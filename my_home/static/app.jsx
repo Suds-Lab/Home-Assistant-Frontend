@@ -300,7 +300,7 @@ function DeviceCard({ device, onChange, onDetails }) {
               {(a.hvac_modes || []).map((mode) => (
                 <button
                   key={mode}
-                  className={`mode ${state === mode ? 'selected' : ''}`}
+                  className={`mode ${state === mode ? 'selected' : ''} ${mode === 'off' ? 'mode-off' : ''}`}
                   onClick={() => act('set_hvac_mode', { hvac_mode: mode }, mode)}
                   disabled={busy}
                 >
@@ -308,6 +308,23 @@ function DeviceCard({ device, onChange, onDetails }) {
                 </button>
               ))}
             </div>
+            {(a.fan_modes || []).length > 0 && !isOff && (
+              <div className="fan-modes">
+                <span className="muted">Fan</span>
+                <div className="mode-row">
+                  {a.fan_modes.map((fm) => (
+                    <button
+                      key={fm}
+                      className={`mode ${a.fan_mode === fm ? 'selected' : ''}`}
+                      onClick={() => act('set_fan_mode', { fan_mode: fm })}
+                      disabled={busy}
+                    >
+                      {fm}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         );
       }
@@ -632,19 +649,36 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   }
 
   const q = search.trim().toLowerCase();
-  const filtered = entities.filter(
-    (e) =>
-      !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.entity_id.toLowerCase().includes(q)
-  );
-  const byDomain = {};
+  const match = (e) =>
+    !q || e.name.toLowerCase().includes(q) || e.entity_id.toLowerCase().includes(q);
+  const filtered = entities.filter(match);
+
+  const byId = {};
+  for (const e of entities) byId[e.entity_id] = e;
+  const hasAreas = entities.some((e) => e.area);
+
+  // Group by Floor → Room when Home Assistant knows areas; otherwise by type.
+  const groups = {};
   for (const e of filtered) {
-    if (!byDomain[e.domain]) byDomain[e.domain] = [];
-    byDomain[e.domain].push(e);
+    const top = hasAreas ? e.floor || 'Other' : 'All devices';
+    const sub = hasAreas ? e.area || 'Unassigned' : domainLabel(e.domain);
+    if (!groups[top]) groups[top] = {};
+    if (!groups[top][sub]) groups[top][sub] = [];
+    groups[top][sub].push(e);
   }
-  const pickerDomains = Object.keys(byDomain).sort((x, y) =>
-    domainLabel(x).localeCompare(domainLabel(y))
+  const tops = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  const selected = [...picked].map((id) => byId[id] || { entity_id: id, name: id });
+
+  const checkRow = (e) => (
+    <label key={e.entity_id} className="pick-row">
+      <input
+        type="checkbox"
+        checked={picked.has(e.entity_id)}
+        onChange={() => toggleEntity(e.entity_id)}
+      />
+      <span className="pick-name">{e.name}</span>
+      <span className="pick-id">{e.entity_id}</span>
+    </label>
   );
 
   return (
@@ -661,11 +695,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       </label>
       <label>
         Display name
-        <input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-        />
+        <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </label>
       <label>
         Password
@@ -681,10 +711,26 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         Administrator (can manage users)
       </label>
 
-      <h4 className="devices-heading">
-        Devices this user can control
-        <span className="muted"> · {picked.size} selected</span>
-      </h4>
+      <h4 className="devices-heading">Devices this user can control</h4>
+
+      {selected.length > 0 && (
+        <div className="selected-box">
+          <div className="selected-head">{selected.length} selected - tap to remove</div>
+          <div className="chips">
+            {selected.map((e) => (
+              <button
+                type="button"
+                key={e.entity_id}
+                className="chip"
+                onClick={() => toggleEntity(e.entity_id)}
+              >
+                {e.name} <span aria-hidden="true">✕</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {entities.length === 0 ? (
         <p className="muted">No entities found in Home Assistant.</p>
       ) : (
@@ -696,22 +742,23 @@ function UserEditor({ user, entities, onSave, onCancel }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {pickerDomains.length === 0 ? (
+          {tops.length === 0 ? (
             <p className="muted">No matches.</p>
           ) : (
-            pickerDomains.map((domain) => (
-              <div key={domain} className="entity-group">
-                <h4>{domainLabel(domain)}</h4>
-                {byDomain[domain].map((e) => (
-                  <label key={e.entity_id} className="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={picked.has(e.entity_id)}
-                      onChange={() => toggleEntity(e.entity_id)}
-                    />
-                    {e.name} <span className="muted">({e.entity_id})</span>
-                  </label>
-                ))}
+            tops.map((top) => (
+              <div key={top} className="floor-group">
+                {hasAreas && <div className="floor-head">{top}</div>}
+                {Object.keys(groups[top])
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((sub) => (
+                    <div key={sub} className="entity-group">
+                      <h4>{sub}</h4>
+                      {groups[top][sub]
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(checkRow)}
+                    </div>
+                  ))}
               </div>
             ))
           )}
