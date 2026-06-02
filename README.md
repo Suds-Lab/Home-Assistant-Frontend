@@ -29,10 +29,12 @@ On Home Assistant OS / Supervised:
 1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories**.
 2. Paste `https://github.com/Suds-Lab/Home-Assistant-Frontend` and **Add**.
 3. The **My Home** add-on appears in the store. Open it → **Install**.
-4. **Configuration** tab: set `jwt_secret` and at least one seed user with
-   `admin: true`. **Start** the add-on.
-5. Open **My Home** in the sidebar (admin management), and point household
-   members at `http://<your-home-assistant>:8099` for their dashboard.
+4. **Configuration** tab: set `jwt_secret` (a long random string). **Start** the
+   add-on. (Users are *not* configured here - see step 5.)
+5. Open **My Home** in the sidebar. A default admin **`alice` / `changeme`** is
+   created on first run - log in, change its password, and add everyone else
+   from the **Manage users** screen. Point household members at
+   `http://<your-home-assistant>:8099` for their dashboard.
 
 Updates then arrive as a normal **Update** button when you push new commits.
 
@@ -127,9 +129,9 @@ no typing entity IDs. Accounts are saved to a persistent store
 restarts. Passwords left blank on edit are kept, and the system won't let you
 remove the last admin.
 
-The `users` list in `users.json` / the add-on **Configuration** tab is only the
-**initial seed** - once the store exists, the management screen is the source
-of truth.
+`users.json` is only the **initial seed** (it bootstraps a default admin on
+first run). Once the store exists, the **Manage users** screen is the single
+source of truth - users are *not* set in the add-on's Configuration tab.
 
 ## 2. Run it (standalone / dev)
 
@@ -161,13 +163,13 @@ the add-on onto the machine directly:
    **⋮** menu (top-right) → **Check for updates**. "My Home" appears under
    **Local add-ons**.
 3. Click it → **Install** (this builds the image; takes a few minutes).
-4. Open the **Configuration** tab and set `jwt_secret` and at least one seed
-   user with `admin: true` (this seeds the first run only).
-5. **Start** the add-on. Thanks to Ingress, **My Home** appears as its own
-   admin tab in the Home Assistant sidebar (like the Terminal / Mosquitto
-   add-ons) - click it to open the **management** screen right inside HA. No
-   separate password: HA already authenticated you as an admin.
-6. Use **Manage users** to add household members and assign their devices.
+4. Open the **Configuration** tab and set `jwt_secret`. **Start** the add-on.
+5. Thanks to Ingress, **My Home** appears as its own admin tab in the Home
+   Assistant sidebar (like the Terminal / Mosquitto add-ons) - click it to open
+   the **management** screen right inside HA. No separate password: HA already
+   authenticated you as an admin.
+6. A default admin (**`alice` / `changeme`**) is seeded on first run. Use
+   **Manage users** to change it and add household members + their devices.
 7. Tell each member to open **`http://<your-home-assistant>:8099`** and log in
    with the account you created - that's their personal device dashboard. (Make
    sure port 8099 is enabled in the add-on's **Network** section.)
