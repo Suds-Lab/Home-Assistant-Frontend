@@ -205,10 +205,14 @@ the app shell is cached so it loads instantly (and offline).
 
 ## How it works / security notes
 - **Real-time updates.** The backend holds one WebSocket to Home Assistant and
-  pushes state changes to each browser over Server-Sent Events, so the UI
-  reflects any change (the app, a physical switch, an automation) within a
-  fraction of a second - no polling. If the stream drops, the dashboard
-  re-syncs over REST on reconnect, so it can't go stale.
+  relays state changes to each browser over a **WebSocket** (`/api/ws`), so the
+  UI reflects any change (the app, a physical switch, an automation) within a
+  fraction of a second - no polling. The browser reconnects and re-syncs over
+  REST automatically, so it can't go stale.
+  - Behind a reverse proxy, allow the WebSocket upgrade on `/api/ws` (nginx:
+    `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection upgrade;`
+    - Cloudflare passes WebSockets through automatically). If you can't proxy
+    WebSockets, set `STREAM=0` to fall back to polling.
 - The browser only ever talks to this backend. Your Home Assistant token lives
   only in `.env` (standalone) or never exists at all (add-on, via Supervisor).
 - Login issues a 7-day session token (JWT). Each request is checked against the

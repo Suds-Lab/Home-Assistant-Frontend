@@ -27,6 +27,7 @@ import jwt
 import requests
 import websocket  # websocket-client
 from flask import Flask, Response, jsonify, request, send_from_directory
+from flask_sock import Sock
 
 try:
     # Load .env for standalone/dev runs. Optional - absent in the add-on.
@@ -163,6 +164,7 @@ def call_service(domain, service, entity_id, extra=None):
 # --- App + auth ----------------------------------------------------------
 
 app = Flask(__name__, static_folder=None)
+sock = Sock(app)
 
 
 class ApiError(Exception):
@@ -447,6 +449,32 @@ def stream():
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@sock.route("/api/ws")
+def ws_stream(ws):
+    """Live updates over a WebSocket (proxy-friendly: traverses reverse proxies
+    and Cloudflare better than SSE). Pushes the user's owned-entity changes; the
+    client re-syncs the full list over REST when it (re)connects."""
+    try:
+        user = user_from_token(request.args.get("token"))
+    except ApiError:
+        ws.close()
+        return
+    sub = {"q": Queue(), "owned": set(user.get("entities", []))}
+    with _SUB_LOCK:
+        SUBSCRIBERS.append(sub)
+    try:
+        while True:
+            try:
+                ws.send(sub["q"].get(timeout=25))
+            except Empty:
+                ws.send('{"type":"ping"}')  # keepalive + detect a closed socket
+    except Exception:  # noqa: BLE001  (client went away)
+        pass
+    finally:
+        with _SUB_LOCK:
+            SUBSCRIBERS[:] = [s for s in SUBSCRIBERS if s is not sub]
 
 
 # --- Admin: manage users (admin-only) ------------------------------------
