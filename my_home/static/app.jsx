@@ -130,6 +130,9 @@ const DOMAIN_LABELS = {
 const domainLabel = (d) =>
   DOMAIN_LABELS[d] || d.charAt(0).toUpperCase() + d.slice(1).replace(/_/g, ' ');
 
+// Make raw HA values (hvac/fan modes) readable: "fan_only" -> "fan only".
+const humanize = (s) => String(s == null ? '' : s).replace(/_/g, ' ');
+
 // States that should highlight a card as "active".
 const ACTIVE_STATES = new Set([
   'on', 'open', 'playing', 'home', 'cleaning', 'unlocked',
@@ -187,6 +190,20 @@ function DeviceCard({ device, onChange, onDetails }) {
     if (Date.now() >= freezeUntil.current) setState(device.state);
   }, [device]);
   useEffect(() => () => clearTimeout(commitTimer.current), []);
+
+  // Optimistic fan mode (an attribute, not the entity state) - same idea so
+  // climate fan buttons respond instantly.
+  const [fanMode, setFanMode] = useState(a.fan_mode);
+  const fanFreeze = useRef(0);
+  useEffect(() => {
+    if (Date.now() >= fanFreeze.current) setFanMode((device.attributes || {}).fan_mode);
+  }, [device]);
+
+  function setFan(fm) {
+    setFanMode(fm);
+    fanFreeze.current = Date.now() + 1500;
+    act('set_fan_mode', { fan_mode: fm });
+  }
 
   const on = state === 'on';
   const isActive = ACTIVE_STATES.has(state);
@@ -304,7 +321,7 @@ function DeviceCard({ device, onChange, onDetails }) {
                   onClick={() => act('set_hvac_mode', { hvac_mode: mode }, mode)}
                   disabled={busy}
                 >
-                  {mode}
+                  {humanize(mode)}
                 </button>
               ))}
             </div>
@@ -315,11 +332,11 @@ function DeviceCard({ device, onChange, onDetails }) {
                   {a.fan_modes.map((fm) => (
                     <button
                       key={fm}
-                      className={`mode ${a.fan_mode === fm ? 'selected' : ''}`}
-                      onClick={() => act('set_fan_mode', { fan_mode: fm })}
+                      className={`mode ${fanMode === fm ? 'selected' : ''}`}
+                      onClick={() => setFan(fm)}
                       disabled={busy}
                     >
-                      {fm}
+                      {humanize(fm)}
                     </button>
                   ))}
                 </div>
