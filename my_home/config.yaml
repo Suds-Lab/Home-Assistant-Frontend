@@ -1,0 +1,54 @@
+# Home Assistant add-on manifest for "My Home" (Python / Flask).
+# Docs: https://developers.home-assistant.io/docs/add-ons/configuration
+name: My Home
+version: "1.0.0"
+slug: my_home
+description: Per-user device dashboard for your Home Assistant
+url: https://github.com/Suds-Lab/Home-Assistant-Frontend
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+
+# The "My Home" sidebar tab (Ingress) is the ADMIN MANAGEMENT UI - manage users
+# and assign their devices. Ingress routes it through HA's own auth, and it's
+# admin-only (panel_admin defaults to true), like the Terminal add-on.
+ingress: true
+ingress_port: 4000
+panel_icon: mdi:home-lightbulb
+panel_title: My Home
+
+# The household-facing device dashboard is published here. Members open it at
+# http://<home-assistant>:8099 and log in with the app account an admin created.
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: My Home user dashboard (per-user device control)
+
+# Grants a Supervisor token + proxied access to the core API at
+# http://supervisor/core/api - no long-lived token needed.
+homeassistant_api: true
+
+# These seed the FIRST run only. After that, manage everyone from the in-app
+# "Manage users" screen (saved to /data, persistent). Mark at least one admin.
+options:
+  jwt_secret: change-me-to-a-long-random-string
+  users:
+    - username: alice
+      password: changeme
+      displayName: Alice
+      admin: true
+      entities:
+        - light.bedroom
+        - climate.bedroom_ac
+schema:
+  jwt_secret: str
+  users:
+    - username: str
+      password: str
+      displayName: str?
+      admin: bool?
+      entities:
+        - str

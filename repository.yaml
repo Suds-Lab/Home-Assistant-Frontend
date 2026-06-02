@@ -1,0 +1,5 @@
+# Home Assistant add-on repository manifest.
+# Docs: https://developers.home-assistant.io/docs/add-ons/repository
+name: Suds Lab Home Assistant Add-ons
+url: https://github.com/Suds-Lab/Home-Assistant-Frontend
+maintainer: Suds Lab
