@@ -7,8 +7,11 @@
     <!-- Relative href so styles resolve under any path prefix (Ingress). -->
     <link rel="stylesheet" href="./styles.css" />
 
-    <!-- PWA: installable, full-screen, native-feeling on phones. -->
-    <link rel="manifest" href="./manifest.webmanifest" />
+    <!-- PWA: installable, full-screen, native-feeling on phones.
+         use-credentials so the manifest loads behind a cookie auth gateway
+         (Cloudflare Access / Authelia / basic-auth) - the default no-credentials
+         manifest fetch gets blocked there and silently breaks install. -->
+    <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="theme-color" content="#0f1419" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
