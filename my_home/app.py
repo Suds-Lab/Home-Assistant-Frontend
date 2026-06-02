@@ -64,6 +64,9 @@ JWT_SECRET = (
     or os.environ.get("JWT_SECRET")
     or "dev-secret-change-me"
 )
+# Display name shown in the UI / browser tab / installed PWA. Configurable.
+APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
+
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
 #    sidebar tab). This port is never published, so a request arriving on it is
@@ -244,6 +247,7 @@ def session():
     return jsonify(
         mode="manage" if is_management() else "user",
         stream=STREAM_ENABLED,
+        appName=APP_NAME,
     )
 
 
@@ -526,6 +530,16 @@ def admin_delete_user(username):
 
 
 # --- Static client (served by Flask; SPA fallback) -----------------------
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    """Serve the PWA manifest with the configured app name (so the installed
+    home-screen app uses it too)."""
+    data = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
+    data["name"] = APP_NAME
+    data["short_name"] = APP_NAME
+    return Response(json.dumps(data), mimetype="application/manifest+json")
 
 
 @app.get("/")

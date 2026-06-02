@@ -25,14 +25,14 @@ There are two interfaces:
 
 ## Configuration
 
-There is only one option:
-
 ```yaml
+app_name: My Home                  # title shown in the app / tab / installed PWA
 jwt_secret: a-long-random-string   # signs login sessions
 ```
 
 | Option | Description |
 |--------|-------------|
+| `app_name` | The name shown in the dashboard header, browser tab, and the installed home-screen (PWA) app. Defaults to "My Home". |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
 
 **Users are not configured here** - manage them in the app (see below). No Home

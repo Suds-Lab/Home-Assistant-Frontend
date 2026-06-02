@@ -56,7 +56,7 @@ const adminDeleteUser = (username) =>
 
 // --- Components -----------------------------------------------------------
 
-function Login({ onLogin }) {
+function Login({ onLogin, appName = 'My Home' }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -79,7 +79,7 @@ function Login({ onLogin }) {
   return (
     <div className="centered">
       <form className="card login" onSubmit={submit}>
-        <h1>My Home</h1>
+        <h1>{appName}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
         <label>
           Username
@@ -460,7 +460,7 @@ function DetailPanel({ device, onClose }) {
   );
 }
 
-function Dashboard({ displayName, onLogout, live = true }) {
+function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -543,7 +543,7 @@ function Dashboard({ displayName, onLogout, live = true }) {
     <div className="dashboard">
       <header className="topbar">
         <div>
-          <h1>My Home</h1>
+          <h1>{appName}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <button className="ghost" onClick={onLogout}>
@@ -897,7 +897,7 @@ function InstallPrompt() {
   );
 }
 
-function UserApp({ live }) {
+function UserApp({ live, appName }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
 
@@ -918,9 +918,9 @@ function UserApp({ live }) {
   return (
     <>
       {!token ? (
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} appName={appName} />
       ) : (
-        <Dashboard displayName={displayName} onLogout={handleLogout} live={live} />
+        <Dashboard displayName={displayName} onLogout={handleLogout} live={live} appName={appName} />
       )}
       <InstallPrompt />
     </>
@@ -931,12 +931,17 @@ function UserApp({ live }) {
 // management, published = user dashboard) and whether live push is enabled.
 function App() {
   const [session, setSession] = useState(null); // null = loading
+  const appName = session?.appName || 'My Home';
 
   useEffect(() => {
     getSession()
       .then(setSession)
       .catch(() => setSession({ mode: 'user', stream: false }));
   }, []);
+
+  useEffect(() => {
+    if (session) document.title = appName;
+  }, [session, appName]);
 
   if (session === null) {
     return (
@@ -946,7 +951,7 @@ function App() {
     );
   }
   if (session.mode === 'manage') return <Admin standalone />;
-  return <UserApp live={session.stream} />;
+  return <UserApp live={session.stream} appName={appName} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
