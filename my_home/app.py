@@ -296,7 +296,7 @@ ALLOWED_SERVICES = {
     "switch": {"turn_on", "turn_off", "toggle"},
     "input_boolean": {"turn_on", "turn_off", "toggle"},
     "fan": {"turn_on", "turn_off", "toggle", "set_percentage", "oscillate"},
-    "climate": {"turn_on", "turn_off", "set_hvac_mode", "set_temperature"},
+    "climate": {"turn_on", "turn_off", "set_hvac_mode", "set_temperature", "set_fan_mode"},
     "cover": {
         "open_cover", "close_cover", "stop_cover", "toggle", "set_cover_position"
     },
@@ -452,18 +452,74 @@ def stream():
 # --- Admin: manage users (admin-only) ------------------------------------
 
 
+def ha_registries():
+    """One-shot WebSocket query for HA's floor/area/entity/device registries, so
+    the picker can group devices by floor and room. Returns {} on any failure."""
+    try:
+        ws = websocket.create_connection(_ws_url(), timeout=10)
+    except Exception:  # noqa: BLE001
+        return {}
+    try:
+        json.loads(ws.recv())  # auth_required
+        ws.send(json.dumps({"type": "auth", "access_token": HA_TOKEN}))
+        if json.loads(ws.recv()).get("type") != "auth_ok":
+            return {}
+        cmds = {
+            1: "config/floor_registry/list",
+            2: "config/area_registry/list",
+            3: "config/entity_registry/list",
+            4: "config/device_registry/list",
+        }
+        for i, t in cmds.items():
+            ws.send(json.dumps({"id": i, "type": t}))
+        got = {}
+        while len(got) < len(cmds):
+            msg = json.loads(ws.recv())
+            if msg.get("type") == "result" and msg.get("id") in cmds:
+                got[msg["id"]] = msg.get("result") or []
+        return {"floors": got[1], "areas": got[2], "entities": got[3], "devices": got[4]}
+    except Exception:  # noqa: BLE001
+        return {}
+    finally:
+        try:
+            ws.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @app.get("/api/admin/entities")
 def admin_entities():
-    """All entities (any domain), for the device picker."""
+    """All entities (any domain), for the device picker - annotated with their
+    floor and room (area) when Home Assistant knows them."""
     require_admin()
-    items = [
-        {
-            "entity_id": s["entity_id"],
-            "name": s.get("attributes", {}).get("friendly_name") or s["entity_id"],
-            "domain": s["entity_id"].split(".")[0],
-        }
-        for s in ha_request("/api/states")
-    ]
+    reg = ha_registries()
+    floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
+    areas = {a["area_id"]: a for a in reg.get("areas", [])}
+    dev_area = {d["id"]: d.get("area_id") for d in reg.get("devices", [])}
+    ent_area = {}
+    for e in reg.get("entities", []):
+        aid = e.get("area_id") or dev_area.get(e.get("device_id"))
+        if aid:
+            ent_area[e["entity_id"]] = aid
+
+    def locate(entity_id):
+        aid = ent_area.get(entity_id)
+        area = areas.get(aid) if aid else None
+        if not area:
+            return (None, None)
+        return (area.get("name"), floors.get(area.get("floor_id")))
+
+    items = []
+    for s in ha_request("/api/states"):
+        eid = s["entity_id"]
+        area, floor = locate(eid)
+        items.append({
+            "entity_id": eid,
+            "name": s.get("attributes", {}).get("friendly_name") or eid,
+            "domain": eid.split(".")[0],
+            "area": area,
+            "floor": floor,
+        })
     items.sort(key=lambda i: (i["domain"], i["name"].lower()))
     return jsonify(entities=items)
 

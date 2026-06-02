@@ -389,6 +389,26 @@ section h2 {
   color: #fff;
 }
 
+/* "Off" is a neutral state - grey it out even when selected. */
+.mode.mode-off.selected {
+  background: #3a4656;
+  border-color: #3a4656;
+  color: var(--text);
+}
+
+/* Climate fan-speed row. */
+.fan-modes {
+  margin-top: 10px;
+}
+
+.fan-modes > .muted {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+}
+
 /* Other controls inside a glowing card pick up the accent too. */
 .device.glow .switch.on {
   background: var(--g);
@@ -537,6 +557,95 @@ section h2 {
   color: var(--text);
   font-size: 0.95rem;
   margin-bottom: 6px;
+}
+
+/* --- Entity picker (redesigned) --- */
+.selected-box {
+  background: #0f1722;
+  border: 1px solid #2c3848;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.selected-head {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.chip span {
+  opacity: 0.8;
+}
+
+.floor-group {
+  margin-bottom: 14px;
+}
+
+.floor-head {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  padding: 8px 0 4px;
+  border-bottom: 1px solid #2c3848;
+  margin-bottom: 6px;
+}
+
+.floor-group .entity-group {
+  margin: 6px 0 6px 6px;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pick-row:hover {
+  background: #0f1722;
+}
+
+.pick-row input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.pick-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-id {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 /* --- Device cards (generic) --- */
