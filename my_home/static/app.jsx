@@ -549,31 +549,54 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) 
       return () => clearInterval(id);
     }
 
-    // Live updates via Server-Sent Events. EventSource can't set headers, so
-    // the session token rides as a query param; it auto-reconnects on drop.
-    const url = `${API_BASE}/stream?token=${encodeURIComponent(getToken() || '')}`;
-    const es = new EventSource(url);
-    const dropped = { current: false };
-    es.onerror = () => {
-      dropped.current = true;
-    };
-    es.onopen = () => {
-      // Re-sync the full list after a reconnect (we may have missed updates).
-      if (dropped.current) {
-        dropped.current = false;
-        refresh();
-      }
-    };
-    es.addEventListener('update', (e) => {
-      setDevices((prev) => applyUpdate(prev, JSON.parse(e.data)));
-    });
+    // Live updates over a WebSocket (proxy/Cloudflare-friendly). WebSockets
+    // don't auto-reconnect, so we reconnect ourselves and re-sync over REST on
+    // each (re)open. The token rides as a query param.
+    let ws;
+    let retry;
+    let stopped = false;
+    let opened = false;
 
-    // Safety net so the dashboard can't go stale if the stream is unavailable.
+    function connect() {
+      if (stopped) return;
+      const u = new URL('api/ws', document.baseURI);
+      u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+      u.searchParams.set('token', getToken() || '');
+      ws = new WebSocket(u.href);
+      ws.onopen = () => {
+        if (opened) refresh(); // reconnect: catch up on anything missed
+        opened = true;
+      };
+      ws.onmessage = (e) => {
+        let m;
+        try {
+          m = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+        if (m && m.entity_id) setDevices((prev) => applyUpdate(prev, m));
+      };
+      ws.onclose = () => {
+        if (!stopped) retry = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => {
+        try {
+          ws.close();
+        } catch {}
+      };
+    }
+    connect();
+
+    // Safety net so the dashboard can't go stale if the socket is unavailable.
     const pollId = setInterval(refresh, 30000);
 
     return () => {
-      es.close();
+      stopped = true;
+      clearTimeout(retry);
       clearInterval(pollId);
+      try {
+        ws && ws.close();
+      } catch {}
     };
   }, [refresh, live]);
 
