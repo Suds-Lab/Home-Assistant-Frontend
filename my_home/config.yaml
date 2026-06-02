@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for "My Home" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
 name: My Home
-version: "1.1.0"
+version: "1.2.0"
 slug: my_home
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -31,24 +31,10 @@ ports_description:
 # http://supervisor/core/api - no long-lived token needed.
 homeassistant_api: true
 
-# These seed the FIRST run only. After that, manage everyone from the in-app
-# "Manage users" screen (saved to /data, persistent). Mark at least one admin.
+# Users are NOT configured here - manage them in the app's "Manage users"
+# screen (the sidebar tab), which is the single source of truth (/data).
+# A default admin (alice / changeme) is seeded on first run; change it there.
 options:
   jwt_secret: change-me-to-a-long-random-string
-  users:
-    - username: alice
-      password: changeme
-      displayName: Alice
-      admin: true
-      entities:
-        - light.bedroom
-        - climate.bedroom_ac
 schema:
   jwt_secret: str
-  users:
-    - username: str
-      password: str
-      displayName: str?
-      admin: bool?
-      entities:
-        - str

@@ -25,37 +25,30 @@ There are two interfaces:
 
 ## Configuration
 
-The options below seed the **first run only**. After that, manage everyone from
-the in-app **Manage users** screen (saved to `/data`, so it persists).
+There is only one option:
 
 ```yaml
 jwt_secret: a-long-random-string   # signs login sessions
-users:
-  - username: alice
-    password: changeme
-    displayName: Alice
-    admin: true                    # can open "Manage users"
-    entities:
-      - light.bedroom
-      - climate.bedroom_ac
 ```
 
 | Option | Description |
 |--------|-------------|
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
-| `users` | Seed accounts. Each needs `username`, `password`, optional `displayName`, optional `admin`, and the `entities` they may control. |
 
-No Home Assistant token is required - the add-on talks to HA through the
+**Users are not configured here** - manage them in the app (see below). No Home
+Assistant token is required either; the add-on talks to HA through the
 Supervisor proxy using its auto-injected token.
 
 ## Managing users
 
-The sidebar **My Home** tab opens the management screen directly. Add, edit, and
-remove users, and tick each person's devices from a searchable list of your real
-HA entities. The system won't let you remove the last admin.
+The sidebar **My Home** tab opens the management screen directly - the single
+source of truth (saved to `/data`). Add, edit, and remove users, and tick each
+person's devices from a searchable list of your real HA entities. The system
+won't let you remove the last admin.
 
-The `users` you set in **Configuration** seed the first run only; after that the
-management screen is the source of truth (saved to `/data`).
+On first run a default admin **`alice` / `changeme`** is created so you can log
+in - change its password (and add everyone else) from the Manage users screen
+right away.
 
 ## Supported devices
 
