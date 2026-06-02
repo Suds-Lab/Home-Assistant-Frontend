@@ -182,9 +182,11 @@ function DeviceCard({ device, onChange, onDetails }) {
   // read from HA (state not yet propagated) can't bounce the control back.
   const [state, setState] = useState(device.state);
   const freezeUntil = useRef(0);
+  const commitTimer = useRef(null);
   useEffect(() => {
     if (Date.now() >= freezeUntil.current) setState(device.state);
   }, [device]);
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
 
   const on = state === 'on';
   const isActive = ACTIVE_STATES.has(state);
@@ -204,6 +206,20 @@ function DeviceCard({ device, onChange, onDetails }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Power toggle: flip the UI instantly, but send an *idempotent* turn_on /
+  // turn_off (not a parity-based "toggle") and debounce it, so clicking fast
+  // ends in exactly the state shown - the last click wins, no desync.
+  function setPower(nextOn) {
+    setState(nextOn ? 'on' : 'off');
+    freezeUntil.current = Date.now() + 1500;
+    clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(() => {
+      control(device.entity_id, nextOn ? 'turn_on' : 'turn_off', {})
+        .then(onChange)
+        .catch(() => {});
+    }, 250);
   }
 
   const slider = (label, value, setValue, service, toData) => (
@@ -231,7 +247,7 @@ function DeviceCard({ device, onChange, onDetails }) {
         return (
           <>
             <div className="row-end">
-              <Toggle on={on} disabled={busy} onClick={() => act('toggle', {}, on ? 'off' : 'on')} />
+              <Toggle on={on} disabled={busy} onClick={() => setPower(!on)} />
             </div>
             {dim && on &&
               slider('Brightness', pct, setPct, 'turn_on', (v) => ({
@@ -244,7 +260,7 @@ function DeviceCard({ device, onChange, onDetails }) {
       case 'input_boolean':
         return (
           <div className="row-end">
-            <Toggle on={on} disabled={busy} onClick={() => act('toggle', {}, on ? 'off' : 'on')} />
+            <Toggle on={on} disabled={busy} onClick={() => setPower(!on)} />
           </div>
         );
       case 'fan':
@@ -252,7 +268,7 @@ function DeviceCard({ device, onChange, onDetails }) {
           <>
             <div className="row-end">
               {on && <span className="fan-spin" aria-hidden="true">❉</span>}
-              <Toggle on={on} disabled={busy} onClick={() => act('toggle', {}, on ? 'off' : 'on')} />
+              <Toggle on={on} disabled={busy} onClick={() => setPower(!on)} />
             </div>
             {a.percentage != null && on &&
               slider('Speed', pct, setPct, 'set_percentage', (v) => ({ percentage: v }))}
@@ -356,7 +372,7 @@ function DeviceCard({ device, onChange, onDetails }) {
         return (
           <div className="row-between">
             <button className="mode" onClick={() => act('trigger')} disabled={busy}>Trigger</button>
-            <Toggle on={on} disabled={busy} onClick={() => act('toggle', {}, on ? 'off' : 'on')} />
+            <Toggle on={on} disabled={busy} onClick={() => setPower(!on)} />
           </div>
         );
       case 'button':
