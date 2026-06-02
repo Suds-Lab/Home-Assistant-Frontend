@@ -1,0 +1,664 @@
+:root {
+  --bg: #0f1419;
+  --card: #1b2430;
+  --card-active: #1f3a5f;
+  --text: #e6edf3;
+  --muted: #8b98a5;
+  --accent: #3b82f6;
+  --accent-2: #22c55e;
+  --error: #f87171;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.error.banner {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+
+/* --- Login --- */
+.centered {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.login {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login h1 {
+  margin: 0;
+}
+
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.login input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #2c3848;
+  background: #0f1722;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.login button[type='submit'] {
+  margin-top: 6px;
+  padding: 11px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+.login button:disabled {
+  opacity: 0.6;
+}
+
+/* --- Dashboard --- */
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.topbar h1 {
+  margin: 0 0 2px;
+  font-size: 1.4rem;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid #2c3848;
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
+section {
+  margin-bottom: 28px;
+}
+
+section h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.device {
+  border: 1px solid transparent;
+  transition: background 0.3s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+/* State-reactive accent. Each accent sets --g; `.glow` paints with it. */
+.accent-warm { --g: #fbbf24; } /* light on  */
+.accent-on { --g: #22c55e; } /* generic on */
+.accent-heat { --g: #ef4444; } /* heating   */
+.accent-cool { --g: #3b82f6; } /* cooling   */
+.accent-dry { --g: #06b6d4; } /* dry       */
+.accent-sky { --g: #38bdf8; } /* cover open */
+.accent-amber { --g: #f59e0b; } /* unlocked  */
+.accent-media { --g: #a855f7; } /* playing   */
+
+.device.glow {
+  border-color: color-mix(in srgb, var(--g) 55%, transparent);
+  background: var(--card);
+  box-shadow:
+    inset 0 0 60px -34px var(--g),
+    0 0 22px -8px var(--g);
+}
+
+/* Tint the device name with the accent so it reads at a glance. */
+.device.glow .device-name {
+  color: color-mix(in srgb, var(--g) 70%, var(--text));
+}
+
+.device.pulse {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: inset 0 0 60px -34px var(--g), 0 0 16px -10px var(--g);
+  }
+  50% {
+    box-shadow: inset 0 0 72px -24px var(--g), 0 0 30px -4px var(--g);
+  }
+}
+
+/* Spinning indicator for a running fan. */
+.fan-spin {
+  margin-right: auto;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--accent-2);
+  animation: spin 2.4s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device.pulse,
+  .fan-spin {
+    animation: none;
+  }
+}
+
+/* --- PWA install banner --- */
+.install-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  max-width: 460px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid #2c3848;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  z-index: 60;
+  animation: slide-up 0.3s ease;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(140%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.install-icon {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.install-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-text span {
+  font-size: 0.8rem;
+}
+
+.install-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-banner {
+    animation: none;
+  }
+}
+
+.device-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.device-name {
+  font-weight: 600;
+}
+
+.device-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Toggle switch */
+.switch {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: #3a4656;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.switch.on {
+  background: var(--accent-2);
+}
+
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: left 0.2s;
+}
+
+.switch.on .knob {
+  left: 23px;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.slider input {
+  width: 100%;
+}
+
+/* Climate */
+.climate-readout {
+  margin-top: 6px;
+}
+
+.temp-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 14px 0;
+}
+
+.temp-control button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #2c3848;
+  background: #0f1722;
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.temp-control button:disabled {
+  opacity: 0.4;
+}
+
+.temp-value {
+  font-size: 1.8rem;
+  font-weight: 600;
+  min-width: 70px;
+  text-align: center;
+}
+
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mode {
+  flex: 1;
+  min-width: 60px;
+  padding: 7px;
+  border-radius: 9px;
+  border: 1px solid #2c3848;
+  background: transparent;
+  color: var(--text);
+  text-transform: capitalize;
+  font-size: 0.85rem;
+}
+
+/* Selected mode / lock-state button takes the card's state accent
+   (Heat = red, Cool = blue, locked = green, ...), falling back to blue. */
+.mode.selected {
+  background: var(--g, var(--accent));
+  border-color: var(--g, var(--accent));
+  color: #fff;
+}
+
+/* Other controls inside a glowing card pick up the accent too. */
+.device.glow .switch.on {
+  background: var(--g);
+}
+
+.device.glow .btn-row button,
+.device.glow .temp-control button {
+  border-color: color-mix(in srgb, var(--g) 45%, #2c3848);
+  color: color-mix(in srgb, var(--g) 65%, var(--text));
+}
+
+.device.glow .btn-row button:hover:not(:disabled),
+.device.glow .temp-control button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--g) 16%, #0f1722);
+}
+
+/* --- Admin / manage users --- */
+.admin {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-primary {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  color: var(--error);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.user-row .meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-size: 0.7rem;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.editor h3 {
+  margin: 0 0 16px;
+}
+
+.editor > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.editor input[type='text'],
+.editor input[type='password'] {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #2c3848;
+  background: #0f1722;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.editor input:disabled {
+  opacity: 0.6;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.devices-heading {
+  margin: 18px 0 8px;
+}
+
+.entity-group {
+  margin: 10px 0;
+}
+
+.entity-group h4 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.entity-group .checkbox-row {
+  padding: 5px 0;
+  font-size: 0.9rem;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.search {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #2c3848;
+  background: #0f1722;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+
+/* --- Device cards (generic) --- */
+.device-state {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+  text-transform: capitalize;
+}
+
+.controls {
+  margin-top: 12px;
+}
+
+.row-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid #2c3848;
+  background: #0f1722;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.btn-row button:disabled {
+  opacity: 0.4;
+}
+
+.info-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #2c3848;
+  background: transparent;
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.info-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* --- Detail panel (modal) --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+.attr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.attr-table td {
+  padding: 6px 8px;
+  border-top: 1px solid #2c3848;
+  vertical-align: top;
+}
+
+.attr-table td:first-child {
+  width: 40%;
+  white-space: nowrap;
+}
+
+.attr-val {
+  word-break: break-word;
+}
+
+.modal h4 {
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.modal code {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
