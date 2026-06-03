@@ -27,12 +27,14 @@ There are two interfaces:
 
 ```yaml
 app_name: My Home                  # title shown in the app / tab / installed PWA
+app_icon: "🏠"                     # an emoji, shown beside the name and as the tab icon
 jwt_secret: a-long-random-string   # signs login sessions
 ```
 
 | Option | Description |
 |--------|-------------|
 | `app_name` | The name shown in the dashboard header, browser tab, and the installed home-screen (PWA) app. Defaults to "My Home". |
+| `app_icon` | An emoji shown next to the name in the app and used as the browser-tab favicon. Defaults to 🏠. |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
 
 **Users are not configured here** - manage them in the app (see below). No Home
