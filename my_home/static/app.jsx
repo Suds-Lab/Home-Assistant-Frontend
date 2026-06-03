@@ -781,8 +781,9 @@ function UserEditor({ user, entities, onSave, onCancel }) {
     </label>
   );
 
-  // In Floor mode, show the rooms (areas) within each floor as sub-sections.
-  const renderBody = (list) => {
+  // In Floor mode, show the rooms (areas) within a floor as collapsible
+  // sub-sections (collapsed by default, like the floors).
+  const renderBody = (list, floorName) => {
     if (mode !== 'floor') return list.map(checkRow);
     const sub = {};
     for (const e of list) {
@@ -792,12 +793,24 @@ function UserEditor({ user, entities, onSave, onCancel }) {
     }
     return Object.keys(sub)
       .sort((a, b) => a.localeCompare(b))
-      .map((room) => (
-        <div key={room} className="acc-subgroup">
-          <div className="acc-subhead">{room}</div>
-          {sub[room].sort((a, b) => a.name.localeCompare(b.name)).map(checkRow)}
-        </div>
-      ));
+      .map((room) => {
+        const key = `room:${floorName}/${room}`;
+        const ropen = searching || expanded.has(key);
+        const rsel = sub[room].filter((e) => picked.has(e.entity_id)).length;
+        return (
+          <div key={room} className="acc-subgroup">
+            <button type="button" className="acc-subhead" onClick={() => toggleGroup(key)}>
+              <span className={`acc-caret ${ropen ? 'open' : ''}`}>▸</span>
+              <span className="acc-subtitle">{room}</span>
+              <span className="acc-count muted">
+                {rsel ? `${rsel}/` : ''}
+                {sub[room].length}
+              </span>
+            </button>
+            {ropen && sub[room].sort((a, b) => a.name.localeCompare(b.name)).map(checkRow)}
+          </div>
+        );
+      });
   };
 
   return (
@@ -895,7 +908,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
                       {list.length}
                     </span>
                   </button>
-                  {open && <div className="acc-body">{renderBody(list)}</div>}
+                  {open && <div className="acc-body">{renderBody(list, name)}</div>}
                 </div>
               );
             })

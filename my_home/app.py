@@ -68,6 +68,11 @@ JWT_SECRET = (
 # Display name + icon shown in the UI / browser tab. Configurable.
 APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
 APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or "🏠"
+# Entity domains assignable in Manage users (empty list = all domains).
+_dt = addon_options.get("device_types")
+if _dt is None:
+    _dt = [d.strip() for d in os.environ.get("DEVICE_TYPES", "").split(",") if d.strip()]
+DEVICE_TYPES = set(_dt) if _dt else set()
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -368,7 +373,40 @@ def control():
     if service not in ALLOWED_SERVICES.get(domain, set()):
         raise ApiError(f"Service '{service}' is not allowed for {domain} entities", 400)
     call_service(domain, service, entity_id, data)
+    _log_action(user, domain, service, entity_id, data)
     return jsonify(ok=True)
+
+
+# Human-readable verbs for the logbook attribution.
+_ACTION_VERBS = {
+    "turn_on": "turned on", "turn_off": "turned off", "toggle": "toggled",
+    "open_cover": "opened", "close_cover": "closed", "stop_cover": "stopped",
+    "set_cover_position": "set the position of", "lock": "locked", "unlock": "unlocked",
+    "set_percentage": "set the speed of", "media_play": "played", "media_pause": "paused",
+    "media_play_pause": "play/paused", "volume_set": "set the volume of",
+    "press": "pressed", "start": "started", "pause": "paused",
+}
+
+
+def _log_action(user, domain, service, entity_id, data):
+    """Record who did it in the HA logbook (HA's own context shows the
+    Supervisor, since app users aren't HA users; this adds the real name)."""
+    name = user.get("displayName") or user.get("username") or "A user"
+    if service == "set_hvac_mode":
+        verb = f"set the mode to {data.get('hvac_mode')}"
+    elif service == "set_fan_mode":
+        verb = f"set the fan to {data.get('fan_mode')}"
+    elif service == "set_swing_mode":
+        verb = f"set swing to {data.get('swing_mode')}"
+    elif service == "set_temperature":
+        verb = f"set the temperature to {data.get('temperature')}°"
+    else:
+        verb = _ACTION_VERBS.get(service, service.replace("_", " "))
+    try:
+        call_service("logbook", "log", entity_id,
+                     {"name": name, "message": verb, "domain": "my_home"})
+    except Exception:  # noqa: BLE001  (logbook is best-effort)
+        pass
 
 
 # --- Real-time updates (HA WebSocket -> cache -> SSE) ---------------------
@@ -574,11 +612,14 @@ def admin_entities():
     items = []
     for s in ha_request("/api/states"):
         eid = s["entity_id"]
+        domain = eid.split(".")[0]
+        if DEVICE_TYPES and domain not in DEVICE_TYPES:
+            continue  # hidden by the device_types config
         area, floor = locate(eid)
         items.append({
             "entity_id": eid,
             "name": s.get("attributes", {}).get("friendly_name") or eid,
-            "domain": eid.split(".")[0],
+            "domain": domain,
             "area": area,
             "floor": floor,
         })
