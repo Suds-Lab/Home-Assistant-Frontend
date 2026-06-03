@@ -1004,6 +1004,83 @@ function IconSettings() {
   );
 }
 
+// Full backup / restore of everything in /data (users, passwords, device
+// assignments, settings, activity, app icon) so an uninstall + reinstall keeps
+// all data intact.
+function BackupSettings() {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+
+  async function exportData() {
+    setStatus('');
+    try {
+      const res = await fetch(new URL('api/admin/export', document.baseURI));
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my-home-backup.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Exported.');
+    } catch (err) {
+      setStatus(err.message || 'Export failed');
+    }
+  }
+
+  async function onFile(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (
+      !window.confirm(
+        'Restoring will REPLACE all current users, device assignments and settings with the contents of this backup. Continue?',
+      )
+    )
+      return;
+    setBusy(true);
+    setStatus('Restoring…');
+    try {
+      const data = JSON.parse(await file.text());
+      const r = await request('/admin/import', { method: 'POST', body: JSON.stringify(data) });
+      setStatus(`Restored ${r.users} user${r.users === 1 ? '' : 's'}. Reloading…`);
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      setStatus(err.message || 'Import failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card settings-card">
+      <span className="device-name">Backup &amp; restore</span>
+      <span className="meta">
+        Export every setting, user, password and device assignment to a file. Keep it safe - it
+        contains passwords. Restore it after reinstalling to bring everything back.
+      </span>
+      <div className="editor-actions">
+        <button className="btn-primary" onClick={exportData} disabled={busy}>
+          Export
+        </button>
+        <label className="ghost upload-btn">
+          {busy ? 'Working…' : 'Restore from file'}
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={onFile}
+            disabled={busy}
+            hidden
+          />
+        </label>
+        {status && <span className="muted">{status}</span>}
+      </div>
+    </div>
+  );
+}
+
 // Names + home icon (emoji). Saves to /data and reloads so the change applies
 // everywhere.
 function NameSettings() {
@@ -1421,6 +1498,7 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
           <NameSettings />
           <IconSettings />
           <DeviceTypesSettings onChange={reload} />
+          <BackupSettings />
         </>
       ) : tab === 'activity' ? (
         <ActivityLog />

@@ -11,6 +11,7 @@ Runs two ways:
     so no long-lived token is needed.
 """
 
+import base64
 import json
 import mimetypes
 import os
@@ -792,6 +793,88 @@ def admin_clear_activity():
         except OSError:
             pass
     return jsonify(ok=True)
+
+
+# Bumped if the backup format ever changes incompatibly.
+BACKUP_TYPE = "my_home_backup"
+BACKUP_VERSION = 1
+
+
+@app.get("/api/admin/export")
+def admin_export():
+    """Download everything in /data as one JSON file: users (with passwords),
+    device assignments, settings, the activity log and the uploaded app icon.
+    Restoring it after a reinstall brings the add-on back exactly as it was."""
+    require_admin()
+    data = {
+        "type": BACKUP_TYPE,
+        "version": BACKUP_VERSION,
+        "users": load_users(),
+        "settings": _load_settings(),
+        "activity": _load_activity(),
+    }
+    icon = _find_icon()
+    if icon:
+        try:
+            data["icon"] = {
+                "filename": icon.name,
+                "data": base64.b64encode(icon.read_bytes()).decode("ascii"),
+            }
+        except OSError:
+            pass
+    resp = Response(json.dumps(data, indent=2), mimetype="application/json")
+    resp.headers["Content-Disposition"] = 'attachment; filename="my-home-backup.json"'
+    return resp
+
+
+@app.post("/api/admin/import")
+def admin_import():
+    """Restore a backup produced by /api/admin/export. Replaces all current
+    users, assignments and settings."""
+    require_admin()
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("type") != BACKUP_TYPE:
+        raise ApiError("That doesn't look like a My Home backup file.", 400)
+
+    users = body.get("users")
+    if not isinstance(users, list):
+        raise ApiError("The backup has no users.", 400)
+    clean = [
+        u for u in users
+        if isinstance(u, dict) and isinstance(u.get("username"), str) and u["username"].strip()
+    ]
+    if not clean:
+        raise ApiError("The backup contains no valid users.", 400)
+    if not any(u.get("admin") for u in clean):
+        clean[0]["admin"] = True  # never import a set with no admin
+    save_users(clean)
+
+    settings = body.get("settings")
+    if isinstance(settings, dict):
+        _save_settings(settings)
+
+    activity = body.get("activity")
+    if isinstance(activity, list):
+        with _ACTIVITY_LOCK:
+            try:
+                ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+                ACTIVITY_FILE.write_text(json.dumps(activity))
+            except OSError:
+                pass
+
+    _remove_icons()
+    icon = body.get("icon")
+    if isinstance(icon, dict) and icon.get("data"):
+        ext = str(icon.get("filename", "")).rsplit(".", 1)[-1].lower()
+        if ext not in ICON_EXT.values():
+            ext = "png"
+        try:
+            ICON_DIR.mkdir(parents=True, exist_ok=True)
+            (ICON_DIR / f"app-icon.{ext}").write_bytes(base64.b64decode(icon["data"]))
+        except (OSError, ValueError):
+            pass
+
+    return jsonify(ok=True, users=len(clean))
 
 
 @app.get("/api/admin/users")
