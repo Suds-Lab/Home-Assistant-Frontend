@@ -29,8 +29,14 @@ async function request(path, options = {}) {
     },
   });
   if (res.status === 401) {
-    setToken(null);
-    throw new Error('Your session expired. Please log in again.');
+    const body = await res.json().catch(() => ({}));
+    // A 401 with an active token = the session expired. A 401 with no token
+    // (i.e. logging in) = bad credentials - surface the real message.
+    if (token) {
+      setToken(null);
+      throw new Error('Your session expired. Please log in again.');
+    }
+    throw new Error(body.error || 'Wrong username or password');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -165,7 +171,7 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 // One card for any entity, with controls tailored to its domain.
-function DeviceCard({ device, onChange, onDetails }) {
+function DeviceCard({ device, onChange }) {
   const [busy, setBusy] = useState(false);
   const a = device.attributes || {};
   const [pct, setPct] = useState(
@@ -452,9 +458,6 @@ function DeviceCard({ device, onChange, onDetails }) {
     <div className={`card device ${accent()}`}>
       <div className="device-head">
         <span className="device-name">{device.name}</span>
-        <button className="info-btn" title="Details" onClick={() => onDetails(device)}>
-          i
-        </button>
       </div>
       <div className="device-state">{prettyState({ state, attributes: a })}</div>
       <div className="controls">{controls()}</div>
@@ -463,58 +466,10 @@ function DeviceCard({ device, onChange, onDetails }) {
 }
 
 // Modal showing an entity's full state and every attribute.
-function DetailPanel({ device, onClose }) {
-  const entries = Object.entries(device.attributes || {});
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h3>{device.name}</h3>
-          <button className="info-btn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <table className="attr-table">
-          <tbody>
-            <tr>
-              <td className="muted">Entity</td>
-              <td><code>{device.entity_id}</code></td>
-            </tr>
-            <tr>
-              <td className="muted">State</td>
-              <td>{prettyState(device)}</td>
-            </tr>
-            {device.last_changed && (
-              <tr>
-                <td className="muted">Last changed</td>
-                <td>{new Date(device.last_changed).toLocaleString()}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <h4>Attributes</h4>
-        {entries.length === 0 ? (
-          <p className="muted">No attributes.</p>
-        ) : (
-          <table className="attr-table">
-            <tbody>
-              {entries.map(([k, v]) => (
-                <tr key={k}>
-                  <td className="muted">{k}</td>
-                  <td className="attr-val">{fmtValue(v)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [detail, setDetail] = useState(null);
 
   // Fallback fetch (used for first paint and if the live stream drops).
   const refresh = useCallback(async () => {
@@ -635,19 +590,12 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) 
             <h2>{domainLabel(domain)}</h2>
             <div className="grid">
               {groups[domain].map((d) => (
-                <DeviceCard
-                  key={d.entity_id}
-                  device={d}
-                  onChange={refresh}
-                  onDetails={setDetail}
-                />
+                <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
               ))}
             </div>
           </section>
         ))
       )}
-
-      {detail && <DetailPanel device={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
@@ -677,6 +625,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
     try {
       await onSave({
         username: username.trim(),
+        original: user?.username || '',
         displayName: displayName.trim(),
         password,
         admin,
@@ -729,7 +678,6 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         <input
           type="text"
           value={username}
-          disabled={!isNew}
           onChange={(e) => setUsername(e.target.value)}
         />
       </label>

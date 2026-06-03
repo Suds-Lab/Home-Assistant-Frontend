@@ -578,12 +578,23 @@ def admin_save_user():
         raise ApiError("Username is required", 400)
 
     users = load_users()
-    existing = next((u for u in users if u["username"] == username), None)
+    # Editing an existing user (possibly renaming): `original` is the old name.
+    original = (body.get("original") or "").strip()
+    existing = next((u for u in users if u["username"] == original), None) if original else None
+    if existing is None:
+        existing = next((u for u in users if u["username"] == username), None)
+
+    # Renaming to a name another account already uses is not allowed.
+    if username != (existing["username"] if existing else None):
+        if any(u["username"] == username for u in users):
+            raise ApiError(f"The username '{username}' is already taken", 400)
+
     password = body.get("password")
     if existing is None and not password:
         raise ApiError("A password is required for a new user", 400)
 
     record = existing if existing is not None else {"username": username}
+    record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     record["admin"] = bool(body.get("admin"))
