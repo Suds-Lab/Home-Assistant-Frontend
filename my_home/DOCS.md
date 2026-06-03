@@ -70,6 +70,17 @@ calls a service it uses the Supervisor's token, so Home Assistant's own logbook
 can only credit "Supervisor". The Activity tab is the source of truth that
 always shows the actual person. You can clear it at any time.
 
+## Backup & restore
+
+The **Settings** tab has a **Backup & restore** card. **Export** downloads a
+single JSON file containing everything in `/data` - users, passwords, each
+user's device assignments, all settings, the activity log and the uploaded app
+icon. Keep it somewhere safe (it contains passwords).
+
+If you uninstall and reinstall the add-on, open Settings → **Restore from
+file** and pick that JSON to bring everything back exactly as it was. Restoring
+replaces all current users, assignments and settings.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +
