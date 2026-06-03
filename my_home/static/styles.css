@@ -761,6 +761,18 @@ section h2 {
   padding: 4px 8px 8px;
 }
 
+.acc-subgroup {
+  margin: 2px 0 6px;
+}
+
+.acc-subhead {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 6px 6px 2px;
+}
+
 /* --- Device cards (generic) --- */
 .device-state {
   color: var(--muted);

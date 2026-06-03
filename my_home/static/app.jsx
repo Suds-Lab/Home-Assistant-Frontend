@@ -741,6 +741,25 @@ function UserEditor({ user, entities, onSave, onCancel }) {
     </label>
   );
 
+  // In Floor mode, show the rooms (areas) within each floor as sub-sections.
+  const renderBody = (list) => {
+    if (mode !== 'floor') return list.map(checkRow);
+    const sub = {};
+    for (const e of list) {
+      const room = e.area || 'No room';
+      if (!sub[room]) sub[room] = [];
+      sub[room].push(e);
+    }
+    return Object.keys(sub)
+      .sort((a, b) => a.localeCompare(b))
+      .map((room) => (
+        <div key={room} className="acc-subgroup">
+          <div className="acc-subhead">{room}</div>
+          {sub[room].sort((a, b) => a.name.localeCompare(b.name)).map(checkRow)}
+        </div>
+      ));
+  };
+
   return (
     <div className="card editor">
       <h3>{isNew ? 'Add user' : `Edit ${user.username}`}</h3>
@@ -836,7 +855,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
                       {list.length}
                     </span>
                   </button>
-                  {open && <div className="acc-body">{list.map(checkRow)}</div>}
+                  {open && <div className="acc-body">{renderBody(list)}</div>}
                 </div>
               );
             })
@@ -967,7 +986,9 @@ function Admin({ onBack, standalone }) {
 const PWA_DISMISS_KEY = 'ha_pwa_dismissed';
 
 // --- Theme: System (default) / Light / Dark ---
-const THEME_KEY = 'ha_theme';
+// v2 key so stale values from the old light/dark-only toggle are ignored and
+// everyone gets the System default.
+const THEME_KEY = 'ha_theme_v2';
 const systemPrefersLight = () =>
   !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
 
@@ -1173,6 +1194,7 @@ function App() {
   const [session, setSession] = useState(null); // null = loading
   const appName = session?.appName || 'My Home';
   const appIcon = session?.appIcon || '🏠';
+  const appImage = session?.appImage || null;
 
   useEffect(() => {
     getSession()
@@ -1183,20 +1205,26 @@ function App() {
   useEffect(() => {
     if (!session) return;
     document.title = appName;
-    // Use the configured icon (emoji) as the browser-tab favicon.
-    const svg =
-      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
-      "<text x='50%' y='52%' dominant-baseline='central' text-anchor='middle' font-size='52'>" +
-      appIcon +
-      '</text></svg>';
+    // Favicon: a custom image when configured, else the emoji icon.
+    let href;
+    if (appImage) {
+      href = new URL(appImage, document.baseURI).href;
+    } else {
+      const svg =
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
+        "<text x='50%' y='52%' dominant-baseline='central' text-anchor='middle' font-size='52'>" +
+        appIcon +
+        '</text></svg>';
+      href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    }
     let link = document.querySelector("link[rel='icon']");
     if (!link) {
       link = document.createElement('link');
       link.rel = 'icon';
       document.head.appendChild(link);
     }
-    link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
-  }, [session, appName, appIcon]);
+    link.href = href;
+  }, [session, appName, appIcon, appImage]);
 
   if (session === null) {
     return (

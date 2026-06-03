@@ -68,6 +68,8 @@ JWT_SECRET = (
 # Display name + icon shown in the UI / browser tab. Configurable.
 APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
 APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or "🏠"
+# Optional URL to a custom image used as the PWA / home-screen / tab icon.
+APP_ICON_URL = addon_options.get("icon_url") or os.environ.get("ICON_URL") or ""
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -248,6 +250,7 @@ def session():
         stream=STREAM_ENABLED,
         appName=APP_NAME,
         appIcon=APP_ICON,
+        appImage="./app-icon" if APP_ICON_URL else None,
     )
 
 
@@ -619,12 +622,37 @@ def admin_delete_user(username):
 
 @app.get("/manifest.webmanifest")
 def manifest():
-    """Serve the PWA manifest with the configured app name (so the installed
-    home-screen app uses it too)."""
+    """Serve the PWA manifest with the configured app name (and custom icon, if
+    set), so the installed home-screen app uses them too."""
     data = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
     data["name"] = APP_NAME
     data["short_name"] = APP_NAME
+    if APP_ICON_URL:
+        icon_type = mimetypes.guess_type(APP_ICON_URL)[0] or "image/png"
+        data["icons"] = [
+            {"src": "./app-icon", "sizes": "192x192", "type": icon_type, "purpose": "any"},
+            {"src": "./app-icon", "sizes": "512x512", "type": icon_type, "purpose": "any"},
+            {"src": "./app-icon", "sizes": "512x512", "type": icon_type, "purpose": "maskable"},
+        ]
     return Response(json.dumps(data), mimetype="application/manifest+json")
+
+
+@app.get("/app-icon")
+def app_icon():
+    """The custom PWA/home-screen icon: proxy the configured image URL (kept
+    same-origin so install works), or fall back to the bundled icon."""
+    if APP_ICON_URL:
+        try:
+            r = requests.get(APP_ICON_URL, timeout=10)
+            if r.ok and r.content:
+                return Response(
+                    r.content,
+                    mimetype=r.headers.get("Content-Type", "image/png"),
+                    headers={"Cache-Control": "max-age=86400"},
+                )
+        except requests.RequestException:
+            pass
+    return send_from_directory(STATIC_DIR / "icons", "icon-512.png")
 
 
 @app.get("/")
