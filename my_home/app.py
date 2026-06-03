@@ -299,7 +299,10 @@ ALLOWED_SERVICES = {
     "switch": {"turn_on", "turn_off", "toggle"},
     "input_boolean": {"turn_on", "turn_off", "toggle"},
     "fan": {"turn_on", "turn_off", "toggle", "set_percentage", "oscillate"},
-    "climate": {"turn_on", "turn_off", "set_hvac_mode", "set_temperature", "set_fan_mode"},
+    "climate": {
+        "turn_on", "turn_off", "set_hvac_mode", "set_temperature",
+        "set_fan_mode", "set_swing_mode",
+    },
     "cover": {
         "open_cover", "close_cover", "stop_cover", "toggle", "set_cover_position"
     },
