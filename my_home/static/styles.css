@@ -606,16 +606,10 @@ section h2 {
 
 .activity-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.activity-head .row-actions {
-  align-items: center;
-  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
 .user-filter {
@@ -625,6 +619,124 @@ section h2 {
   background: var(--input-bg);
   color: var(--text);
   font-size: 0.9rem;
+}
+
+/* Logbook filter controls */
+.lb-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lb-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lb-range input {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  color-scheme: dark light;
+}
+
+.lb-dash {
+  color: var(--muted);
+}
+
+.lb-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.lb-nav .icon-only {
+  font-size: 1.1rem;
+  min-width: 40px;
+}
+
+/* Item multi-select (native <details> dropdown) */
+.lb-multi {
+  position: relative;
+}
+
+.lb-multi > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.lb-multi > summary::-webkit-details-marker {
+  display: none;
+}
+
+.lb-multi > summary::after {
+  content: ' ▾';
+  color: var(--muted);
+}
+
+.lb-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+}
+
+.lb-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.lb-menu-row:hover {
+  background: var(--input-bg);
+}
+
+.lb-menu-row .mdi-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.lb-menu-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-menu-clear {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  cursor: pointer;
 }
 
 /* Home Assistant logbook-style list */

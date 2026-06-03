@@ -1128,16 +1128,39 @@ function timeLabel(ts) {
   });
 }
 
+// Date <-> <input type="datetime-local"> value ("YYYY-MM-DDTHH:MM", local time).
+function toLocalInput(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(
+    d.getMinutes(),
+  )}`;
+}
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function endOfToday() {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 // Styled after Home Assistant's logbook: entries grouped by day, each with a
 // round device-type icon, the entity in accent colour, the action, and a
-// time / relative-time / user line. Plus a filter to show one user.
+// time / relative-time / user line. Records this app's own control actions,
+// with controls to pick a time range, page by day, and filter by user / item.
 function ActivityLog() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [who, setWho] = useState(''); // '' = all users
+  const [selItems, setSelItems] = useState(() => new Set()); // entity_ids; empty = all
+  const [start, setStart] = useState(startOfToday);
+  const [end, setEnd] = useState(endOfToday);
 
   const load = useCallback(() => {
-    adminGetActivity()
+    adminGetActivity(1000)
       .then((d) => setItems(d.activity))
       .catch((e) => setError(e.message));
   }, []);
@@ -1146,35 +1169,48 @@ function ActivityLog() {
     load();
   }, [load]);
 
-  async function clear() {
-    if (!window.confirm('Clear the entire activity log?')) return;
-    try {
-      await adminClearActivity();
-      setWho('');
-      load();
-    } catch (e) {
-      setError(e.message);
-    }
+  function shiftDays(n) {
+    setStart(new Date(start.getTime() + n * DAY_MS));
+    setEnd(new Date(end.getTime() + n * DAY_MS));
   }
 
-  // Distinct users present in the log, for the filter dropdown.
+  function toggleItem(id) {
+    setSelItems((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  // Distinct users / items present across the whole log, for the filters.
   const users = [];
+  const itemOpts = [];
   if (items) {
-    const seen = new Set();
+    const us = new Set();
+    const is = new Set();
     for (const e of items) {
-      const key = e.username || '';
-      if (!seen.has(key)) {
-        seen.add(key);
-        users.push({ value: key, label: e.name || e.username || 'Unknown' });
+      const uk = e.username || '';
+      if (!us.has(uk)) {
+        us.add(uk);
+        users.push({ value: uk, label: e.name || e.username || 'Unknown' });
+      }
+      if (e.entity_id && !is.has(e.entity_id)) {
+        is.add(e.entity_id);
+        itemOpts.push({ id: e.entity_id, label: e.entity || e.entity_id, domain: e.domain });
       }
     }
+    itemOpts.sort((a, b) => a.label.localeCompare(b.label));
   }
 
-  const shown = items
-    ? who
-      ? items.filter((e) => (e.username || '') === who)
-      : items
-    : [];
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const shown = (items || []).filter((e) => {
+    const t = e.ts * 1000;
+    if (t < startMs || t > endMs) return false;
+    if (who && (e.username || '') !== who) return false;
+    if (selItems.size && !selItems.has(e.entity_id)) return false;
+    return true;
+  });
 
   // Group the (newest-first) entries into calendar days.
   const groups = [];
@@ -1191,37 +1227,81 @@ function ActivityLog() {
   return (
     <div className="card activity">
       <div className="activity-head">
-        <div>
-          <span className="device-name">Activity</span>
-          <span className="meta">Who controlled what, most recent first.</span>
-        </div>
-        <div className="row-actions">
-          {items && users.length > 0 && (
-            <select
-              className="user-filter"
-              value={who}
-              onChange={(ev) => setWho(ev.target.value)}
-              aria-label="Filter by user"
-            >
-              <option value="">All users</option>
-              {users.map((u) => (
-                <option key={u.value} value={u.value}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <button className="ghost" onClick={load}>Refresh</button>
-          {items && items.length > 0 && (
-            <button className="btn-danger" onClick={clear}>Clear</button>
-          )}
-        </div>
+        <span className="device-name">Activity</span>
+        <button className="ghost" onClick={load}>Refresh</button>
       </div>
+
+      <div className="lb-controls">
+        <div className="lb-range">
+          <input
+            type="datetime-local"
+            value={toLocalInput(start)}
+            max={toLocalInput(end)}
+            onChange={(ev) => ev.target.value && setStart(new Date(ev.target.value))}
+            aria-label="Start date and time"
+          />
+          <span className="lb-dash">-</span>
+          <input
+            type="datetime-local"
+            value={toLocalInput(end)}
+            min={toLocalInput(start)}
+            onChange={(ev) => ev.target.value && setEnd(new Date(ev.target.value))}
+            aria-label="End date and time"
+          />
+        </div>
+        <div className="lb-nav">
+          <button className="ghost icon-only" onClick={() => shiftDays(-1)} aria-label="Previous day">
+            ‹
+          </button>
+          <button className="ghost icon-only" onClick={() => shiftDays(1)} aria-label="Next day">
+            ›
+          </button>
+        </div>
+        {items && users.length > 1 && (
+          <select
+            className="user-filter"
+            value={who}
+            onChange={(ev) => setWho(ev.target.value)}
+            aria-label="Filter by user"
+          >
+            <option value="">All users</option>
+            {users.map((u) => (
+              <option key={u.value} value={u.value}>
+                {u.label}
+              </option>
+            ))}
+          </select>
+        )}
+        {items && itemOpts.length > 0 && (
+          <details className="lb-multi">
+            <summary>{selItems.size ? `${selItems.size} item${selItems.size === 1 ? '' : 's'}` : 'All items'}</summary>
+            <div className="lb-menu">
+              {selItems.size > 0 && (
+                <button className="lb-menu-clear" onClick={() => setSelItems(new Set())}>
+                  Clear selection
+                </button>
+              )}
+              {itemOpts.map((it) => (
+                <label key={it.id} className="lb-menu-row">
+                  <input
+                    type="checkbox"
+                    checked={selItems.has(it.id)}
+                    onChange={() => toggleItem(it.id)}
+                  />
+                  <DomainIcon domain={it.domain} />
+                  <span>{it.label}</span>
+                </label>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+
       {error && <div className="error">{error}</div>}
       {items === null ? (
         <p className="muted">Loading…</p>
       ) : shown.length === 0 ? (
-        <p className="muted">{who ? 'No activity for this user.' : 'No activity yet.'}</p>
+        <p className="muted">No activity in this range.</p>
       ) : (
         groups.map((g) => (
           <div key={g.label} className="lb-group">
