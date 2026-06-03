@@ -673,6 +673,14 @@ section h2 {
   accent-color: var(--accent);
 }
 
+.pick-icon {
+  flex-shrink: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+  width: 22px;
+  text-align: center;
+}
+
 .pick-name {
   flex: 1;
   min-width: 0;

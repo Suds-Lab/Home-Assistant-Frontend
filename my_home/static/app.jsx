@@ -136,6 +136,31 @@ const DOMAIN_LABELS = {
 const domainLabel = (d) =>
   DOMAIN_LABELS[d] || d.charAt(0).toUpperCase() + d.slice(1).replace(/_/g, ' ');
 
+const DOMAIN_ICONS = {
+  light: '💡',
+  switch: '🔌',
+  input_boolean: '🎚️',
+  climate: '🌡️',
+  fan: '🌀',
+  cover: '🪟',
+  lock: '🔒',
+  media_player: '🔊',
+  scene: '🎬',
+  script: '📜',
+  automation: '⚙️',
+  button: '🔘',
+  input_button: '🔘',
+  vacuum: '🤖',
+  sensor: '📈',
+  binary_sensor: '📡',
+  camera: '📷',
+  person: '🧑',
+  weather: '⛅',
+  number: '🔢',
+  select: '🔽',
+};
+const domainIcon = (d) => DOMAIN_ICONS[d] || '🔧';
+
 // Make raw HA values (hvac/fan modes) readable: "fan_only" -> "fan only".
 const humanize = (s) => String(s == null ? '' : s).replace(/_/g, ' ');
 
@@ -710,6 +735,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         checked={picked.has(e.entity_id)}
         onChange={() => toggleEntity(e.entity_id)}
       />
+      <span className="pick-icon" title={domainLabel(e.domain)}>{domainIcon(e.domain)}</span>
       <span className="pick-name">{e.name}</span>
       <span className="pick-id">{e.entity_id}</span>
     </label>
