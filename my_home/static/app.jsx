@@ -62,7 +62,7 @@ const adminDeleteUser = (username) =>
 
 // --- Components -----------------------------------------------------------
 
-function Login({ onLogin, appName = 'My Home' }) {
+function Login({ onLogin, appName = 'My Home', appIcon = '🏠' }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -85,7 +85,7 @@ function Login({ onLogin, appName = 'My Home' }) {
   return (
     <div className="centered">
       <form className="card login" onSubmit={submit}>
-        <h1>{appName}</h1>
+        <h1><span className="app-icon">{appIcon}</span> {appName}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
         <label>
           Username
@@ -465,7 +465,7 @@ function DeviceCard({ device, onChange }) {
   );
 }
 
-function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) {
+function Dashboard({ displayName, onLogout, live = true, appName = 'My Home', appIcon = '🏠' }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -578,7 +578,7 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) 
     <div className="dashboard">
       <header className="topbar">
         <div>
-          <h1>{appName}</h1>
+          <h1><span className="app-icon">{appIcon}</span> {appName}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
@@ -940,33 +940,51 @@ function Admin({ onBack, standalone }) {
 // instructions (Safari has no install event). Dismissal is remembered.
 const PWA_DISMISS_KEY = 'ha_pwa_dismissed';
 
-// --- Theme (light / dark) ---
+// --- Theme: System (default) / Light / Dark ---
 const THEME_KEY = 'ha_theme';
-function initialTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark';
+const systemPrefersLight = () =>
+  !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+
+function themePref() {
+  const v = localStorage.getItem(THEME_KEY);
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+}
+function resolveTheme(pref) {
+  if (pref === 'system') return systemPrefersLight() ? 'light' : 'dark';
+  return pref;
+}
+function applyTheme(pref) {
+  document.documentElement.setAttribute('data-theme', resolveTheme(pref));
 }
 if (typeof document !== 'undefined') {
-  document.documentElement.setAttribute('data-theme', initialTheme());
+  applyTheme(themePref());
 }
 
 function ThemeToggle() {
-  const [theme, setTheme] = useState(initialTheme());
+  const [pref, setPref] = useState(themePref());
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    localStorage.setItem(THEME_KEY, pref);
+    applyTheme(pref);
+    // When following the system, re-apply live as the OS theme changes.
+    if (pref === 'system' && window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      const onChange = () => applyTheme('system');
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+  }, [pref]);
+
+  const NEXT = { system: 'light', light: 'dark', dark: 'system' };
+  const ICON = { system: '🌗', light: '☀️', dark: '🌙' };
+  const TITLE = { system: 'Theme: System', light: 'Theme: Light', dark: 'Theme: Dark' };
   return (
     <button
       className="ghost icon-only"
-      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-      title={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
-      aria-label="Toggle theme"
+      onClick={() => setPref(NEXT[pref])}
+      title={TITLE[pref]}
+      aria-label={TITLE[pref]}
     >
-      {theme === 'light' ? '🌙' : '☀️'}
+      {ICON[pref]}
     </button>
   );
 }
@@ -1087,7 +1105,7 @@ function InstallPrompt() {
   );
 }
 
-function UserApp({ live, appName }) {
+function UserApp({ live, appName, appIcon }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
 
@@ -1108,9 +1126,15 @@ function UserApp({ live, appName }) {
   return (
     <>
       {!token ? (
-        <Login onLogin={handleLogin} appName={appName} />
+        <Login onLogin={handleLogin} appName={appName} appIcon={appIcon} />
       ) : (
-        <Dashboard displayName={displayName} onLogout={handleLogout} live={live} appName={appName} />
+        <Dashboard
+          displayName={displayName}
+          onLogout={handleLogout}
+          live={live}
+          appName={appName}
+          appIcon={appIcon}
+        />
       )}
       <InstallPrompt />
     </>
@@ -1122,6 +1146,7 @@ function UserApp({ live, appName }) {
 function App() {
   const [session, setSession] = useState(null); // null = loading
   const appName = session?.appName || 'My Home';
+  const appIcon = session?.appIcon || '🏠';
 
   useEffect(() => {
     getSession()
@@ -1130,8 +1155,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (session) document.title = appName;
-  }, [session, appName]);
+    if (!session) return;
+    document.title = appName;
+    // Use the configured icon (emoji) as the browser-tab favicon.
+    const svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
+      "<text x='50%' y='52%' dominant-baseline='central' text-anchor='middle' font-size='52'>" +
+      appIcon +
+      '</text></svg>';
+    let link = document.querySelector("link[rel='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  }, [session, appName, appIcon]);
 
   if (session === null) {
     return (
@@ -1141,7 +1180,7 @@ function App() {
     );
   }
   if (session.mode === 'manage') return <Admin standalone />;
-  return <UserApp live={session.stream} appName={appName} />;
+  return <UserApp live={session.stream} appName={appName} appIcon={appIcon} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);

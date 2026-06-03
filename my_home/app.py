@@ -65,8 +65,9 @@ JWT_SECRET = (
     or os.environ.get("JWT_SECRET")
     or "dev-secret-change-me"
 )
-# Display name shown in the UI / browser tab / installed PWA. Configurable.
+# Display name + icon shown in the UI / browser tab. Configurable.
 APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
+APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or "🏠"
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -246,6 +247,7 @@ def session():
         mode="manage" if is_management() else "user",
         stream=STREAM_ENABLED,
         appName=APP_NAME,
+        appIcon=APP_ICON,
     )
 
 

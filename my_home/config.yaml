@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for "My Home" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
 name: My Home
-version: "1.6.0"
+version: "1.7.0"
 slug: my_home
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -36,7 +36,9 @@ homeassistant_api: true
 # A default admin (alice / changeme) is seeded on first run; change it there.
 options:
   app_name: My Home
+  app_icon: "🏠"
   jwt_secret: change-me-to-a-long-random-string
 schema:
   app_name: str?
+  app_icon: str?
   jwt_secret: str
