@@ -495,6 +495,19 @@ section h2 {
   border-radius: 10px;
 }
 
+.btn-success {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-2);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+}
+
 .user-row {
   display: flex;
   align-items: center;

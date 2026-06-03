@@ -649,7 +649,7 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home', ap
         <div className="topbar-actions">
           <ThemeToggle />
           <InstallButton />
-          <button className="ghost" onClick={onLogout}>
+          <button className="btn-danger" onClick={onLogout}>
             Log out
           </button>
         </div>
@@ -1183,67 +1183,58 @@ function InstallButton() {
     setReady(false);
   }
   return (
-    <button className="ghost" onClick={install}>
+    <button className="btn-success" onClick={install}>
       Install
     </button>
   );
 }
 
-function InstallPrompt() {
-  const [deferred, setDeferred] = useState(null);
-  const [show, setShow] = useState(false);
+// Floating install banner. On the lockscreen (`persistent`) it stays put until
+// the app is installed; on the dashboard it's dismissible.
+function InstallPrompt({ persistent = false }) {
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const [deferred, setDeferred] = useState(deferredInstall);
   const [ios, setIos] = useState(false);
+  const [dismissed, setDismissed] = useState(localStorage.getItem(PWA_DISMISS_KEY) === '1');
 
   useEffect(() => {
-    const standalone =
-      window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    if (standalone || localStorage.getItem(PWA_DISMISS_KEY) === '1') return;
-
-    // Service workers need a secure context (HTTPS or localhost).
+    if (standalone) return;
     if ('serviceWorker' in navigator && window.isSecureContext) {
-      navigator.serviceWorker
-        .register(new URL('sw.js', document.baseURI))
-        .catch(() => {});
+      navigator.serviceWorker.register(new URL('sw.js', document.baseURI)).catch(() => {});
     }
-
-    function onPrompt(e) {
-      e.preventDefault();
-      setDeferred(e);
-      setShow(true);
-    }
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', () => setShow(false));
-
+    const onInstallable = () => setDeferred(deferredInstall);
+    window.addEventListener('pwa-installable', onInstallable);
+    window.addEventListener('pwa-installed', () => setDeferred(null));
     const ua = navigator.userAgent;
-    const isIOS = /iphone|ipad|ipod/i.test(ua);
-    const isSafari = /safari/i.test(ua) && !/crios|fxios|android/i.test(ua);
-    if (isIOS && isSafari) {
+    if (/iphone|ipad|ipod/i.test(ua) && /safari/i.test(ua) && !/crios|fxios|android/i.test(ua)) {
       setIos(true);
-      setShow(true);
     }
-
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+    return () => window.removeEventListener('pwa-installable', onInstallable);
   }, []);
 
+  async function install() {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    setDeferred(null);
+  }
+
   function dismiss() {
-    setShow(false);
+    setDismissed(true);
     localStorage.setItem(PWA_DISMISS_KEY, '1');
   }
 
-  async function install() {
-    if (!deferred) return;
-    deferred.prompt();
-    await deferred.userChoice;
-    setDeferred(null);
-    setShow(false);
-  }
+  if (standalone) return null;
+  const installable = deferred || ios;
+  if (!installable || (!persistent && dismissed)) return null;
 
-  if (!show) return null;
   return (
     <div className="install-banner">
       <div className="install-icon">🏠</div>
       <div className="install-text">
-        <strong>Install My Home</strong>
+        <strong>Install this app</strong>
         <span className="muted">
           {ios
             ? 'Tap the Share button, then “Add to Home Screen”.'
@@ -1251,13 +1242,15 @@ function InstallPrompt() {
         </span>
       </div>
       {!ios && deferred && (
-        <button className="btn-primary" onClick={install}>
+        <button className="btn-success" onClick={install}>
           Install
         </button>
       )}
-      <button className="install-close" onClick={dismiss} aria-label="Dismiss">
-        ✕
-      </button>
+      {!persistent && (
+        <button className="install-close" onClick={dismiss} aria-label="Dismiss">
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -1293,7 +1286,7 @@ function UserApp({ live, appName, appIcon }) {
           appIcon={appIcon}
         />
       )}
-      <InstallPrompt />
+      <InstallPrompt persistent={!token} />
     </>
   );
 }
