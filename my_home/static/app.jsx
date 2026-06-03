@@ -1409,7 +1409,7 @@ function InstallButton() {
 
 // Floating install banner. On the lockscreen (`persistent`) it stays put until
 // the app is installed; on the dashboard it's dismissible.
-function InstallPrompt({ persistent = false }) {
+function InstallPrompt({ persistent = false, appName = 'My Home', appIcon = '🏠' }) {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const [deferred, setDeferred] = useState(deferredInstall);
@@ -1450,9 +1450,9 @@ function InstallPrompt({ persistent = false }) {
 
   return (
     <div className="install-banner">
-      <div className="install-icon">🏠</div>
+      <div className="install-icon">{appIcon}</div>
       <div className="install-text">
-        <strong>Install this app</strong>
+        <strong>Install {appName}</strong>
         <span className="muted">
           {ios
             ? 'Tap the Share button, then “Add to Home Screen”.'
@@ -1473,7 +1473,7 @@ function InstallPrompt({ persistent = false }) {
   );
 }
 
-function UserApp({ live, title, appIcon }) {
+function UserApp({ live, title, appName, appIcon }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
 
@@ -1504,7 +1504,7 @@ function UserApp({ live, title, appIcon }) {
           appIcon={appIcon}
         />
       )}
-      <InstallPrompt persistent={!token} />
+      <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} />
     </>
   );
 }
@@ -1557,7 +1557,7 @@ function App() {
     );
   }
   if (session.mode === 'manage') return <Admin standalone title={title} />;
-  return <UserApp live={session.stream} title={title} appIcon={appIcon} />;
+  return <UserApp live={session.stream} title={title} appName={appName} appIcon={appIcon} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
