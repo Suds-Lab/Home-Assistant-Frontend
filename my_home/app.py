@@ -170,7 +170,10 @@ def enabled_domains():
     return DEVICE_TYPES or None
 
 
-# Resolve display settings: in-app overrides (Settings tab) win over config.
+# Resolve display settings (set in the Settings tab, stored in /data).
+#  * App name  -> browser-tab <title>, PWA / installed-app name. cfg_name().
+#  * Title     -> the heading people see on the login page and dashboard.
+#                 Falls back to the app name when unset. cfg_title().
 def cfg_name():
     return (_load_settings().get("name") or "").strip() or APP_NAME
 
@@ -353,8 +356,8 @@ def session():
     return jsonify(
         mode="manage" if is_management() else "user",
         stream=STREAM_ENABLED,
-        appName=cfg_name(),
-        titleName=cfg_title(),
+        appName=cfg_name(),   # browser tab + installed-app (PWA) name
+        title=cfg_title(),    # heading shown on the login page + dashboard
         appIcon=cfg_emoji(),
         appImage=_app_image_url(),
     )
