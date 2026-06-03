@@ -80,7 +80,7 @@ const adminClearActivity = () => request('/admin/activity', { method: 'DELETE' }
 
 // --- Components -----------------------------------------------------------
 
-function Login({ onLogin, appName = 'My Home', appIcon = '🏠' }) {
+function Login({ onLogin, title = 'My Home', appIcon = '🏠' }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -103,7 +103,7 @@ function Login({ onLogin, appName = 'My Home', appIcon = '🏠' }) {
   return (
     <div className="centered">
       <form className="card login" onSubmit={submit}>
-        <h1><span className="app-icon">{appIcon}</span> {appName}</h1>
+        <h1><span className="app-icon">{appIcon}</span> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
         <label>
           Username
@@ -549,7 +549,7 @@ function DeviceCard({ device, onChange }) {
   );
 }
 
-function Dashboard({ displayName, onLogout, live = true, appName = 'My Home', appIcon = '🏠' }) {
+function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appIcon = '🏠' }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -662,7 +662,7 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home', ap
     <div className="dashboard">
       <header className="topbar">
         <div>
-          <h1><span className="app-icon">{appIcon}</span> {appName}</h1>
+          <h1><span className="app-icon">{appIcon}</span> {title}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
@@ -1031,12 +1031,12 @@ function NameSettings() {
   return (
     <div className="card editor settings-card">
       <label>
-        App name (shown in the app)
-        <input type="text" value={s.name} onChange={set('name')} placeholder="My Home" />
+        Title (login page &amp; dashboard heading)
+        <input type="text" value={s.title} onChange={set('title')} placeholder="Defaults to the app name" />
       </label>
       <label>
-        Title (browser tab)
-        <input type="text" value={s.title} onChange={set('title')} placeholder="Defaults to the app name" />
+        App name (browser tab &amp; installed app)
+        <input type="text" value={s.name} onChange={set('name')} placeholder="My Home" />
       </label>
       <label>
         Home icon (an emoji)
@@ -1176,7 +1176,7 @@ function ActivityLog() {
   );
 }
 
-function Admin({ onBack, standalone, appName = 'My Home' }) {
+function Admin({ onBack, standalone, title = 'My Home' }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
   const [editing, setEditing] = useState(null); // {user} or {} for new
@@ -1237,7 +1237,7 @@ function Admin({ onBack, standalone, appName = 'My Home' }) {
   return (
     <div className="admin">
       <header className="topbar">
-        <h1>{appName}</h1>
+        <h1>{title}</h1>
         <div className="topbar-actions">
           <ThemeToggle />
           {!standalone && (
@@ -1473,7 +1473,7 @@ function InstallPrompt({ persistent = false }) {
   );
 }
 
-function UserApp({ live, appName, appIcon }) {
+function UserApp({ live, title, appIcon }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
 
@@ -1494,13 +1494,13 @@ function UserApp({ live, appName, appIcon }) {
   return (
     <>
       {!token ? (
-        <Login onLogin={handleLogin} appName={appName} appIcon={appIcon} />
+        <Login onLogin={handleLogin} title={title} appIcon={appIcon} />
       ) : (
         <Dashboard
           displayName={displayName}
           onLogout={handleLogout}
           live={live}
-          appName={appName}
+          title={title}
           appIcon={appIcon}
         />
       )}
@@ -1513,8 +1513,9 @@ function UserApp({ live, appName, appIcon }) {
 // management, published = user dashboard) and whether live push is enabled.
 function App() {
   const [session, setSession] = useState(null); // null = loading
+  // App name -> browser tab + installed-app name. Title -> visible heading.
   const appName = session?.appName || 'My Home';
-  const titleName = session?.titleName || appName;
+  const title = session?.title || appName;
   const appIcon = session?.appIcon || '🏠';
   const appImage = session?.appImage || null;
 
@@ -1526,7 +1527,7 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    document.title = titleName;
+    document.title = appName;
     // Favicon: a custom image when configured, else the emoji icon.
     let href;
     if (appImage) {
@@ -1546,7 +1547,7 @@ function App() {
       document.head.appendChild(link);
     }
     link.href = href;
-  }, [session, titleName, appIcon, appImage]);
+  }, [session, appName, appIcon, appImage]);
 
   if (session === null) {
     return (
@@ -1555,8 +1556,8 @@ function App() {
       </div>
     );
   }
-  if (session.mode === 'manage') return <Admin standalone appName={appName} />;
-  return <UserApp live={session.stream} appName={appName} appIcon={appIcon} />;
+  if (session.mode === 'manage') return <Admin standalone title={title} />;
+  return <UserApp live={session.stream} title={title} appIcon={appIcon} />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);

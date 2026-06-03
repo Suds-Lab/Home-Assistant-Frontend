@@ -26,23 +26,23 @@ There are two interfaces:
 ## Configuration
 
 ```yaml
-app_name: My Home                  # title shown in the app / tab / installed PWA
-app_icon: "🏠"                     # an emoji, shown beside the name and as the tab icon
 jwt_secret: a-long-random-string   # signs login sessions
 ```
 
 | Option | Description |
 |--------|-------------|
-| `app_name` | The name shown in the dashboard header, browser tab, and the installed home-screen (PWA) app. Defaults to "My Home". |
-| `app_icon` | An emoji shown next to the name in the app and used as the browser-tab favicon. Defaults to 🏠. |
-| `device_types` | Which entity domains can be assigned in **Manage users** (e.g. `light`, `climate`, `cover`). Leave the list empty to allow every domain. |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
 
-These options are just the **defaults**. Once the add-on is running, manage
-everything live in the sidebar's **Settings** tab: the browser-tab title, the
-in-app name, the home-screen emoji, an **uploaded app-icon image** (PWA /
-favicon), and which **device types** are available. Those settings are stored
-in `/data` and override the config.
+Everything else is configured live in the sidebar's **Settings** tab (stored
+in `/data`):
+
+- **Title** - the heading people see on the **login page** and the **dashboard**.
+- **App name** - the **browser-tab title** and the name of the **installed
+  home-screen (PWA) app**. The Title falls back to this when left blank.
+- **Home icon** - an emoji used beside the title and as the browser-tab favicon.
+- **App icon** - an **uploaded image** used for the PWA / favicon (overrides the
+  emoji).
+- **Device types** - which entity domains can be assigned in **Manage users**.
 
 **Users are not configured here** - manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the
