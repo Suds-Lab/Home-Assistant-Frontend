@@ -113,9 +113,6 @@ def _seed_users():
     else:
         bundled = BASE_DIR / "users.json"
         seed = json.loads(bundled.read_text())["users"] if bundled.exists() else []
-    # Guarantee at least one admin so the "Manage users" screen is reachable.
-    if seed and not any(u.get("admin") for u in seed):
-        seed[0]["admin"] = True
     return seed
 
 
@@ -238,7 +235,6 @@ def login():
     return jsonify(
         token=token,
         displayName=user.get("displayName") or user["username"],
-        admin=bool(user.get("admin")),
     )
 
 
@@ -559,7 +555,6 @@ def admin_list_users():
         {
             "username": u["username"],
             "displayName": u.get("displayName", ""),
-            "admin": bool(u.get("admin")),
             "entities": u.get("entities", []),
         }
         for u in load_users()
@@ -597,29 +592,22 @@ def admin_save_user():
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
-    record["admin"] = bool(body.get("admin"))
     if password:
         record["password"] = password
     if existing is None:
         users.append(record)
 
-    if not any(u.get("admin") for u in users):
-        raise ApiError("At least one user must remain an admin", 400)
     save_users(users)
     return jsonify(ok=True)
 
 
 @app.delete("/api/admin/users/<username>")
 def admin_delete_user(username):
-    admin = require_admin()
-    if username == admin["username"]:
-        raise ApiError("You can't delete your own account", 400)
+    require_admin()
     users = load_users()
     remaining = [u for u in users if u["username"] != username]
     if len(remaining) == len(users):
         raise ApiError("No such user", 404)
-    if not any(u.get("admin") for u in remaining):
-        raise ApiError("At least one user must remain an admin", 400)
     save_users(remaining)
     return jsonify(ok=True)
 
