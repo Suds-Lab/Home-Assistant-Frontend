@@ -820,15 +820,22 @@ def admin_save_user():
 
     users = load_users()
     # Editing an existing user (possibly renaming): `original` is the old name.
+    # Its presence is what distinguishes an edit from a create.
     original = (body.get("original") or "").strip()
-    existing = next((u for u in users if u["username"] == original), None) if original else None
-    if existing is None:
-        existing = next((u for u in users if u["username"] == username), None)
+    taken = any(u["username"] == username for u in users)
 
-    # Renaming to a name another account already uses is not allowed.
-    if username != (existing["username"] if existing else None):
-        if any(u["username"] == username for u in users):
-            raise ApiError(f"The username '{username}' is already taken", 400)
+    if original:
+        existing = next((u for u in users if u["username"] == original), None)
+        if existing is None:
+            raise ApiError(f"The user '{original}' no longer exists", 404)
+        # Renaming onto a name another account already uses is not allowed.
+        if username != original and taken:
+            raise ApiError(f"The username '{username}' is already in use", 400)
+    else:
+        # Creating: never silently overwrite an existing account.
+        if taken:
+            raise ApiError(f"The username '{username}' is already in use", 400)
+        existing = None
 
     password = body.get("password")
     if existing is None and not password:
