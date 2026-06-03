@@ -35,6 +35,7 @@ jwt_secret: a-long-random-string   # signs login sessions
 |--------|-------------|
 | `app_name` | The name shown in the dashboard header, browser tab, and the installed home-screen (PWA) app. Defaults to "My Home". |
 | `app_icon` | An emoji shown next to the name in the app and used as the browser-tab favicon. Defaults to 🏠. |
+| `device_types` | Which entity domains can be assigned in **Manage users** (e.g. `light`, `climate`, `cover`). Leave the list empty to allow every domain. |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
 
 To use a **custom image** as the installed app / home-screen icon (instead of

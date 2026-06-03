@@ -796,11 +796,23 @@ section h2 {
 }
 
 .acc-subhead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--muted);
-  padding: 6px 6px 2px;
+  text-align: left;
+}
+
+.acc-subtitle {
+  flex: 1;
+  font-weight: 600;
 }
 
 /* --- Device cards (generic) --- */
