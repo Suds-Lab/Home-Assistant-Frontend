@@ -1112,9 +1112,29 @@ function relativeTime(ts) {
   return new Date(ts * 1000).toLocaleDateString();
 }
 
+function dayLabel(ts) {
+  return new Date(ts * 1000).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function timeLabel(ts) {
+  return new Date(ts * 1000).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+// Styled after Home Assistant's logbook: entries grouped by day, each with a
+// round device-type icon, the entity in accent colour, the action, and a
+// time / relative-time / user line. Plus a filter to show one user.
 function ActivityLog() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
+  const [who, setWho] = useState(''); // '' = all users
 
   const load = useCallback(() => {
     adminGetActivity()
@@ -1130,10 +1150,42 @@ function ActivityLog() {
     if (!window.confirm('Clear the entire activity log?')) return;
     try {
       await adminClearActivity();
+      setWho('');
       load();
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  // Distinct users present in the log, for the filter dropdown.
+  const users = [];
+  if (items) {
+    const seen = new Set();
+    for (const e of items) {
+      const key = e.username || '';
+      if (!seen.has(key)) {
+        seen.add(key);
+        users.push({ value: key, label: e.name || e.username || 'Unknown' });
+      }
+    }
+  }
+
+  const shown = items
+    ? who
+      ? items.filter((e) => (e.username || '') === who)
+      : items
+    : [];
+
+  // Group the (newest-first) entries into calendar days.
+  const groups = [];
+  let cur = null;
+  for (const e of shown) {
+    const label = dayLabel(e.ts);
+    if (!cur || cur.label !== label) {
+      cur = { label, rows: [] };
+      groups.push(cur);
+    }
+    cur.rows.push(e);
   }
 
   return (
@@ -1144,6 +1196,21 @@ function ActivityLog() {
           <span className="meta">Who controlled what, most recent first.</span>
         </div>
         <div className="row-actions">
+          {items && users.length > 0 && (
+            <select
+              className="user-filter"
+              value={who}
+              onChange={(ev) => setWho(ev.target.value)}
+              aria-label="Filter by user"
+            >
+              <option value="">All users</option>
+              {users.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
+          )}
           <button className="ghost" onClick={load}>Refresh</button>
           {items && items.length > 0 && (
             <button className="btn-danger" onClick={clear}>Clear</button>
@@ -1153,24 +1220,31 @@ function ActivityLog() {
       {error && <div className="error">{error}</div>}
       {items === null ? (
         <p className="muted">Loading…</p>
-      ) : items.length === 0 ? (
-        <p className="muted">No activity yet.</p>
+      ) : shown.length === 0 ? (
+        <p className="muted">{who ? 'No activity for this user.' : 'No activity yet.'}</p>
       ) : (
-        <ul className="activity-list">
-          {items.map((e, i) => (
-            <li key={i} className="activity-item">
-              <span className="pick-icon" title={domainLabel(e.domain)}>
-                <DomainIcon domain={e.domain} />
-              </span>
-              <span className="activity-text">
-                <strong>{e.name}</strong> {e.verb} <strong>{e.entity}</strong>
-              </span>
-              <span className="activity-time" title={new Date(e.ts * 1000).toLocaleString()}>
-                {relativeTime(e.ts)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        groups.map((g) => (
+          <div key={g.label} className="lb-group">
+            <div className="lb-date">{g.label}</div>
+            <ul className="lb-list">
+              {g.rows.map((e, i) => (
+                <li key={i} className="lb-row">
+                  <span className="lb-icon" title={domainLabel(e.domain)}>
+                    <DomainIcon domain={e.domain} />
+                  </span>
+                  <div className="lb-body">
+                    <div className="lb-line">
+                      <span className="lb-entity">{e.entity}</span> {e.verb}
+                    </div>
+                    <div className="lb-meta">
+                      {timeLabel(e.ts)} · {relativeTime(e.ts)} · {e.name}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
       )}
     </div>
   );
