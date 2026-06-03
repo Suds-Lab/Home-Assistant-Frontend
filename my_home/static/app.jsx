@@ -72,6 +72,9 @@ const adminClearIcon = async () => {
 const adminGetDeviceTypes = () => request('/admin/device-types');
 const adminSetDeviceTypes = (types) =>
   request('/admin/device-types', { method: 'POST', body: JSON.stringify({ types }) });
+const adminGetSettings = () => request('/admin/settings');
+const adminSetSettings = (s) =>
+  request('/admin/settings', { method: 'POST', body: JSON.stringify(s) });
 
 // --- Components -----------------------------------------------------------
 
@@ -988,6 +991,52 @@ function IconSettings() {
   );
 }
 
+// Names + home icon (emoji). Saves to /data and reloads so the change applies
+// everywhere.
+function NameSettings() {
+  const [s, setS] = useState(null);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    adminGetSettings()
+      .then((d) => setS({ name: d.name, title: d.title, icon: d.icon }))
+      .catch((e) => setStatus(e.message));
+  }, []);
+
+  async function save() {
+    setStatus('Saving…');
+    try {
+      await adminSetSettings(s);
+      location.reload(); // re-fetch session so the new name/icon apply everywhere
+    } catch (e) {
+      setStatus(e.message);
+    }
+  }
+
+  if (!s) return null;
+  const set = (k) => (e) => setS({ ...s, [k]: e.target.value });
+  return (
+    <div className="card editor settings-card">
+      <label>
+        App name (shown in the app)
+        <input type="text" value={s.name} onChange={set('name')} placeholder="My Home" />
+      </label>
+      <label>
+        Title (browser tab)
+        <input type="text" value={s.title} onChange={set('title')} placeholder="Defaults to the app name" />
+      </label>
+      <label>
+        Home icon (an emoji)
+        <input type="text" value={s.icon} onChange={set('icon')} placeholder="🏠" />
+      </label>
+      <div className="editor-actions">
+        <button className="btn-primary" onClick={save}>Save</button>
+        {status && <span className="muted">{status}</span>}
+      </div>
+    </div>
+  );
+}
+
 // Choose which entity domains appear in the device picker. Shows every type
 // present in Home Assistant so removed ones can be added back.
 function DeviceTypesSettings({ onChange }) {
@@ -1038,10 +1087,11 @@ function DeviceTypesSettings({ onChange }) {
   );
 }
 
-function Admin({ onBack, standalone }) {
+function Admin({ onBack, standalone, appName = 'My Home' }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
   const [editing, setEditing] = useState(null); // {user} or {} for new
+  const [tab, setTab] = useState('users'); // 'users' | 'settings'
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
@@ -1098,12 +1148,9 @@ function Admin({ onBack, standalone }) {
   return (
     <div className="admin">
       <header className="topbar">
-        <h1>Manage users</h1>
+        <h1>{appName}</h1>
         <div className="topbar-actions">
           <ThemeToggle />
-          <button className="btn-primary" onClick={() => setEditing({ user: null })}>
-            Add user
-          </button>
           {!standalone && (
             <button className="ghost" onClick={onBack}>
               Back
@@ -1112,31 +1159,54 @@ function Admin({ onBack, standalone }) {
         </div>
       </header>
 
+      <div className="tabs">
+        <button className={`seg ${tab === 'users' ? 'on' : ''}`} onClick={() => setTab('users')}>
+          Users
+        </button>
+        <button className={`seg ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>
+          Settings
+        </button>
+      </div>
+
       {error && <div className="error banner">{error}</div>}
-      <IconSettings />
-      <DeviceTypesSettings onChange={reload} />
-      {users === null ? (
-        <p className="muted">Loading…</p>
+
+      {tab === 'settings' ? (
+        <>
+          <NameSettings />
+          <IconSettings />
+          <DeviceTypesSettings onChange={reload} />
+        </>
       ) : (
-        users.map((u) => (
-          <div key={u.username} className="card user-row">
-            <div>
-              <span className="device-name">{u.displayName || u.username}</span>
-              <div className="meta">
-                {u.username} · {u.entities.length} device
-                {u.entities.length === 1 ? '' : 's'}
-              </div>
-            </div>
-            <div className="row-actions">
-              <button className="ghost" onClick={() => setEditing({ user: u })}>
-                Edit
-              </button>
-              <button className="btn-danger" onClick={() => handleDelete(u.username)}>
-                Delete
-              </button>
-            </div>
+        <>
+          <div className="tab-actions">
+            <button className="btn-primary" onClick={() => setEditing({ user: null })}>
+              Add user
+            </button>
           </div>
-        ))
+          {users === null ? (
+            <p className="muted">Loading…</p>
+          ) : (
+            users.map((u) => (
+              <div key={u.username} className="card user-row">
+                <div>
+                  <span className="device-name">{u.displayName || u.username}</span>
+                  <div className="meta">
+                    {u.username} · {u.entities.length} device
+                    {u.entities.length === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <div className="row-actions">
+                  <button className="ghost" onClick={() => setEditing({ user: u })}>
+                    Edit
+                  </button>
+                  <button className="btn-danger" onClick={() => handleDelete(u.username)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </>
       )}
     </div>
   );
@@ -1350,6 +1420,7 @@ function UserApp({ live, appName, appIcon }) {
 function App() {
   const [session, setSession] = useState(null); // null = loading
   const appName = session?.appName || 'My Home';
+  const titleName = session?.titleName || appName;
   const appIcon = session?.appIcon || '🏠';
   const appImage = session?.appImage || null;
 
@@ -1361,7 +1432,7 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    document.title = appName;
+    document.title = titleName;
     // Favicon: a custom image when configured, else the emoji icon.
     let href;
     if (appImage) {
@@ -1381,7 +1452,7 @@ function App() {
       document.head.appendChild(link);
     }
     link.href = href;
-  }, [session, appName, appIcon, appImage]);
+  }, [session, titleName, appIcon, appImage]);
 
   if (session === null) {
     return (
@@ -1390,7 +1461,7 @@ function App() {
       </div>
     );
   }
-  if (session.mode === 'manage') return <Admin standalone />;
+  if (session.mode === 'manage') return <Admin standalone appName={appName} />;
   return <UserApp live={session.stream} appName={appName} appIcon={appIcon} />;
 }
 

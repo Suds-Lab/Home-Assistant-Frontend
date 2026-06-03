@@ -129,11 +129,25 @@ def _save_settings(data):
 
 def enabled_domains():
     """Domains the picker is allowed to show. None = all. The in-app setting
-    (Manage users) wins; otherwise the `device_types` config seeds it."""
+    wins; otherwise the `device_types` config seeds it."""
     s = _load_settings()
     if isinstance(s.get("device_types"), list):
         return set(s["device_types"])
     return DEVICE_TYPES or None
+
+
+# Resolve display settings: in-app overrides (Settings tab) win over config.
+def cfg_name():
+    return (_load_settings().get("name") or "").strip() or APP_NAME
+
+
+def cfg_title():
+    s = _load_settings()
+    return (s.get("title") or "").strip() or cfg_name()
+
+
+def cfg_emoji():
+    return (_load_settings().get("icon") or "").strip() or APP_ICON
 ICON_EXT = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -305,8 +319,9 @@ def session():
     return jsonify(
         mode="manage" if is_management() else "user",
         stream=STREAM_ENABLED,
-        appName=APP_NAME,
-        appIcon=APP_ICON,
+        appName=cfg_name(),
+        titleName=cfg_title(),
+        appIcon=cfg_emoji(),
         appImage=_app_image_url(),
     )
 
@@ -650,6 +665,25 @@ def admin_entities():
     return jsonify(entities=items)
 
 
+@app.get("/api/admin/settings")
+def admin_get_settings():
+    """Display settings (names + home emoji) for the Settings tab."""
+    require_admin()
+    return jsonify(title=cfg_title(), name=cfg_name(), icon=cfg_emoji())
+
+
+@app.post("/api/admin/settings")
+def admin_set_settings():
+    require_admin()
+    body = request.get_json(silent=True) or {}
+    s = _load_settings()
+    for key in ("title", "name", "icon"):
+        if key in body and isinstance(body[key], str):
+            s[key] = body[key].strip()
+    _save_settings(s)
+    return jsonify(ok=True)
+
+
 @app.get("/api/admin/device-types")
 def admin_get_device_types():
     """All entity domains present in HA + which are currently enabled for the
@@ -770,8 +804,8 @@ def manifest():
     """Serve the PWA manifest with the configured app name (and custom icon, if
     set), so the installed home-screen app uses them too."""
     data = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
-    data["name"] = APP_NAME
-    data["short_name"] = APP_NAME
+    data["name"] = cfg_name()
+    data["short_name"] = cfg_name()
     icon = _find_icon()
     if icon:
         src = _app_image_url()

@@ -38,9 +38,11 @@ jwt_secret: a-long-random-string   # signs login sessions
 | `device_types` | Which entity domains can be assigned in **Manage users** (e.g. `light`, `climate`, `cover`). Leave the list empty to allow every domain. |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
 
-To use a **custom image** as the installed app / home-screen icon (instead of
-the emoji), **upload** it from the **Manage users** screen → *App icon*. It's
-stored in `/data` and served as the PWA icon + favicon.
+These options are just the **defaults**. Once the add-on is running, manage
+everything live in the sidebar's **Settings** tab: the browser-tab title, the
+in-app name, the home-screen emoji, an **uploaded app-icon image** (PWA /
+favicon), and which **device types** are available. Those settings are stored
+in `/data` and override the config.
 
 **Users are not configured here** - manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the

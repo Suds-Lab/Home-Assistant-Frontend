@@ -793,6 +793,28 @@ section h2 {
   color: #fff;
 }
 
+/* Management Users/Settings tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tabs .seg {
+  padding: 7px 16px;
+  font-size: 0.9rem;
+}
+
+.tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.settings-card {
+  margin-bottom: 14px;
+}
+
 /* Collapsible group (accordion) */
 .acc-group {
   border: 1px solid var(--border);
