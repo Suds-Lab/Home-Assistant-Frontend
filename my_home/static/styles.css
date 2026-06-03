@@ -610,37 +610,85 @@ section h2 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
-.activity-list {
+.activity-head .row-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.user-filter {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* Home Assistant logbook-style list */
+.lb-group {
+  margin-top: 14px;
+}
+
+.lb-date {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.lb-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.activity-item {
+.lb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.lb-row:last-child {
+  border-bottom: none;
+}
+
+.lb-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-  border-top: 1px solid var(--border);
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
 }
 
-.activity-item:first-child {
-  border-top: none;
-}
-
-.activity-text {
+.lb-body {
   flex: 1;
   min-width: 0;
-  font-size: 0.92rem;
 }
 
-.activity-time {
-  flex-shrink: 0;
+.lb-line {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.lb-entity {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.lb-meta {
   color: var(--muted);
   font-size: 0.8rem;
-  white-space: nowrap;
+  margin-top: 2px;
 }
 
 .badge {
