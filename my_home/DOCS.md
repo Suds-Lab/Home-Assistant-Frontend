@@ -59,6 +59,17 @@ On first run a default admin **`alice` / `changeme`** is created so you can log
 in - change its password (and add everyone else) from the Manage users screen
 right away.
 
+## Activity log
+
+The **Activity** tab in the sidebar shows who controlled what, newest first -
+each entry names the real app user (e.g. "Alice set the temperature to 21°
+Bedroom AC"). This is the app's own record, stored in `/data`.
+
+It exists because app users are **not** Home Assistant users: when the add-on
+calls a service it uses the Supervisor's token, so Home Assistant's own logbook
+can only credit "Supervisor". The Activity tab is the source of truth that
+always shows the actual person. You can clear it at any time.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +

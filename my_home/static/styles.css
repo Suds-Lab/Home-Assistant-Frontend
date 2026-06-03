@@ -591,6 +591,45 @@ section h2 {
   flex-shrink: 0;
 }
 
+.activity-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.activity-item:first-child {
+  border-top: none;
+}
+
+.activity-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.92rem;
+}
+
+.activity-time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .badge {
   font-size: 0.7rem;
   background: var(--accent);
