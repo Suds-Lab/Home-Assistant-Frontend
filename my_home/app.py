@@ -113,6 +113,8 @@ STORE_FILE = _store_path()
 # Uploaded custom app icon lives next to the user store (persistent /data).
 ICON_DIR = STORE_FILE.parent
 SETTINGS_FILE = ICON_DIR / "settings.json"
+ACTIVITY_FILE = ICON_DIR / "activity.json"
+ACTIVITY_MAX = 1000  # keep the most recent N actions
 
 
 def _load_settings():
@@ -125,6 +127,38 @@ def _load_settings():
 def _save_settings(data):
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+
+
+_ACTIVITY_LOCK = threading.Lock()
+
+
+def _load_activity():
+    try:
+        data = json.loads(ACTIVITY_FILE.read_text())
+        return data if isinstance(data, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _append_activity(entry):
+    """Append one action to our own activity log (newest last on disk).
+
+    This is the app's own record of who did what - app users aren't HA users,
+    so HA's native logbook can only credit the Supervisor. This log always
+    shows the real person.
+    """
+    with _ACTIVITY_LOCK:
+        log = _load_activity()
+        log.append(entry)
+        if len(log) > ACTIVITY_MAX:
+            log = log[-ACTIVITY_MAX:]
+        try:
+            ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = ACTIVITY_FILE.with_name(ACTIVITY_FILE.name + ".tmp")
+            tmp.write_text(json.dumps(log))
+            tmp.replace(ACTIVITY_FILE)
+        except OSError:
+            pass  # best-effort; never block a control action on logging
 
 
 def enabled_domains():
@@ -425,25 +459,45 @@ _ACTION_VERBS = {
 }
 
 
-def _log_action(user, domain, service, entity_id, data):
-    """Record who did it in the HA logbook (HA's own context shows the
-    Supervisor, since app users aren't HA users; this adds the real name)."""
-    name = user.get("displayName") or user.get("username") or "A user"
+def _action_verb(service, data):
     if service == "set_hvac_mode":
-        verb = f"set the mode to {data.get('hvac_mode')}"
-    elif service == "set_fan_mode":
-        verb = f"set the fan to {data.get('fan_mode')}"
-    elif service == "set_swing_mode":
-        verb = f"set swing to {data.get('swing_mode')}"
-    elif service == "set_temperature":
-        verb = f"set the temperature to {data.get('temperature')}°"
-    else:
-        verb = _ACTION_VERBS.get(service, service.replace("_", " "))
-    try:
-        call_service("logbook", "log", entity_id,
-                     {"name": name, "message": verb, "domain": "my_home"})
-    except Exception:  # noqa: BLE001  (logbook is best-effort)
-        pass
+        return f"set the mode to {data.get('hvac_mode')}"
+    if service == "set_fan_mode":
+        return f"set the fan to {data.get('fan_mode')}"
+    if service == "set_swing_mode":
+        return f"set swing to {data.get('swing_mode')}"
+    if service == "set_temperature":
+        return f"set the temperature to {data.get('temperature')}°"
+    if service == "set_percentage":
+        return f"set the speed to {data.get('percentage')}%"
+    if service == "set_cover_position":
+        return f"set the position to {data.get('position')}%"
+    if service == "volume_set":
+        return f"set the volume to {round((data.get('volume_level') or 0) * 100)}%"
+    return _ACTION_VERBS.get(service, service.replace("_", " "))
+
+
+def _entity_name(entity_id):
+    state = STATE_CACHE.get(entity_id)
+    if state:
+        return state.get("attributes", {}).get("friendly_name") or entity_id
+    return entity_id
+
+
+def _log_action(user, domain, service, entity_id, data):
+    """Record who did what in the app's own activity log. App users aren't HA
+    users, so HA's native logbook can only credit the Supervisor - this log is
+    the source of truth that always names the real person."""
+    _append_activity({
+        "ts": time.time(),
+        "username": user.get("username"),
+        "name": user.get("displayName") or user.get("username") or "A user",
+        "entity_id": entity_id,
+        "entity": _entity_name(entity_id),
+        "domain": domain,
+        "service": service,
+        "verb": _action_verb(service, data),
+    })
 
 
 # --- Real-time updates (HA WebSocket -> cache -> SSE) ---------------------
@@ -707,6 +761,33 @@ def admin_set_device_types():
     s = _load_settings()
     s["device_types"] = [t for t in types if isinstance(t, str)]
     _save_settings(s)
+    return jsonify(ok=True)
+
+
+@app.get("/api/admin/activity")
+def admin_activity():
+    """The app's own activity log - who controlled what, newest first."""
+    require_admin()
+    log = _load_activity()
+    who = request.args.get("user")
+    if who:
+        log = [e for e in log if e.get("username") == who]
+    try:
+        limit = min(int(request.args.get("limit", 200)), ACTIVITY_MAX)
+    except (TypeError, ValueError):
+        limit = 200
+    return jsonify(activity=list(reversed(log))[:limit])
+
+
+@app.delete("/api/admin/activity")
+def admin_clear_activity():
+    """Clear the activity log."""
+    require_admin()
+    with _ACTIVITY_LOCK:
+        try:
+            ACTIVITY_FILE.unlink()
+        except OSError:
+            pass
     return jsonify(ok=True)
 
 

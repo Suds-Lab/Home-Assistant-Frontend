@@ -75,6 +75,8 @@ const adminSetDeviceTypes = (types) =>
 const adminGetSettings = () => request('/admin/settings');
 const adminSetSettings = (s) =>
   request('/admin/settings', { method: 'POST', body: JSON.stringify(s) });
+const adminGetActivity = (limit = 200) => request(`/admin/activity?limit=${limit}`);
+const adminClearActivity = () => request('/admin/activity', { method: 'DELETE' });
 
 // --- Components -----------------------------------------------------------
 
@@ -1098,11 +1100,87 @@ function DeviceTypesSettings({ onChange }) {
   );
 }
 
+function relativeTime(ts) {
+  const secs = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(ts * 1000).toLocaleDateString();
+}
+
+function ActivityLog() {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    adminGetActivity()
+      .then((d) => setItems(d.activity))
+      .catch((e) => setError(e.message));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function clear() {
+    if (!window.confirm('Clear the entire activity log?')) return;
+    try {
+      await adminClearActivity();
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <div className="card activity">
+      <div className="activity-head">
+        <div>
+          <span className="device-name">Activity</span>
+          <span className="meta">Who controlled what, most recent first.</span>
+        </div>
+        <div className="row-actions">
+          <button className="ghost" onClick={load}>Refresh</button>
+          {items && items.length > 0 && (
+            <button className="btn-danger" onClick={clear}>Clear</button>
+          )}
+        </div>
+      </div>
+      {error && <div className="error">{error}</div>}
+      {items === null ? (
+        <p className="muted">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="muted">No activity yet.</p>
+      ) : (
+        <ul className="activity-list">
+          {items.map((e, i) => (
+            <li key={i} className="activity-item">
+              <span className="pick-icon" title={domainLabel(e.domain)}>
+                <DomainIcon domain={e.domain} />
+              </span>
+              <span className="activity-text">
+                <strong>{e.name}</strong> {e.verb} <strong>{e.entity}</strong>
+              </span>
+              <span className="activity-time" title={new Date(e.ts * 1000).toLocaleString()}>
+                {relativeTime(e.ts)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Admin({ onBack, standalone, appName = 'My Home' }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
   const [editing, setEditing] = useState(null); // {user} or {} for new
-  const [tab, setTab] = useState('users'); // 'users' | 'settings'
+  const [tab, setTab] = useState('users'); // 'users' | 'activity' | 'settings'
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
@@ -1174,6 +1252,9 @@ function Admin({ onBack, standalone, appName = 'My Home' }) {
         <button className={`seg ${tab === 'users' ? 'on' : ''}`} onClick={() => setTab('users')}>
           Users
         </button>
+        <button className={`seg ${tab === 'activity' ? 'on' : ''}`} onClick={() => setTab('activity')}>
+          Activity
+        </button>
         <button className={`seg ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>
           Settings
         </button>
@@ -1187,6 +1268,8 @@ function Admin({ onBack, standalone, appName = 'My Home' }) {
           <IconSettings />
           <DeviceTypesSettings onChange={reload} />
         </>
+      ) : tab === 'activity' ? (
+        <ActivityLog />
       ) : (
         <>
           <div className="tab-actions">
