@@ -7,7 +7,24 @@
   --accent: #3b82f6;
   --accent-2: #22c55e;
   --error: #f87171;
+  --border: #2c3848;
+  --input-bg: #0f1722;
+  --switch-bg: #3a4656;
   --radius: 14px;
+}
+
+[data-theme='light'] {
+  --bg: #eef1f5;
+  --card: #ffffff;
+  --card-active: #e6eefc;
+  --text: #16202c;
+  --muted: #5b6b7a;
+  --accent: #2563eb;
+  --accent-2: #16a34a;
+  --error: #dc2626;
+  --border: #d4dbe3;
+  --input-bg: #f2f5f9;
+  --switch-bg: #c4ccd6;
 }
 
 * {
@@ -81,8 +98,8 @@ button {
 .login input {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #2c3848;
-  background: #0f1722;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 1rem;
 }
@@ -122,10 +139,20 @@ button {
 
 .ghost {
   background: transparent;
-  border: 1px solid #2c3848;
+  border: 1px solid var(--border);
   color: var(--text);
   padding: 8px 14px;
   border-radius: 10px;
+}
+
+.ghost.icon-only {
+  padding: 8px 10px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dashboard-search {
+  margin-bottom: 18px;
 }
 
 section {
@@ -222,7 +249,7 @@ section h2 {
   align-items: center;
   gap: 12px;
   background: var(--card);
-  border: 1px solid #2c3848;
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 12px 14px;
   box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
@@ -290,7 +317,7 @@ section h2 {
   height: 26px;
   border-radius: 999px;
   border: none;
-  background: #3a4656;
+  background: var(--switch-bg);
   position: relative;
   transition: background 0.2s;
   flex-shrink: 0;
@@ -345,8 +372,8 @@ section h2 {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid #2c3848;
-  background: #0f1722;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 1.4rem;
   line-height: 1;
@@ -372,7 +399,7 @@ section h2 {
 .mode {
   padding: 7px 6px;
   border-radius: 9px;
-  border: 1px solid #2c3848;
+  border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
   text-transform: capitalize;
@@ -389,8 +416,8 @@ section h2 {
 
 /* "Off" is a neutral state - grey it out even when selected. */
 .mode.mode-off.selected {
-  background: #3a4656;
-  border-color: #3a4656;
+  background: var(--switch-bg);
+  border-color: var(--switch-bg);
   color: var(--text);
 }
 
@@ -414,13 +441,13 @@ section h2 {
 
 .device.glow .btn-row button,
 .device.glow .temp-control button {
-  border-color: color-mix(in srgb, var(--g) 45%, #2c3848);
+  border-color: color-mix(in srgb, var(--g) 45%, var(--border));
   color: color-mix(in srgb, var(--g) 65%, var(--text));
 }
 
 .device.glow .btn-row button:hover:not(:disabled),
 .device.glow .temp-control button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--g) 16%, #0f1722);
+  background: color-mix(in srgb, var(--g) 16%, var(--input-bg));
 }
 
 /* --- Admin / manage users --- */
@@ -503,8 +530,8 @@ section h2 {
 .editor input[type='password'] {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #2c3848;
-  background: #0f1722;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 1rem;
 }
@@ -550,8 +577,8 @@ section h2 {
   width: 100%;
   padding: 9px 12px;
   border-radius: 10px;
-  border: 1px solid #2c3848;
-  background: #0f1722;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 0.95rem;
   margin-bottom: 6px;
@@ -559,8 +586,8 @@ section h2 {
 
 /* --- Entity picker (redesigned) --- */
 .selected-box {
-  background: #0f1722;
-  border: 1px solid #2c3848;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
   margin-bottom: 14px;
@@ -605,7 +632,7 @@ section h2 {
   font-size: 0.95rem;
   color: var(--text);
   padding: 8px 0 4px;
-  border-bottom: 1px solid #2c3848;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 6px;
 }
 
@@ -624,7 +651,7 @@ section h2 {
 }
 
 .pick-row:hover {
-  background: #0f1722;
+  background: var(--input-bg);
 }
 
 .pick-row input {
@@ -644,6 +671,74 @@ section h2 {
   font-size: 0.75rem;
   font-family: ui-monospace, monospace;
   white-space: nowrap;
+}
+
+/* Group-by segmented control */
+.group-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 10px;
+  font-size: 0.8rem;
+}
+
+.seg {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.seg.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Collapsible group (accordion) */
+.acc-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.acc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.acc-caret {
+  transition: transform 0.15s ease;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.acc-caret.open {
+  transform: rotate(90deg);
+}
+
+.acc-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.acc-count {
+  font-size: 0.8rem;
+}
+
+.acc-body {
+  padding: 4px 8px 8px;
 }
 
 /* --- Device cards (generic) --- */
@@ -679,8 +774,8 @@ section h2 {
   flex: 1;
   padding: 8px;
   border-radius: 9px;
-  border: 1px solid #2c3848;
-  background: #0f1722;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 1rem;
 }
@@ -693,7 +788,7 @@ section h2 {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 1px solid #2c3848;
+  border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   font-style: italic;
@@ -744,7 +839,7 @@ section h2 {
 
 .attr-table td {
   padding: 6px 8px;
-  border-top: 1px solid #2c3848;
+  border-top: 1px solid var(--border);
   vertical-align: top;
 }
 

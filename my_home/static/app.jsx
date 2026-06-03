@@ -73,8 +73,8 @@ function Login({ onLogin, appName = 'My Home' }) {
     setError('');
     setBusy(true);
     try {
-      const { token, displayName, admin } = await login(username, password);
-      onLogin(token, displayName, admin);
+      const { token, displayName } = await login(username, password);
+      onLogin(token, displayName);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -465,11 +465,11 @@ function DeviceCard({ device, onChange }) {
   );
 }
 
-// Modal showing an entity's full state and every attribute.
 function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
   // Fallback fetch (used for first paint and if the live stream drops).
   const refresh = useCallback(async () => {
@@ -555,8 +555,15 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) 
     };
   }, [refresh, live]);
 
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? devices.filter(
+        (d) => d.name.toLowerCase().includes(q) || d.entity_id.toLowerCase().includes(q)
+      )
+    : devices;
+
   const groups = {};
-  for (const d of devices) {
+  for (const d of visible) {
     if (!groups[d.domain]) groups[d.domain] = [];
     groups[d.domain].push(d);
   }
@@ -574,16 +581,31 @@ function Dashboard({ displayName, onLogout, live = true, appName = 'My Home' }) 
           <h1>{appName}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
-        <button className="ghost" onClick={onLogout}>
-          Log out
-        </button>
+        <div className="topbar-actions">
+          <ThemeToggle />
+          <InstallButton />
+          <button className="ghost" onClick={onLogout}>
+            Log out
+          </button>
+        </div>
       </header>
 
       {error && <div className="error banner">{error}</div>}
+      {!loading && devices.length > 2 && (
+        <input
+          type="search"
+          className="search dashboard-search"
+          placeholder="Search devices…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
       {loading ? (
         <p className="muted">Loading your devices…</p>
       ) : devices.length === 0 ? (
         <p className="muted">No devices assigned to you.</p>
+      ) : domains.length === 0 ? (
+        <p className="muted">No devices match “{query}”.</p>
       ) : (
         domains.map((domain) => (
           <section key={domain}>
@@ -605,11 +627,19 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [username, setUsername] = useState(user?.username || '');
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [password, setPassword] = useState('');
-  const [admin, setAdmin] = useState(user?.admin || false);
   const [picked, setPicked] = useState(new Set(user?.entities || []));
   const [search, setSearch] = useState('');
+  const [groupBy, setGroupBy] = useState(null); // null = auto
+  const [expanded, setExpanded] = useState(() => new Set());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const toggleGroup = (key) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   function toggleEntity(id) {
     setPicked((prev) => {
@@ -628,7 +658,6 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
-        admin,
         entities: [...picked],
       });
     } catch (err) {
@@ -645,18 +674,34 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const byId = {};
   for (const e of entities) byId[e.entity_id] = e;
   const hasAreas = entities.some((e) => e.area);
+  const hasFloors = entities.some((e) => e.floor);
 
-  // Group by Floor → Room when Home Assistant knows areas; otherwise by type.
+  // How to group the picker. Defaults to Floor (or Room) when HA knows areas.
+  const mode = groupBy || (hasFloors ? 'floor' : hasAreas ? 'room' : 'type');
+  const groupKey = (e) =>
+    mode === 'floor'
+      ? e.floor || 'No floor'
+      : mode === 'room'
+      ? e.area || 'No room'
+      : domainLabel(e.domain);
+
   const groups = {};
   for (const e of filtered) {
-    const top = hasAreas ? e.floor || 'Other' : 'All devices';
-    const sub = hasAreas ? e.area || 'Unassigned' : domainLabel(e.domain);
-    if (!groups[top]) groups[top] = {};
-    if (!groups[top][sub]) groups[top][sub] = [];
-    groups[top][sub].push(e);
+    const k = groupKey(e);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(e);
   }
-  const tops = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  const groupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  for (const list of Object.values(groups)) list.sort((a, b) => a.name.localeCompare(b.name));
+
   const selected = [...picked].map((id) => byId[id] || { entity_id: id, name: id });
+
+  const groupOptions = [
+    hasFloors && ['floor', 'Floor'],
+    hasAreas && ['room', 'Room'],
+    ['type', 'Type'],
+  ].filter(Boolean);
+  const searching = q.length > 0;
 
   const checkRow = (e) => (
     <label key={e.entity_id} className="pick-row">
@@ -694,10 +739,6 @@ function UserEditor({ user, entities, onSave, onCancel }) {
           onChange={(e) => setPassword(e.target.value)}
         />
       </label>
-      <label className="checkbox-row">
-        <input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} />
-        Administrator (can manage users)
-      </label>
 
       <h4 className="devices-heading">Devices this user can control</h4>
 
@@ -730,25 +771,49 @@ function UserEditor({ user, entities, onSave, onCancel }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {tops.length === 0 ? (
+          {groupOptions.length > 1 && (
+            <div className="group-by">
+              <span className="muted">Group by</span>
+              {groupOptions.map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  className={`seg ${mode === val ? 'on' : ''}`}
+                  onClick={() => {
+                    setGroupBy(val);
+                    setExpanded(new Set());
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {groupNames.length === 0 ? (
             <p className="muted">No matches.</p>
           ) : (
-            tops.map((top) => (
-              <div key={top} className="floor-group">
-                {hasAreas && <div className="floor-head">{top}</div>}
-                {Object.keys(groups[top])
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((sub) => (
-                    <div key={sub} className="entity-group">
-                      <h4>{sub}</h4>
-                      {groups[top][sub]
-                        .slice()
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(checkRow)}
-                    </div>
-                  ))}
-              </div>
-            ))
+            groupNames.map((name) => {
+              const list = groups[name];
+              const open = searching || expanded.has(name);
+              const sel = list.filter((e) => picked.has(e.entity_id)).length;
+              return (
+                <div key={name} className="acc-group">
+                  <button
+                    type="button"
+                    className="acc-head"
+                    onClick={() => toggleGroup(name)}
+                  >
+                    <span className={`acc-caret ${open ? 'open' : ''}`}>▸</span>
+                    <span className="acc-title">{name}</span>
+                    <span className="acc-count muted">
+                      {sel ? `${sel}/` : ''}
+                      {list.length}
+                    </span>
+                  </button>
+                  {open && <div className="acc-body">{list.map(checkRow)}</div>}
+                </div>
+              );
+            })
           )}
         </>
       )}
@@ -828,6 +893,7 @@ function Admin({ onBack, standalone }) {
       <header className="topbar">
         <h1>Manage users</h1>
         <div className="topbar-actions">
+          <ThemeToggle />
           <button className="btn-primary" onClick={() => setEditing({ user: null })}>
             Add user
           </button>
@@ -847,7 +913,6 @@ function Admin({ onBack, standalone }) {
           <div key={u.username} className="card user-row">
             <div>
               <span className="device-name">{u.displayName || u.username}</span>
-              {u.admin && <span className="badge">admin</span>}
               <div className="meta">
                 {u.username} · {u.entities.length} device
                 {u.entities.length === 1 ? '' : 's'}
@@ -874,6 +939,80 @@ function Admin({ onBack, standalone }) {
 // browser's install prompt (Android/desktop Chrome), and shows tailored iOS
 // instructions (Safari has no install event). Dismissal is remembered.
 const PWA_DISMISS_KEY = 'ha_pwa_dismissed';
+
+// --- Theme (light / dark) ---
+const THEME_KEY = 'ha_theme';
+function initialTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+    ? 'light'
+    : 'dark';
+}
+if (typeof document !== 'undefined') {
+  document.documentElement.setAttribute('data-theme', initialTheme());
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(initialTheme());
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+  return (
+    <button
+      className="ghost icon-only"
+      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+      title={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
+      aria-label="Toggle theme"
+    >
+      {theme === 'light' ? '🌙' : '☀️'}
+    </button>
+  );
+}
+
+// Capture the browser's install prompt once, app-wide, so both the first-visit
+// banner and the always-available header "Install" button can use it.
+let deferredInstall = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    window.dispatchEvent(new Event('pwa-installable'));
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstall = null;
+    window.dispatchEvent(new Event('pwa-installed'));
+  });
+}
+
+// A persistent header button - visible whenever the app is installable, even
+// after the first-visit banner is dismissed.
+function InstallButton() {
+  const [ready, setReady] = useState(!!deferredInstall);
+  useEffect(() => {
+    const on = () => setReady(!!deferredInstall);
+    window.addEventListener('pwa-installable', on);
+    window.addEventListener('pwa-installed', on);
+    return () => {
+      window.removeEventListener('pwa-installable', on);
+      window.removeEventListener('pwa-installed', on);
+    };
+  }, []);
+  if (!ready) return null;
+  async function install() {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    setReady(false);
+  }
+  return (
+    <button className="ghost" onClick={install}>
+      Install
+    </button>
+  );
+}
 
 function InstallPrompt() {
   const [deferred, setDeferred] = useState(null);
