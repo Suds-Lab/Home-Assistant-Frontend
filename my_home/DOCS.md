@@ -28,7 +28,6 @@ There are two interfaces:
 ```yaml
 app_name: My Home                  # title shown in the app / tab / installed PWA
 app_icon: "🏠"                     # an emoji, shown beside the name and as the tab icon
-icon_url: ""                       # optional: URL to an image for the PWA/home-screen icon
 jwt_secret: a-long-random-string   # signs login sessions
 ```
 
@@ -36,8 +35,11 @@ jwt_secret: a-long-random-string   # signs login sessions
 |--------|-------------|
 | `app_name` | The name shown in the dashboard header, browser tab, and the installed home-screen (PWA) app. Defaults to "My Home". |
 | `app_icon` | An emoji shown next to the name in the app and used as the browser-tab favicon. Defaults to 🏠. |
-| `icon_url` | Optional URL to a **square image** (e.g. PNG). When set, it becomes the installed PWA / home-screen icon and the tab favicon (the add-on fetches it and serves it same-origin). Leave blank to use the emoji. |
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
+
+To use a **custom image** as the installed app / home-screen icon (instead of
+the emoji), **upload** it from the **Manage users** screen → *App icon*. It's
+stored in `/data` and served as the PWA icon + favicon.
 
 **Users are not configured here** - manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the

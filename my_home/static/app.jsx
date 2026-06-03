@@ -52,13 +52,23 @@ const getDevice = (entity_id) => request(`/entity/${encodeURIComponent(entity_id
 const control = (entity_id, service, data = {}) =>
   request('/control', { method: 'POST', body: JSON.stringify({ entity_id, service, data }) });
 
-// Admin (only reachable by users flagged admin:true).
+// Admin (management screen, reached via the HA sidebar / Ingress).
 const adminGetUsers = () => request('/admin/users');
 const adminGetEntities = () => request('/admin/entities');
 const adminSaveUser = (user) =>
   request('/admin/users', { method: 'POST', body: JSON.stringify(user) });
 const adminDeleteUser = (username) =>
   request(`/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+const adminUploadIcon = async (file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(new URL('api/admin/icon', document.baseURI), { method: 'POST', body: fd });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Upload failed');
+};
+const adminClearIcon = async () => {
+  const r = await fetch(new URL('api/admin/icon', document.baseURI), { method: 'DELETE' });
+  if (!r.ok) throw new Error('Failed to remove icon');
+};
 
 // --- Components -----------------------------------------------------------
 
@@ -906,6 +916,62 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   );
 }
 
+// Upload / reset the custom app icon (PWA / home-screen / favicon).
+function IconSettings() {
+  const [v, setV] = useState(0); // cache-buster for the preview
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function onFile(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    setError('');
+    try {
+      await adminUploadIcon(file);
+      setV(Date.now());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reset() {
+    setBusy(true);
+    setError('');
+    try {
+      await adminClearIcon();
+      setV(Date.now());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card icon-settings">
+      <img className="icon-preview" src={`app-icon?v=${v}`} alt="App icon" />
+      <div className="icon-settings-text">
+        <span className="device-name">App icon</span>
+        <span className="meta">Installed-app / home-screen icon and browser tab.</span>
+        {error && <span className="error">{error}</span>}
+      </div>
+      <div className="row-actions">
+        <label className="ghost upload-btn">
+          {busy ? 'Working…' : 'Upload'}
+          <input type="file" accept="image/*" onChange={onFile} disabled={busy} hidden />
+        </label>
+        <button className="ghost" onClick={reset} disabled={busy}>
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Admin({ onBack, standalone }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
@@ -981,6 +1047,7 @@ function Admin({ onBack, standalone }) {
       </header>
 
       {error && <div className="error banner">{error}</div>}
+      <IconSettings />
       {users === null ? (
         <p className="muted">Loading…</p>
       ) : (

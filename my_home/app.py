@@ -68,8 +68,6 @@ JWT_SECRET = (
 # Display name + icon shown in the UI / browser tab. Configurable.
 APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
 APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or "🏠"
-# Optional URL to a custom image used as the PWA / home-screen / tab icon.
-APP_ICON_URL = addon_options.get("icon_url") or os.environ.get("ICON_URL") or ""
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -106,6 +104,37 @@ def _store_path():
 
 
 STORE_FILE = _store_path()
+
+# Uploaded custom app icon lives next to the user store (persistent /data).
+ICON_DIR = STORE_FILE.parent
+ICON_EXT = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+    "image/gif": "gif",
+}
+
+
+def _find_icon():
+    """Path to the uploaded custom icon, if any."""
+    for p in sorted(ICON_DIR.glob("app-icon.*")):
+        return p
+    return None
+
+
+def _remove_icons():
+    for p in ICON_DIR.glob("app-icon.*"):
+        try:
+            p.unlink()
+        except OSError:
+            pass  # best-effort (e.g. transient file lock on Windows)
+
+
+def _app_image_url():
+    """Cache-busted URL for the custom icon, or None when using the default."""
+    p = _find_icon()
+    return f"./app-icon?v={int(p.stat().st_mtime)}" if p else None
 
 
 def _seed_users():
@@ -164,6 +193,7 @@ def call_service(domain, service, entity_id, extra=None):
 # --- App + auth ----------------------------------------------------------
 
 app = Flask(__name__, static_folder=None)
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB cap on uploads
 sock = Sock(app)
 
 
@@ -250,7 +280,7 @@ def session():
         stream=STREAM_ENABLED,
         appName=APP_NAME,
         appIcon=APP_ICON,
-        appImage="./app-icon" if APP_ICON_URL else None,
+        appImage=_app_image_url(),
     )
 
 
@@ -620,6 +650,28 @@ def admin_delete_user(username):
     return jsonify(ok=True)
 
 
+@app.post("/api/admin/icon")
+def admin_upload_icon():
+    """Upload a custom app icon (PWA / home-screen / favicon)."""
+    require_admin()
+    f = request.files.get("file")
+    if not f or not (f.mimetype or "").startswith("image/"):
+        raise ApiError("Please choose an image file", 400)
+    ext = ICON_EXT.get(f.mimetype, "png")
+    ICON_DIR.mkdir(parents=True, exist_ok=True)
+    _remove_icons()
+    f.save(str(ICON_DIR / f"app-icon.{ext}"))
+    return jsonify(ok=True)
+
+
+@app.delete("/api/admin/icon")
+def admin_clear_icon():
+    """Remove the custom icon and revert to the default."""
+    require_admin()
+    _remove_icons()
+    return jsonify(ok=True)
+
+
 # --- Static client (served by Flask; SPA fallback) -----------------------
 
 
@@ -630,31 +682,24 @@ def manifest():
     data = json.loads((STATIC_DIR / "manifest.webmanifest").read_text())
     data["name"] = APP_NAME
     data["short_name"] = APP_NAME
-    if APP_ICON_URL:
-        icon_type = mimetypes.guess_type(APP_ICON_URL)[0] or "image/png"
+    icon = _find_icon()
+    if icon:
+        src = _app_image_url()
+        icon_type = mimetypes.guess_type(icon.name)[0] or "image/png"
         data["icons"] = [
-            {"src": "./app-icon", "sizes": "192x192", "type": icon_type, "purpose": "any"},
-            {"src": "./app-icon", "sizes": "512x512", "type": icon_type, "purpose": "any"},
-            {"src": "./app-icon", "sizes": "512x512", "type": icon_type, "purpose": "maskable"},
+            {"src": src, "sizes": "192x192", "type": icon_type, "purpose": "any"},
+            {"src": src, "sizes": "512x512", "type": icon_type, "purpose": "any"},
+            {"src": src, "sizes": "512x512", "type": icon_type, "purpose": "maskable"},
         ]
     return Response(json.dumps(data), mimetype="application/manifest+json")
 
 
 @app.get("/app-icon")
 def app_icon():
-    """The custom PWA/home-screen icon: proxy the configured image URL (kept
-    same-origin so install works), or fall back to the bundled icon."""
-    if APP_ICON_URL:
-        try:
-            r = requests.get(APP_ICON_URL, timeout=10)
-            if r.ok and r.content:
-                return Response(
-                    r.content,
-                    mimetype=r.headers.get("Content-Type", "image/png"),
-                    headers={"Cache-Control": "max-age=86400"},
-                )
-        except requests.RequestException:
-            pass
+    """The custom uploaded PWA/home-screen icon, or the bundled default."""
+    icon = _find_icon()
+    if icon:
+        return send_from_directory(icon.parent, icon.name)
     return send_from_directory(STATIC_DIR / "icons", "icon-512.png")
 
 

@@ -503,6 +503,36 @@ section h2 {
   margin-bottom: 10px;
 }
 
+.icon-settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.icon-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.icon-settings-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-btn {
+  cursor: pointer;
+  display: inline-block;
+}
+
 .user-row .meta {
   color: var(--muted);
   font-size: 0.85rem;
