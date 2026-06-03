@@ -236,6 +236,19 @@ function DeviceCard({ device, onChange }) {
     act('set_fan_mode', { fan_mode: fm });
   }
 
+  // Optimistic swing mode (same pattern as fan mode).
+  const [swingMode, setSwingMode] = useState(a.swing_mode);
+  const swingFreeze = useRef(0);
+  useEffect(() => {
+    if (Date.now() >= swingFreeze.current) setSwingMode((device.attributes || {}).swing_mode);
+  }, [device]);
+
+  function setSwing(sm) {
+    setSwingMode(sm);
+    swingFreeze.current = Date.now() + 1500;
+    act('set_swing_mode', { swing_mode: sm });
+  }
+
   const on = state === 'on';
   const isActive = ACTIVE_STATES.has(state);
 
@@ -368,6 +381,23 @@ function DeviceCard({ device, onChange }) {
                       disabled={busy}
                     >
                       {humanize(fm)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(a.swing_modes || []).length > 0 && !isOff && (
+              <div className="fan-modes">
+                <span className="muted">Swing</span>
+                <div className="mode-row">
+                  {a.swing_modes.map((sm) => (
+                    <button
+                      key={sm}
+                      className={`mode ${swingMode === sm ? 'selected' : ''}`}
+                      onClick={() => setSwing(sm)}
+                      disabled={busy}
+                    >
+                      {humanize(sm)}
                     </button>
                   ))}
                 </div>

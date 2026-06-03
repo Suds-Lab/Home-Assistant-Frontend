@@ -1,8 +1,8 @@
 # Home Assistant add-on manifest for "My Home" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
-name: My Home
-version: "1.8.0"
-slug: my_home
+name: Home Assistent Frontend
+version: "1.8.1"
+slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
 arch:
@@ -18,7 +18,7 @@ arch:
 ingress: true
 ingress_port: 4000
 panel_icon: mdi:home-lightbulb
-panel_title: My Home
+panel_title: Frontend Manager
 
 # The household-facing device dashboard is published here. Members open it at
 # http://<home-assistant>:8099 and log in with the app account an admin created.
