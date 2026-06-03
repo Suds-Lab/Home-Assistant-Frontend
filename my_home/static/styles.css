@@ -394,6 +394,7 @@ section h2 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
   gap: 8px;
+  align-items: stretch; /* same-row buttons share the tallest height */
 }
 
 .mode {
@@ -403,7 +404,18 @@ section h2 {
   background: transparent;
   color: var(--text);
   text-transform: capitalize;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  min-height: 34px;
+  /* Wrap long labels (and break long single words like "MediumHigh") so the
+     button grows vertically instead of the text overflowing. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 /* Selected mode / lock-state button takes the card's state accent
