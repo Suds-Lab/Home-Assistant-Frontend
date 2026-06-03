@@ -129,7 +129,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 20px;
+}
+
+.topbar > div {
+  min-width: 0; /* allow the title to wrap instead of shoving the buttons */
 }
 
 .topbar h1 {
@@ -472,6 +477,14 @@ section h2 {
 .topbar-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0; /* keep the action group compact; let the title wrap instead */
+}
+
+/* Never wrap "Log out" / "Install": a wrapped label made the action row tall,
+   and the default stretch then ballooned every button. nowrap keeps the row
+   short, and the stretch gives the buttons a uniform height. */
+.topbar-actions button {
+  white-space: nowrap;
 }
 
 .btn-primary {
