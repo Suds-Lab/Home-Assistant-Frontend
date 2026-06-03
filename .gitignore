@@ -11,6 +11,10 @@ venv/
 _*.py
 _*.json
 
+# Runtime data (lives in /data on the add-on; dev writes it into my_home/)
+my_home/settings.json
+my_home/app-icon.*
+
 # Misc
 *.log
 .DS_Store

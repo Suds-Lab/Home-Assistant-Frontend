@@ -112,6 +112,28 @@ STORE_FILE = _store_path()
 
 # Uploaded custom app icon lives next to the user store (persistent /data).
 ICON_DIR = STORE_FILE.parent
+SETTINGS_FILE = ICON_DIR / "settings.json"
+
+
+def _load_settings():
+    try:
+        return json.loads(SETTINGS_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_settings(data):
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+
+
+def enabled_domains():
+    """Domains the picker is allowed to show. None = all. The in-app setting
+    (Manage users) wins; otherwise the `device_types` config seeds it."""
+    s = _load_settings()
+    if isinstance(s.get("device_types"), list):
+        return set(s["device_types"])
+    return DEVICE_TYPES or None
 ICON_EXT = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -609,12 +631,13 @@ def admin_entities():
             return (None, None)
         return (area.get("name"), floors.get(area.get("floor_id")))
 
+    allowed = enabled_domains()
     items = []
     for s in ha_request("/api/states"):
         eid = s["entity_id"]
         domain = eid.split(".")[0]
-        if DEVICE_TYPES and domain not in DEVICE_TYPES:
-            continue  # hidden by the device_types config
+        if allowed is not None and domain not in allowed:
+            continue  # hidden by the device-types setting
         area, floor = locate(eid)
         items.append({
             "entity_id": eid,
@@ -625,6 +648,32 @@ def admin_entities():
         })
     items.sort(key=lambda i: (i["domain"], i["name"].lower()))
     return jsonify(entities=items)
+
+
+@app.get("/api/admin/device-types")
+def admin_get_device_types():
+    """All entity domains present in HA + which are currently enabled for the
+    picker (so the admin can see what's available and add types back)."""
+    require_admin()
+    available = sorted({s["entity_id"].split(".")[0] for s in ha_request("/api/states")})
+    allowed = enabled_domains()
+    return jsonify(
+        available=available,
+        enabled=available if allowed is None else sorted(allowed),
+    )
+
+
+@app.post("/api/admin/device-types")
+def admin_set_device_types():
+    require_admin()
+    body = request.get_json(silent=True) or {}
+    types = body.get("types")
+    if not isinstance(types, list):
+        raise ApiError("types must be a list", 400)
+    s = _load_settings()
+    s["device_types"] = [t for t in types if isinstance(t, str)]
+    _save_settings(s)
+    return jsonify(ok=True)
 
 
 @app.get("/api/admin/users")

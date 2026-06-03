@@ -69,6 +69,9 @@ const adminClearIcon = async () => {
   const r = await fetch(new URL('api/admin/icon', document.baseURI), { method: 'DELETE' });
   if (!r.ok) throw new Error('Failed to remove icon');
 };
+const adminGetDeviceTypes = () => request('/admin/device-types');
+const adminSetDeviceTypes = (types) =>
+  request('/admin/device-types', { method: 'POST', body: JSON.stringify({ types }) });
 
 // --- Components -----------------------------------------------------------
 
@@ -985,6 +988,56 @@ function IconSettings() {
   );
 }
 
+// Choose which entity domains appear in the device picker. Shows every type
+// present in Home Assistant so removed ones can be added back.
+function DeviceTypesSettings({ onChange }) {
+  const [available, setAvailable] = useState(null);
+  const [enabled, setEnabled] = useState(new Set());
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    adminGetDeviceTypes()
+      .then((d) => {
+        setAvailable(d.available);
+        setEnabled(new Set(d.enabled));
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+
+  async function toggle(dom) {
+    const next = new Set(enabled);
+    next.has(dom) ? next.delete(dom) : next.add(dom);
+    setEnabled(next);
+    try {
+      await adminSetDeviceTypes([...next]);
+      onChange && onChange();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  if (!available || available.length === 0) return null;
+  return (
+    <div className="card device-types">
+      <span className="device-name">Device types to show</span>
+      <span className="meta">Tap a type to include or exclude it from the picker.</span>
+      <div className="chips type-chips">
+        {available.map((dom) => (
+          <button
+            key={dom}
+            type="button"
+            className={`type-chip ${enabled.has(dom) ? 'on' : ''}`}
+            onClick={() => toggle(dom)}
+          >
+            <span aria-hidden="true">{domainIcon(dom)}</span> {domainLabel(dom)}
+          </button>
+        ))}
+      </div>
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
 function Admin({ onBack, standalone }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
@@ -1061,6 +1114,7 @@ function Admin({ onBack, standalone }) {
 
       {error && <div className="error banner">{error}</div>}
       <IconSettings />
+      <DeviceTypesSettings onChange={reload} />
       {users === null ? (
         <p className="muted">Loading…</p>
       ) : (
