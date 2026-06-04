@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.19.3
+- Docs: add the OAuth / Google sign-in setup to the main README guide (it was only in the add-on Documentation tab).
+
 ## 1.19.2
 - Docs: explain the OAuth redirect URI works behind Cloudflare Tunnel / a reverse proxy, with a Cloudflare Access caveat.
 
