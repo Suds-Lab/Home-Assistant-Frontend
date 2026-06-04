@@ -743,6 +743,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [password, setPassword] = useState('');
   const [picked, setPicked] = useState(new Set(user?.entities || []));
+  const [all, setAll] = useState(!!user?.all);
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState(null); // null = auto
   const [expanded, setExpanded] = useState(() => new Set());
@@ -773,6 +774,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
+        all,
         entities: [...picked],
       });
     } catch (err) {
@@ -890,78 +892,93 @@ function UserEditor({ user, entities, onSave, onCancel }) {
 
       <h4 className="devices-heading">Devices this user can control</h4>
 
-      {selected.length > 0 && (
-        <div className="selected-box">
-          <div className="selected-head">{selected.length} selected - tap to remove</div>
-          <div className="chips">
-            {selected.map((e) => (
-              <button
-                type="button"
-                key={e.entity_id}
-                className="chip"
-                onClick={() => toggleEntity(e.entity_id)}
-              >
-                {e.name} <span aria-hidden="true">✕</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <label className="checkbox-row all-toggle">
+        <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
+        <span>
+          <strong>All devices</strong> - control everything, including devices added later
+        </span>
+      </label>
 
-      {entities.length === 0 ? (
-        <p className="muted">No entities found in Home Assistant.</p>
+      {all ? (
+        <p className="muted all-note">
+          This user can control every device. Turn this off to choose specific devices.
+        </p>
       ) : (
         <>
-          <input
-            type="text"
-            className="search"
-            placeholder="Search devices…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {groupOptions.length > 1 && (
-            <div className="group-by">
-              <span className="muted">Group by</span>
-              {groupOptions.map(([val, label]) => (
-                <button
-                  key={val}
-                  type="button"
-                  className={`seg ${mode === val ? 'on' : ''}`}
-                  onClick={() => {
-                    setGroupBy(val);
-                    setExpanded(new Set());
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          {groupNames.length === 0 ? (
-            <p className="muted">No matches.</p>
-          ) : (
-            groupNames.map((name) => {
-              const list = groups[name];
-              const open = searching || expanded.has(name);
-              const sel = list.filter((e) => picked.has(e.entity_id)).length;
-              return (
-                <div key={name} className="acc-group">
+          {selected.length > 0 && (
+            <div className="selected-box">
+              <div className="selected-head">{selected.length} selected - tap to remove</div>
+              <div className="chips">
+                {selected.map((e) => (
                   <button
                     type="button"
-                    className="acc-head"
-                    onClick={() => toggleGroup(name)}
+                    key={e.entity_id}
+                    className="chip"
+                    onClick={() => toggleEntity(e.entity_id)}
                   >
-                    <span className={`acc-caret ${open ? 'open' : ''}`}>▸</span>
-                    <span className="acc-title">{name}</span>
-                    <span className="acc-count muted">
-                      {sel ? `${sel}/` : ''}
-                      {list.length}
-                    </span>
+                    {e.name} <span aria-hidden="true">✕</span>
                   </button>
-                  {open && <div className="acc-body">{renderBody(list, name)}</div>}
+                ))}
+              </div>
+            </div>
+          )}
+
+          {entities.length === 0 ? (
+            <p className="muted">No entities found in Home Assistant.</p>
+          ) : (
+            <>
+              <input
+                type="text"
+                className="search"
+                placeholder="Search devices…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {groupOptions.length > 1 && (
+                <div className="group-by">
+                  <span className="muted">Group by</span>
+                  {groupOptions.map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      className={`seg ${mode === val ? 'on' : ''}`}
+                      onClick={() => {
+                        setGroupBy(val);
+                        setExpanded(new Set());
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              );
-            })
+              )}
+              {groupNames.length === 0 ? (
+                <p className="muted">No matches.</p>
+              ) : (
+                groupNames.map((name) => {
+                  const list = groups[name];
+                  const open = searching || expanded.has(name);
+                  const sel = list.filter((e) => picked.has(e.entity_id)).length;
+                  return (
+                    <div key={name} className="acc-group">
+                      <button
+                        type="button"
+                        className="acc-head"
+                        onClick={() => toggleGroup(name)}
+                      >
+                        <span className={`acc-caret ${open ? 'open' : ''}`}>▸</span>
+                        <span className="acc-title">{name}</span>
+                        <span className="acc-count muted">
+                          {sel ? `${sel}/` : ''}
+                          {list.length}
+                        </span>
+                      </button>
+                      {open && <div className="acc-body">{renderBody(list, name)}</div>}
+                    </div>
+                  );
+                })
+              )}
+            </>
           )}
         </>
       )}
@@ -1612,8 +1629,10 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
                 <div>
                   <span className="device-name">{u.displayName || u.username}</span>
                   <div className="meta">
-                    {u.username} · {u.entities.length} device
-                    {u.entities.length === 1 ? '' : 's'}
+                    {u.username} ·{' '}
+                    {u.all
+                      ? 'All devices'
+                      : `${u.entities.length} device${u.entities.length === 1 ? '' : 's'}`}
                   </div>
                 </div>
                 <div className="row-actions">

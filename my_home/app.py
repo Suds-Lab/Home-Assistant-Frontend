@@ -369,9 +369,23 @@ def require_admin():
     return {"username": None, "admin": True}
 
 
+def _domain_assignable(entity_id):
+    """Whether this entity is within the admin's allowed device types."""
+    allowed = enabled_domains()
+    return allowed is None or entity_id.split(".")[0] in allowed
+
+
+def user_can_access(user, entity_id):
+    """An 'all' user owns every assignable entity (including future ones);
+    otherwise it's the explicit list."""
+    if user.get("all"):
+        return _domain_assignable(entity_id)
+    return entity_id in user.get("entities", [])
+
+
 def assert_owned(user, entity_id):
     """Reject any entity the logged-in user is not allowed to see/control."""
-    if entity_id not in user.get("entities", []):
+    if not user_can_access(user, entity_id):
         raise ApiError("You do not have access to that device", 403)
 
 
@@ -567,11 +581,10 @@ def _device_view(s):
 def devices():
     """Every entity assigned to the user, with full state + attributes."""
     user = current_user()
-    owned = set(user.get("entities", []))
     result = [
         _device_view(s)
         for s in ha_request("/api/states")
-        if s["entity_id"] in owned
+        if user_can_access(user, s["entity_id"])
     ]
     result.sort(key=lambda d: (d["domain"], d["name"].lower()))
     return jsonify(devices=result)
@@ -1077,6 +1090,7 @@ def admin_list_users():
             "username": u["username"],
             "displayName": u.get("displayName", ""),
             "entities": u.get("entities", []),
+            "all": bool(u.get("all")),
         }
         for u in load_users()
     ]
@@ -1119,6 +1133,7 @@ def admin_save_user():
     record = existing if existing is not None else {"username": username}
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
+    record["all"] = bool(body.get("all"))  # grant every device (now and future)
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
         record["password"] = password
