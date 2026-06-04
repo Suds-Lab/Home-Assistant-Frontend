@@ -32,6 +32,7 @@ jwt_secret: a-long-random-string   # signs login sessions
 | Option | Description |
 |--------|-------------|
 | `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
+| `oauth_*` | Optional OAuth / OpenID Connect sign-in (see below). |
 
 Everything else is configured live in the sidebar's **Settings** tab (stored
 in `/data`):
@@ -43,6 +44,29 @@ in `/data`):
 - **App icon** - an **uploaded image** used for the PWA / favicon (overrides the
   emoji).
 - **Device types** - which entity domains can be assigned in **Manage users**.
+- **Sign-in methods** - Local password, OAuth, or both (see below).
+
+## Sign-in with Google / OAuth
+
+The user dashboard can authenticate people with Google (or any OpenID Connect
+provider). Credentials go in the **add-on configuration**; you then turn it on
+in **Settings → Sign-in methods** (Local / Google / Both).
+
+```yaml
+oauth_client_id: "…apps.googleusercontent.com"
+oauth_client_secret: "…"
+oauth_redirect_url: "https://home.example.com"   # public base URL of the dashboard
+oauth_allowed_domains: ["my.domain"]             # optional; empty = any verified email
+```
+
+Add `https://home.example.com/api/oauth/callback` to your provider's authorised
+redirect URIs. For a non-Google provider, also override `oauth_authorize_url`,
+`oauth_token_url`, `oauth_userinfo_url`, `oauth_scopes` and `oauth_provider_name`.
+
+When someone signs in for the first time, an app user is created automatically
+**with no devices**. They see a "reach out to your administrator" screen until
+an admin assigns them devices in **Manage users** (onboarding). Only users with
+at least one assigned device see the dashboard.
 
 **Users are not configured here** - manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the

@@ -612,6 +612,64 @@ section h2 {
   margin-bottom: 12px;
 }
 
+.or-sep {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 14px 0;
+  gap: 10px;
+}
+.or-sep::before,
+.or-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.btn-oauth {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.btn-oauth:hover {
+  border-color: var(--accent);
+}
+
+.onboarding {
+  text-align: center;
+  padding: 48px 20px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.onboarding-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.onboarding h2 {
+  margin: 0 0 8px;
+}
+
+.warn-box {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--warn-text, #92400e);
+  background: var(--warn-bg, rgba(245, 158, 11, 0.14));
+  border: 1px solid var(--warn-border, rgba(245, 158, 11, 0.4));
+}
+
 .user-filter {
   padding: 7px 10px;
   border-radius: 10px;
@@ -1010,6 +1068,18 @@ section h2 {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.seg:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.seg-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
 }
 
 /* Management Users/Settings tabs */

@@ -80,7 +80,13 @@ const adminClearActivity = () => request('/admin/activity', { method: 'DELETE' }
 
 // --- Components -----------------------------------------------------------
 
-function Login({ onLogin, title = 'My Home', appIcon = '🏠' }) {
+function Login({
+  onLogin,
+  title = 'My Home',
+  appIcon = '🏠',
+  providers = { local: true, oauth: false },
+  oauthName = 'OAuth',
+}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -100,34 +106,52 @@ function Login({ onLogin, title = 'My Home', appIcon = '🏠' }) {
     }
   }
 
+  function oauthSignIn() {
+    // Top-level navigation: the provider redirects back to /api/oauth/callback.
+    window.location.href = new URL('api/oauth/login', document.baseURI).href;
+  }
+
   return (
     <div className="centered">
-      <form className="card login" onSubmit={submit}>
+      <div className="card login">
         <h1><span className="app-icon">{appIcon}</span> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoFocus
-            autoComplete="username"
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
-        {error && <div className="error">{error}</div>}
-        <button type="submit" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+
+        {providers.local && (
+          <form onSubmit={submit}>
+            <label>
+              Username
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoFocus
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            {error && <div className="error">{error}</div>}
+            <button type="submit" disabled={busy}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        )}
+
+        {providers.local && providers.oauth && <div className="or-sep">or</div>}
+
+        {providers.oauth && (
+          <button type="button" className="btn-oauth" onClick={oauthSignIn}>
+            Sign in with {oauthName}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -687,7 +711,14 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
       {loading ? (
         <p className="muted">Loading your devices…</p>
       ) : devices.length === 0 ? (
-        <p className="muted">No devices assigned to you.</p>
+        <div className="onboarding">
+          <div className="onboarding-icon">👋</div>
+          <h2>You're signed in</h2>
+          <p className="muted">
+            No devices have been assigned to you yet. Please reach out to your system
+            administrator to get set up.
+          </p>
+        </div>
       ) : domains.length === 0 ? (
         <p className="muted">No devices match “{query}”.</p>
       ) : (
@@ -1004,6 +1035,65 @@ function IconSettings() {
   );
 }
 
+// Which sign-in methods the user dashboard offers. OAuth credentials live in
+// the add-on config; this just toggles Local / OAuth / Both.
+function AuthProviderSettings() {
+  const [val, setVal] = useState(null);
+  const [cfg, setCfg] = useState({ configured: false, name: 'OAuth' });
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    adminGetSettings()
+      .then((d) => {
+        setVal(d.authProviders || 'local');
+        setCfg({ configured: !!d.oauthConfigured, name: d.oauthName || 'OAuth' });
+      })
+      .catch((e) => setStatus(e.message));
+  }, []);
+
+  async function choose(v) {
+    setVal(v);
+    setStatus('Saving…');
+    try {
+      await adminSetSettings({ authProviders: v });
+      setStatus('Saved.');
+    } catch (e) {
+      setStatus(e.message);
+    }
+  }
+
+  if (val === null) return null;
+  const opts = [
+    ['local', 'Local'],
+    ['oauth', cfg.name],
+    ['both', 'Both'],
+  ];
+  return (
+    <div className="card settings-card">
+      <span className="device-name">Sign-in methods</span>
+      <span className="meta">How household members sign in to the user dashboard.</span>
+      <div className="seg-group">
+        {opts.map(([v, label]) => (
+          <button
+            key={v}
+            className={`seg ${val === v ? 'on' : ''}`}
+            disabled={v !== 'local' && !cfg.configured}
+            onClick={() => choose(v)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {!cfg.configured && (
+        <span className="meta">
+          Add OAuth credentials in the add-on configuration to enable {cfg.name} sign-in.
+        </span>
+      )}
+      {status && <span className="muted">{status}</span>}
+    </div>
+  );
+}
+
 // Full backup / restore of everything in /data (users, passwords, device
 // assignments, settings, activity, app icon) so an uninstall + reinstall keeps
 // all data intact.
@@ -1058,9 +1148,13 @@ function BackupSettings() {
     <div className="card settings-card">
       <span className="device-name">Backup &amp; restore</span>
       <span className="meta">
-        Export every setting, user, password and device assignment to a file. Keep it safe - it
-        contains passwords. Restore it after reinstalling to bring everything back.
+        Export every setting, user and device assignment to a file, then restore it after
+        reinstalling to bring everything back.
       </span>
+      <div className="warn-box">
+        ⚠ The backup contains user <strong>passwords in plain text</strong>. Anyone with this file
+        can sign in as those users - store it securely and don’t share it.
+      </div>
       <div className="editor-actions">
         <button className="btn-primary" onClick={exportData} disabled={busy}>
           Export
@@ -1498,6 +1592,7 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
           <NameSettings />
           <IconSettings />
           <DeviceTypesSettings onChange={reload} />
+          <AuthProviderSettings />
           <BackupSettings />
         </>
       ) : tab === 'activity' ? (
@@ -1705,7 +1800,7 @@ function InstallPrompt({ persistent = false, appName = 'My Home', appIcon = '�
   );
 }
 
-function UserApp({ live, title, appName, appIcon }) {
+function UserApp({ live, title, appName, appIcon, providers, oauthName }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
 
@@ -1726,7 +1821,13 @@ function UserApp({ live, title, appName, appIcon }) {
   return (
     <>
       {!token ? (
-        <Login onLogin={handleLogin} title={title} appIcon={appIcon} />
+        <Login
+          onLogin={handleLogin}
+          title={title}
+          appIcon={appIcon}
+          providers={providers}
+          oauthName={oauthName}
+        />
       ) : (
         <Dashboard
           displayName={displayName}
@@ -1741,6 +1842,45 @@ function UserApp({ live, title, appName, appIcon }) {
   );
 }
 
+function setLinkHref(rel, href) {
+  let link = document.querySelector(`link[rel='${rel}']`);
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = rel;
+    document.head.appendChild(link);
+  }
+  link.href = href;
+}
+
+function setMetaContent(name, content) {
+  let m = document.querySelector(`meta[name='${name}']`);
+  if (!m) {
+    m = document.createElement('meta');
+    m.name = name;
+    document.head.appendChild(m);
+  }
+  m.content = content;
+}
+
+// iOS can't use an emoji or SVG as a home-screen icon, so paint the emoji onto
+// an opaque PNG canvas it can use for apple-touch-icon.
+function emojiToPng(emoji, size = 180) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#0f1419';
+    ctx.fillRect(0, 0, size, size);
+    ctx.font = `${Math.floor(size * 0.66)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, size / 2, size / 2 + size * 0.04);
+    return c.toDataURL('image/png');
+  } catch (e) {
+    return null;
+  }
+}
+
 // Top-level: the backend tells us which port we're on (Ingress/sidebar =
 // management, published = user dashboard) and whether live push is enabled.
 function App() {
@@ -1750,6 +1890,20 @@ function App() {
   const title = session?.title || appName;
   const appIcon = session?.appIcon || '🏠';
   const appImage = session?.appImage || null;
+  const providers = session?.providers || { local: true, oauth: false };
+  const oauthName = session?.oauthName || 'OAuth';
+
+  // OAuth callback hands the session token back in the URL fragment. Capture
+  // and store it (then strip it) before anything reads the token.
+  useEffect(() => {
+    if (location.hash.includes('oauth_token=')) {
+      const t = new URLSearchParams(location.hash.slice(1)).get('oauth_token');
+      if (t) {
+        setToken(t);
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     getSession()
@@ -1772,13 +1926,16 @@ function App() {
         '</text></svg>';
       href = 'data:image/svg+xml,' + encodeURIComponent(svg);
     }
-    let link = document.querySelector("link[rel='icon']");
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'icon';
-      document.head.appendChild(link);
-    }
-    link.href = href;
+    setLinkHref('icon', href);
+
+    // iOS ignores the web manifest for "Add to Home Screen" - it reads these
+    // tags from the live DOM instead. Keep them in sync with the configured
+    // name/icon so the installed iOS app isn't stuck on the defaults.
+    setMetaContent('apple-mobile-web-app-title', appName);
+    const touch = appImage
+      ? new URL(appImage, document.baseURI).href
+      : emojiToPng(appIcon) || './icons/apple-touch-icon.png';
+    setLinkHref('apple-touch-icon', touch);
   }, [session, appName, appIcon, appImage]);
 
   if (session === null) {
@@ -1789,7 +1946,16 @@ function App() {
     );
   }
   if (session.mode === 'manage') return <Admin standalone title={title} />;
-  return <UserApp live={session.stream} title={title} appName={appName} appIcon={appIcon} />;
+  return (
+    <UserApp
+      live={session.stream}
+      title={title}
+      appName={appName}
+      appIcon={appIcon}
+      providers={providers}
+      oauthName={oauthName}
+    />
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
