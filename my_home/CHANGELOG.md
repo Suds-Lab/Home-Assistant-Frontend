@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.2
+- Climate: the temperature stepper now updates instantly on each tap and sends a single update after you stop, instead of waiting on every press.
+
 ## 1.22.1
 - OAuth: use the account's real name from the provider (e.g. the Google name) as the display name on first sign-in, and greet the user by it. Falls back to the email's local part; never overwrites an admin-edited name.
 

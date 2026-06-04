@@ -301,6 +301,7 @@ function DeviceCard({ device, onChange }) {
       : 100
   );
   const [target, setTarget] = useState(a.temperature ?? 22);
+  const targetRef = useRef(a.temperature ?? 22); // latest target across fast taps
   const [vol, setVol] = useState(a.volume_level != null ? Math.round(a.volume_level * 100) : 50);
 
   // Optimistic state: reflect the command instantly instead of waiting for the
@@ -309,10 +310,17 @@ function DeviceCard({ device, onChange }) {
   const [state, setState] = useState(device.state);
   const freezeUntil = useRef(0);
   const commitTimer = useRef(null);
+  const tempTimer = useRef(null);
   useEffect(() => {
     if (Date.now() >= freezeUntil.current) setState(device.state);
   }, [device]);
-  useEffect(() => () => clearTimeout(commitTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(commitTimer.current);
+      clearTimeout(tempTimer.current);
+    },
+    []
+  );
 
   // Optimistic fan mode (an attribute, not the entity state) - same idea so
   // climate fan buttons respond instantly.
@@ -432,10 +440,19 @@ function DeviceCard({ device, onChange }) {
         const min = a.min_temp ?? 16;
         const max = a.max_temp ?? 30;
         const step = a.target_temp_step ?? 0.5;
+        // Update the shown value instantly on every tap, but only send the
+        // final temperature to HA after a short pause - so going 70 -> 64 is
+        // one call, not six, and no press has to wait on a round-trip.
         const nudge = (delta) => {
-          const next = Math.min(max, Math.max(min, Number((target + delta).toFixed(1))));
+          const next = Math.min(max, Math.max(min, Number((targetRef.current + delta).toFixed(1))));
+          targetRef.current = next;
           setTarget(next);
-          act('set_temperature', { temperature: next });
+          clearTimeout(tempTimer.current);
+          tempTimer.current = setTimeout(() => {
+            control(device.entity_id, 'set_temperature', { temperature: next })
+              .then(onChange)
+              .catch(() => {});
+          }, 600);
         };
         return (
           <>
@@ -445,9 +462,9 @@ function DeviceCard({ device, onChange }) {
               </div>
             )}
             <div className="temp-control">
-              <button onClick={() => nudge(-step)} disabled={busy || isOff}>−</button>
+              <button onClick={() => nudge(-step)} disabled={isOff}>−</button>
               <span className="temp-value">{isOff ? '-' : `${target}°`}</span>
-              <button onClick={() => nudge(step)} disabled={busy || isOff}>+</button>
+              <button onClick={() => nudge(step)} disabled={isOff}>+</button>
             </div>
             <div className="mode-row">
               {(a.hvac_modes || []).map((mode) => (
