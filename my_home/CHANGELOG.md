@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.1
+- Compact view: climate cards now shrink properly by hiding the fan-speed and swing controls (temperature and mode stay); switch off compact for the full controls.
+
 ## 1.24.0
 - Dashboard: when you have several devices, group them by **Type** or **Room** and collapse/expand each section (remembered per browser). The user dashboard now knows each device's room/floor from Home Assistant.
 

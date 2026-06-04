@@ -273,11 +273,11 @@ section h2 {
   font-size: 0.74rem;
   min-height: 28px;
 }
+/* Compact: drop the bulky fan-speed and swing sections from climate cards so
+   they shrink to roughly a light's size (temperature + mode stay). Switch off
+   compact for the full set of controls. */
 .compact .fan-modes {
-  margin-top: 12px;
-}
-.compact .fan-modes > .muted {
-  margin-bottom: 6px;
+  display: none;
 }
 .compact .switch {
   width: 40px;
