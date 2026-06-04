@@ -224,6 +224,25 @@ section h2 {
   margin-bottom: 18px;
 }
 
+/* Area sub-sections nested under a floor (Floor grouping). */
+.area-subgroup {
+  margin: 0 0 16px;
+}
+
+.area-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 0 0 10px 4px;
+}
+
+.area-subhead .section-count {
+  margin-left: auto;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

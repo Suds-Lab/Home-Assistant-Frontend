@@ -853,6 +853,18 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
     return groupLabelOf(x).localeCompare(groupLabelOf(y));
   });
 
+  // Floor mode nests areas under each floor: returns [[areaName, devices], …].
+  const subgroupByArea = (list) => {
+    const m = {};
+    for (const d of list) {
+      const a = d.area || OTHER;
+      (m[a] = m[a] || []).push(d);
+    }
+    return Object.keys(m)
+      .sort((x, y) => (x === OTHER ? 1 : y === OTHER ? -1 : x.localeCompare(y)))
+      .map((name) => [name, m[name]]);
+  };
+
   return (
     <div className={`dashboard${compact ? ' compact' : ''}`}>
       <header className="topbar">
@@ -952,13 +964,28 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
               ) : (
                 <h2>{groupLabelOf(key)}</h2>
               )}
-              {open && (
-                <div className="grid">
-                  {groups[key].map((d) => (
-                    <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
-                  ))}
-                </div>
-              )}
+              {open &&
+                (mode === 'floor' ? (
+                  subgroupByArea(groups[key]).map(([area, list]) => (
+                    <div key={area} className="area-subgroup">
+                      <div className="area-subhead">
+                        <span>{area}</span>
+                        <span className="section-count muted">{list.length}</span>
+                      </div>
+                      <div className="grid">
+                        {list.map((d) => (
+                          <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="grid">
+                    {groups[key].map((d) => (
+                      <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                    ))}
+                  </div>
+                ))}
             </section>
           );
         })

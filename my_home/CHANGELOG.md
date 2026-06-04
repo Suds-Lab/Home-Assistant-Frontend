@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.3
+- Floor grouping is now hierarchical: each floor shows its areas as sub-sections (Floor → Area → devices).
+
 ## 1.24.2
 - Dashboard grouping now offers **Type / Area / Floor** (was Type / Room). Devices without an area or floor group under "Other".
 
