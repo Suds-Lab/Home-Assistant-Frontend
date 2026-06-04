@@ -904,6 +904,18 @@ section h2 {
   gap: 8px;
 }
 
+.all-toggle {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.all-note {
+  margin: 4px 0 8px;
+}
+
 .devices-heading {
   margin: 18px 0 8px;
 }

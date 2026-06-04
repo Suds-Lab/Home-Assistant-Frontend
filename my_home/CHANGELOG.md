@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.20.0
+- Manage users: an **All devices** toggle grants a user every device (including ones added later) and hides the picker. Respects the allowed device types.
+
 ## 1.19.3
 - Docs: add the OAuth / Google sign-in setup to the main README guide (it was only in the add-on Documentation tab).
 
