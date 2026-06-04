@@ -65,6 +65,26 @@ Your **redirect URI** is that plus `/api/oauth/callback`:
 https://home.example.com/api/oauth/callback
 ```
 
+The provider **requires** this exact URL to be registered (step 2) - it will
+only redirect back to addresses you've whitelisted.
+
+#### Behind Cloudflare Tunnel / a reverse proxy
+
+This works without anything special. Point your tunnel's public hostname at the
+add-on's **user-dashboard port `8099`** (e.g. `service: http://<HA-IP>:8099`) -
+the `/api/oauth/*` routes are served by that same app, so no extra route is
+needed. Set `oauth_redirect_url` to your **public HTTPS hostname**
+(`https://home.example.com`); the add-on builds the redirect from that config
+value, not from the proxied request, so Google always sees the real HTTPS URL
+even though Cloudflare reaches the add-on over plain HTTP internally. There are
+no auth cookies in the flow (the CSRF `state` is a signed token in the URL), so
+nothing breaks across the tunnel.
+
+> If you also put **Cloudflare Access** (or any login gateway) in front of this
+> hostname, either drop it here and rely on this app's OAuth, or add a bypass
+> for `/api/oauth/*` - otherwise the gateway's own login page can intercept the
+> callback.
+
 ### 2. Create Google OAuth credentials
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and
