@@ -133,6 +133,57 @@ remove the last admin.
 first run). Once the store exists, the **Manage users** screen is the single
 source of truth - users are *not* set in the add-on's Configuration tab.
 
+## Sign-in with Google / OAuth
+
+The user dashboard can authenticate household members with Google (or any
+OpenID Connect provider) instead of - or alongside - a local password. The
+OAuth credentials live in the **add-on Configuration**; you then choose the
+sign-in methods in **Settings → Sign-in methods** (Local / Google / Both).
+
+> The dashboard must be reachable over **HTTPS at a public URL** (e.g. a reverse
+> proxy or Cloudflare Tunnel). Your **redirect URI** is that URL plus
+> `/api/oauth/callback`, e.g. `https://home.example.com/api/oauth/callback`.
+
+**1. Create Google credentials** in the [Google Cloud Console](https://console.cloud.google.com/):
+- **APIs & Services → OAuth consent screen**: pick Internal (Workspace) or
+  External, set the app name + support email, add the scopes `openid`,
+  `.../auth/userinfo.email`, `.../auth/userinfo.profile`. For External, add test
+  users or **Publish**.
+- **Credentials → Create credentials → OAuth client ID → Web application**: under
+  **Authorised redirect URIs** add your redirect URI **exactly** (the provider
+  only redirects to URLs you register here). Copy the **Client ID** and **secret**.
+
+**2. Configure the add-on** (Configuration tab):
+
+```yaml
+oauth_client_id: "1234….apps.googleusercontent.com"
+oauth_client_secret: "GOCSPX-…"
+oauth_redirect_url: "https://home.example.com"   # public base URL (no trailing slash needed)
+oauth_allowed_domains: ["my.domain"]             # optional; empty = any verified email
+```
+
+`oauth_allowed_domains` restricts sign-in to those email domains (only
+`*@my.domain`); leave it `[]` to allow any verified email. Restart the add-on,
+then enable **Google** or **Both** in **Settings → Sign-in methods**.
+
+**Behind Cloudflare Tunnel / a reverse proxy:** point the tunnel's public
+hostname at the add-on's user-dashboard port `8099`; the `/api/oauth/*` routes
+ride along on that same app. The add-on builds the redirect from
+`oauth_redirect_url` (not the proxied request), so Google sees the real HTTPS
+URL even though Cloudflare reaches the add-on over plain HTTP. If you also run
+**Cloudflare Access** on that hostname, drop it here or bypass `/api/oauth/*`,
+or its login page will intercept the callback.
+
+**First sign-in & onboarding:** a Google user who signs in for the first time
+is auto-created **with no devices** and sees a "reach out to your administrator"
+screen until an admin assigns them devices in **Manage users**. Only users with
+at least one device see the dashboard.
+
+**Other providers:** override `oauth_authorize_url`, `oauth_token_url`,
+`oauth_userinfo_url`, `oauth_scopes` and `oauth_provider_name` for any OIDC
+provider. (The full walkthrough is also in the add-on's **Documentation** tab /
+[`my_home/DOCS.md`](my_home/DOCS.md).)
+
 ## 2. Run it (standalone / dev)
 
 From the repo root:
