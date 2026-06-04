@@ -179,6 +179,13 @@ def _save_settings(data):
 
 _ACTIVITY_LOCK = threading.Lock()
 
+# Services that adjust a continuous value: stepping the AC up/down (or a dimmer,
+# cover position, volume) fires one call per press. Rather than logging every
+# step, collapse a run of them by the same user on the same entity into a single
+# entry showing the FINAL value, as long as they're close together in time.
+_COALESCE_SERVICES = {"set_temperature", "set_percentage", "set_cover_position", "volume_set"}
+_COALESCE_WINDOW = 120  # seconds
+
 
 def _load_activity():
     try:
@@ -197,7 +204,19 @@ def _append_activity(entry):
     """
     with _ACTIVITY_LOCK:
         log = _load_activity()
-        log.append(entry)
+        last = log[-1] if log else None
+        coalesce = (
+            last is not None
+            and entry.get("service") in _COALESCE_SERVICES
+            and last.get("service") == entry.get("service")
+            and last.get("entity_id") == entry.get("entity_id")
+            and last.get("username") == entry.get("username")
+            and (entry.get("ts", 0) - last.get("ts", 0)) <= _COALESCE_WINDOW
+        )
+        if coalesce:
+            log[-1] = entry  # keep only the latest (final) value of the run
+        else:
+            log.append(entry)
         if len(log) > ACTIVITY_MAX:
             log = log[-ACTIVITY_MAX:]
         try:
