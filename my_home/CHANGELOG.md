@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.2
+- Dashboard grouping now offers **Type / Area / Floor** (was Type / Room). Devices without an area or floor group under "Other".
+
 ## 1.24.1
 - Compact view: climate cards now shrink properly by hiding the fan-speed and swing controls (temperature and mode stay); switch off compact for the full controls.
 
