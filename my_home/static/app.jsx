@@ -7,6 +7,7 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 const TOKEN_KEY = 'ha_app_token';
 const NAME_KEY = 'ha_app_name';
+const COMPACT_KEY = 'ha_app_compact';
 
 // Resolve the API base relative to the current document so it works in dev
 // and behind Home Assistant Ingress (where the app sits under a /…/ prefix).
@@ -616,6 +617,15 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
+
+  function toggleCompact() {
+    setCompact((c) => {
+      const next = !c;
+      localStorage.setItem(COMPACT_KEY, next ? '1' : '0');
+      return next;
+    });
+  }
 
   // Fallback fetch (used for first paint and if the live stream drops).
   const refresh = useCallback(async () => {
@@ -721,13 +731,23 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
   );
 
   return (
-    <div className="dashboard">
+    <div className={`dashboard${compact ? ' compact' : ''}`}>
       <header className="topbar">
         <div>
           <h1><span className="app-icon">{appIcon}</span> {title}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
+          {devices.length > 4 && (
+            <button
+              className="ghost icon-only"
+              onClick={toggleCompact}
+              title={compact ? 'Comfortable view' : 'Compact view'}
+              aria-pressed={compact}
+            >
+              {compact ? '▦' : '▤'}
+            </button>
+          )}
           <ThemeToggle />
           <InstallButton />
           <button className="btn-danger" onClick={onLogout}>

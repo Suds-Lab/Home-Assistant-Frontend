@@ -1,30 +1,36 @@
+/* Palette mirrors Home Assistant's default themes (primary #03a9f4, the same
+   backgrounds, card colours, dividers and text tones) so the app feels native
+   inside HA and consistent on the user dashboard. */
 :root {
-  --bg: #0f1419;
-  --card: #1b2430;
-  --card-active: #1f3a5f;
-  --text: #e6edf3;
-  --muted: #8b98a5;
-  --accent: #3b82f6;
-  --accent-2: #22c55e;
-  --error: #f87171;
-  --border: #2c3848;
-  --input-bg: #0f1722;
-  --switch-bg: #3a4656;
-  --radius: 14px;
+  --bg: #111111;
+  --card: #1c1c1c;
+  --card-active: #2a2a2a;
+  --text: #e1e1e1;
+  --muted: #9b9b9b;
+  --accent: #03a9f4;
+  --accent-2: #0f9d58;
+  --error: #f44336;
+  --border: rgba(225, 225, 225, 0.12);
+  --input-bg: #242424;
+  --switch-bg: #3f3f3f;
+  --radius: 12px;
+  --card-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
 }
 
 [data-theme='light'] {
-  --bg: #eef1f5;
+  --bg: #f4f5f7;
   --card: #ffffff;
-  --card-active: #e6eefc;
-  --text: #16202c;
-  --muted: #5b6b7a;
-  --accent: #2563eb;
-  --accent-2: #16a34a;
-  --error: #dc2626;
-  --border: #d4dbe3;
-  --input-bg: #f2f5f9;
-  --switch-bg: #c4ccd6;
+  --card-active: #e8f4fb;
+  --text: #212121;
+  --muted: #727272;
+  --accent: #03a9f4;
+  --accent-2: #0f9d58;
+  --error: #d32f2f;
+  --border: rgba(0, 0, 0, 0.12);
+  --input-bg: #f4f5f7;
+  --switch-bg: #c8ccce;
+  --card-shadow: 0 2px 1px -1px rgba(0, 0, 0, 0.2), 0 1px 1px rgba(0, 0, 0, 0.14),
+    0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 * {
@@ -33,9 +39,10 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
 
 .muted {
@@ -73,6 +80,8 @@ button {
   background: var(--card);
   border-radius: var(--radius);
   padding: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
 }
 
 .login {
@@ -177,6 +186,61 @@ section h2 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
+}
+
+/* Compact view: smaller, denser cards so more devices fit per screen. The grid
+   is responsive either way (more columns on wider screens), but compact also
+   shrinks each card's internals. On an average phone this fits roughly two
+   climate cards plus three lights/switches without much scrolling. */
+.compact .grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.compact section {
+  margin-bottom: 18px;
+}
+.compact section h2 {
+  margin-bottom: 8px;
+}
+.compact .card {
+  padding: 12px;
+}
+.compact .device-sub,
+.compact .slider {
+  font-size: 0.76rem;
+}
+.compact .temp-control {
+  margin: 8px 0;
+  gap: 10px;
+}
+.compact .temp-control button {
+  width: 32px;
+  height: 32px;
+  font-size: 1.15rem;
+}
+.compact .temp-value {
+  font-size: 1.35rem;
+  min-width: 56px;
+}
+.compact .mode-row {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+}
+.compact .mode {
+  padding: 5px 4px;
+  font-size: 0.74rem;
+  min-height: 28px;
+}
+.compact .switch {
+  width: 40px;
+  height: 22px;
+}
+.compact .switch .knob {
+  width: 16px;
+  height: 16px;
+}
+.compact .switch.on .knob {
+  left: 21px;
 }
 
 .device {
@@ -951,6 +1015,8 @@ section h2 {
   display: flex;
   gap: 10px;
   margin-top: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .search {
@@ -1109,6 +1175,7 @@ section h2 {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
+  justify-content: center;
 }
 
 .tabs .seg {
@@ -1118,7 +1185,7 @@ section h2 {
 
 .tab-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin-bottom: 12px;
 }
 
