@@ -50,23 +50,82 @@ in `/data`):
 
 The user dashboard can authenticate people with Google (or any OpenID Connect
 provider). Credentials go in the **add-on configuration**; you then turn it on
-in **Settings → Sign-in methods** (Local / Google / Both).
+in **Settings → Sign-in methods**.
+
+> The user dashboard must be reachable over **HTTPS at a public URL** (e.g.
+> through a reverse proxy / Nginx Proxy Manager / Cloudflare Tunnel). Google
+> won't redirect back to a bare `http://<ip>:8099` address.
+
+### 1. Note your dashboard URL
+
+Find the public base URL of the user dashboard, e.g. `https://home.example.com`.
+Your **redirect URI** is that plus `/api/oauth/callback`:
+
+```
+https://home.example.com/api/oauth/callback
+```
+
+### 2. Create Google OAuth credentials
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and
+   create (or pick) a project.
+2. **APIs & Services → OAuth consent screen**:
+   - User type: **Internal** if you use Google Workspace and only your own
+     domain signs in; otherwise **External**.
+   - Fill in the app name and your support email.
+   - Add the scopes `openid`, `.../auth/userinfo.email`,
+     `.../auth/userinfo.profile`.
+   - If you chose **External**, either add each person under **Test users**, or
+     **Publish** the app so anyone can sign in.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type: **Web application**.
+   - Under **Authorised redirect URIs**, add the redirect URI from step 1
+     exactly (scheme, host and `/api/oauth/callback`, no trailing slash).
+   - Create, then copy the **Client ID** and **Client secret**.
+
+### 3. Configure the add-on
+
+In the add-on **Configuration** tab:
 
 ```yaml
-oauth_client_id: "…apps.googleusercontent.com"
-oauth_client_secret: "…"
-oauth_redirect_url: "https://home.example.com"   # public base URL of the dashboard
+oauth_client_id: "1234…apps.googleusercontent.com"
+oauth_client_secret: "GOCSPX-…"
+oauth_redirect_url: "https://home.example.com"   # public base URL (no trailing slash needed)
 oauth_allowed_domains: ["my.domain"]             # optional; empty = any verified email
 ```
 
-Add `https://home.example.com/api/oauth/callback` to your provider's authorised
-redirect URIs. For a non-Google provider, also override `oauth_authorize_url`,
-`oauth_token_url`, `oauth_userinfo_url`, `oauth_scopes` and `oauth_provider_name`.
+`oauth_allowed_domains` restricts sign-in to those email domains (so only
+`*@my.domain` can get in). Leave it empty (`[]`) to allow any verified email.
+Restart the add-on after saving.
+
+### 4. Turn it on
+
+Open the sidebar **Settings** tab → **Sign-in methods** and choose **Google**
+(OAuth only) or **Both** (password + Google). The option stays disabled until
+the credentials above are valid.
+
+### 5. First sign-in & onboarding
 
 When someone signs in for the first time, an app user is created automatically
 **with no devices**. They see a "reach out to your administrator" screen until
 an admin assigns them devices in **Manage users** (onboarding). Only users with
 at least one assigned device see the dashboard.
+
+### Other (non-Google) providers
+
+Any OpenID Connect provider works - set the endpoints to match it:
+
+```yaml
+oauth_provider_name: "Authentik"
+oauth_authorize_url: "https://id.example.com/application/o/authorize/"
+oauth_token_url: "https://id.example.com/application/o/token/"
+oauth_userinfo_url: "https://id.example.com/application/o/userinfo/"
+oauth_scopes: "openid email profile"
+```
+
+The provider must return an `email` (and ideally `email_verified`) from its
+userinfo endpoint, and you must register the same `/api/oauth/callback`
+redirect URI with it.
 
 **Users are not configured here** - manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the
