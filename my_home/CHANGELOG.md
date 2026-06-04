@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.23.1
+- Climate cards: revert the larger buttons back to their normal size; the roominess now comes from wider gaps between buttons and sections, not bigger buttons.
+
 ## 1.23.0
 - Climate swing: for 2-axis swing (off/horizontal/vertical/both), show independent **Horizontal** and **Vertical** toggles instead of four exclusive buttons, and derive the swing mode from the pair. Other swing setups keep the button list.
 
