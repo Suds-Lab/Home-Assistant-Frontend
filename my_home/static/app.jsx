@@ -452,7 +452,7 @@ function DeviceCard({ device, onChange }) {
             control(device.entity_id, 'set_temperature', { temperature: next })
               .then(onChange)
               .catch(() => {});
-          }, 600);
+          }, 1500);
         };
         return (
           <>

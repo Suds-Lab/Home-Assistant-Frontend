@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.4
+- Climate: lengthen the temperature send delay to 1.5s so more taps are batched into a single update.
+
 ## 1.22.3
 - Activity log: collapse a run of continuous adjustments (temperature, fan speed, cover position, volume) by the same user on the same device into a single entry showing the final value, instead of logging every step.
 
