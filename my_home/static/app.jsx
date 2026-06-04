@@ -8,8 +8,9 @@ const { useState, useEffect, useCallback, useRef } = React;
 const TOKEN_KEY = 'ha_app_token';
 const NAME_KEY = 'ha_app_name';
 const COMPACT_KEY = 'ha_app_compact';
-const GROUPBY_KEY = 'ha_app_groupby'; // 'type' | 'room'
+const GROUPBY_KEY = 'ha_app_groupby'; // 'type' | 'area' | 'floor'
 const COLLAPSED_KEY = 'ha_app_collapsed';
+const OPEN_AREAS_KEY = 'ha_app_open_areas'; // areas under a floor are collapsed by default
 const GROUPING_THRESHOLD = 8; // show grouping controls once a user has this many devices
 
 // Resolve the API base relative to the current document so it works in dev
@@ -699,6 +700,14 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
       return new Set();
     }
   });
+  // Areas under a floor start collapsed; this tracks the ones the user opened.
+  const [openAreas, setOpenAreas] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(OPEN_AREAS_KEY) || '[]'));
+    } catch {
+      return new Set();
+    }
+  });
 
   function toggleCompact() {
     setCompact((c) => {
@@ -718,6 +727,15 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  function toggleArea(key) {
+    setOpenAreas((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      localStorage.setItem(OPEN_AREAS_KEY, JSON.stringify([...next]));
       return next;
     });
   }
@@ -966,19 +984,31 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
               )}
               {open &&
                 (mode === 'floor' ? (
-                  subgroupByArea(groups[key]).map(([area, list]) => (
-                    <div key={area} className="area-subgroup">
-                      <div className="area-subhead">
-                        <span>{area}</span>
-                        <span className="section-count muted">{list.length}</span>
+                  subgroupByArea(groups[key]).map(([area, list]) => {
+                    const akey = `${key}::${area}`;
+                    const aopen = openAreas.has(akey);
+                    return (
+                      <div key={area} className="area-subgroup">
+                        <button
+                          type="button"
+                          className="area-subhead"
+                          onClick={() => toggleArea(akey)}
+                          aria-expanded={aopen}
+                        >
+                          <span className={`acc-caret ${aopen ? 'open' : ''}`}>▸</span>
+                          <span>{area}</span>
+                          <span className="section-count muted">{list.length}</span>
+                        </button>
+                        {aopen && (
+                          <div className="grid">
+                            {list.map((d) => (
+                              <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="grid">
-                        {list.map((d) => (
-                          <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
-                        ))}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="grid">
                     {groups[key].map((d) => (

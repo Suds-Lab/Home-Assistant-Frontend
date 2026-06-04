@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.4
+- Floor grouping: areas under a floor are now collapsed by default - expand an area to reveal its devices (remembered per browser).
+
 ## 1.24.3
 - Floor grouping is now hierarchical: each floor shows its areas as sub-sections (Floor → Area → devices).
 
