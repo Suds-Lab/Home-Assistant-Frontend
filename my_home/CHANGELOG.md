@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.23.3
+- Climate cards: more space between the mode/fan/swing buttons (gap 14px → 18px).
+
 ## 1.23.2
 - Climate swing: recognise abbreviated 2-axis modes (e.g. Off/H/V/H+V), not just off/horizontal/vertical/both, so those also show the Horizontal/Vertical toggles.
 
