@@ -815,12 +815,19 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
     : devices;
 
   const hasRooms = devices.some((d) => d.area);
+  const hasFloors = devices.some((d) => d.floor);
   const dense = devices.length >= GROUPING_THRESHOLD; // collapsible + group-by
-  const NO_ROOM = 'Other';
-  const byRoom = groupBy === 'room' && hasRooms;
+  const OTHER = 'Other';
+  // Resolve the active grouping ('room' is the legacy name for 'area'); fall
+  // back to Type if the chosen grouping has no data.
+  let mode = groupBy === 'room' ? 'area' : groupBy;
+  if (mode === 'area' && !hasRooms) mode = 'type';
+  if (mode === 'floor' && !hasFloors) mode = 'type';
+  const byLocation = mode === 'area' || mode === 'floor';
 
-  const groupKeyOf = (d) => (byRoom ? d.area || NO_ROOM : d.domain);
-  const groupLabelOf = (key) => (byRoom ? key : domainLabel(key));
+  const groupKeyOf = (d) =>
+    mode === 'area' ? d.area || OTHER : mode === 'floor' ? d.floor || OTHER : d.domain;
+  const groupLabelOf = (key) => (mode === 'type' ? domainLabel(key) : key);
 
   const groups = {};
   for (const d of visible) {
@@ -829,16 +836,18 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
     groups[k].push(d);
   }
   for (const list of Object.values(groups)) {
-    // Within a room, keep devices ordered by type then name; within a type, by name.
+    // Within an area/floor, order by type then name; within a type, by name.
     list.sort((a, b) =>
-      byRoom ? a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name) : a.name.localeCompare(b.name)
+      byLocation
+        ? a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name)
+        : a.name.localeCompare(b.name)
     );
   }
-  // Order groups: rooms alphabetically (with "Other" last); types by label.
+  // Order groups: areas/floors alphabetically ("Other" last); types by label.
   const keys = Object.keys(groups).sort((x, y) => {
-    if (byRoom) {
-      if (x === NO_ROOM) return 1;
-      if (y === NO_ROOM) return -1;
+    if (byLocation) {
+      if (x === OTHER) return 1;
+      if (y === OTHER) return -1;
       return x.localeCompare(y);
     }
     return groupLabelOf(x).localeCompare(groupLabelOf(y));
@@ -880,23 +889,34 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
           onChange={(e) => setQuery(e.target.value)}
         />
       )}
-      {!loading && dense && hasRooms && (
+      {!loading && dense && (hasRooms || hasFloors) && (
         <div className="group-by dashboard-groupby">
           <span className="muted">Group by</span>
           <button
             type="button"
-            className={`seg ${!byRoom ? 'on' : ''}`}
+            className={`seg ${mode === 'type' ? 'on' : ''}`}
             onClick={() => chooseGroupBy('type')}
           >
             Type
           </button>
-          <button
-            type="button"
-            className={`seg ${byRoom ? 'on' : ''}`}
-            onClick={() => chooseGroupBy('room')}
-          >
-            Room
-          </button>
+          {hasRooms && (
+            <button
+              type="button"
+              className={`seg ${mode === 'area' ? 'on' : ''}`}
+              onClick={() => chooseGroupBy('area')}
+            >
+              Area
+            </button>
+          )}
+          {hasFloors && (
+            <button
+              type="button"
+              className={`seg ${mode === 'floor' ? 'on' : ''}`}
+              onClick={() => chooseGroupBy('floor')}
+            >
+              Floor
+            </button>
+          )}
         </div>
       )}
       {loading ? (
@@ -914,7 +934,7 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
         <p className="muted">No devices match “{query}”.</p>
       ) : (
         keys.map((key) => {
-          const ckey = `${byRoom ? 'room' : 'type'}:${key}`;
+          const ckey = `${mode}:${key}`;
           const open = !dense || !collapsed.has(ckey);
           return (
             <section key={ckey}>
