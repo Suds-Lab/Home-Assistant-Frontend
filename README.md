@@ -163,8 +163,11 @@ oauth_allowed_domains: ["my.domain"]             # optional; empty = any verifie
 ```
 
 `oauth_allowed_domains` restricts sign-in to those email domains (only
-`*@my.domain`); leave it `[]` to allow any verified email. Restart the add-on,
-then enable **Google** or **Both** in **Settings → Sign-in methods**.
+`*@my.domain`); leave it `[]` to allow any verified email. To let in a specific
+guest outside your domain, add them to `oauth_allowed_emails:
+["guest@gmail.com"]`. Restart the add-on, then enable **Google** or **Both** in
+**Settings → Sign-in methods**. (For non-Google providers, `oauth_logo_url`
+sets the button's logo.)
 
 **Behind Cloudflare Tunnel / a reverse proxy:** point the tunnel's public
 hostname at the add-on's user-dashboard port `8099`; the `/api/oauth/*` routes
