@@ -497,19 +497,37 @@ function DeviceCard({ device, onChange }) {
             )}
             {(a.swing_modes || []).length > 0 && !isOff && (() => {
               const modes = a.swing_modes;
-              const lc = modes.map((s) => String(s).toLowerCase());
-              // 2-axis swing (off / horizontal / vertical / both): show two
-              // independent toggles instead of four exclusive buttons, and
-              // derive the single swing_mode HA expects from the pair.
-              const twoAxis = ['off', 'horizontal', 'vertical', 'both'].every((x) =>
-                lc.includes(x)
-              );
-              const modeFor = (target) => modes[lc.indexOf(target)] ?? target;
-              const cur = String(swingMode || '').toLowerCase();
-              const hOn = cur === 'horizontal' || cur === 'both';
-              const vOn = cur === 'vertical' || cur === 'both';
-              const setHV = (h, v) =>
-                setSwing(modeFor(h && v ? 'both' : h ? 'horizontal' : v ? 'vertical' : 'off'));
+              // Classify each swing mode into the axes it drives, tolerating
+              // naming variants: off/stop/none, horizontal|h, vertical|v,
+              // both|all|h+v, etc. If the four combinations (off / H / V /
+              // both) are all available, show two independent toggles instead
+              // of four exclusive buttons and derive the swing_mode from them.
+              const axesOf = (mode) => {
+                const s = String(mode).toLowerCase().trim();
+                if (/(^|[^a-z])(off|stop|none|disabled)([^a-z]|$)/.test(s) || s === '0' || s === 'false')
+                  return { off: true };
+                if (s.includes('both') || s === 'all' || s === '3d') return { h: true, v: true };
+                const h = s.includes('horizontal') || /(^|[^a-z])h([^a-z]|$)/.test(s);
+                const v = s.includes('vertical') || /(^|[^a-z])v([^a-z]|$)/.test(s);
+                return { h, v };
+              };
+              const cls = modes.map((m) => ({ m, ax: axesOf(m) }));
+              const offMode = (cls.find((c) => c.ax.off) || {}).m;
+              const pick = (h, v) =>
+                (cls.find((c) => !c.ax.off && !!c.ax.h === h && !!c.ax.v === v) || {}).m;
+              const hOnly = pick(true, false);
+              const vOnly = pick(false, true);
+              const both = pick(true, true);
+              const twoAxis =
+                offMode != null && hOnly != null && vOnly != null && both != null;
+              const curAx = axesOf(swingMode || 'off');
+              const hOn = !!curAx.h;
+              const vOn = !!curAx.v;
+              const modeFor = (h, v) => (h && v ? both : h ? hOnly : v ? vOnly : offMode);
+              const setHV = (h, v) => {
+                const t = modeFor(h, v);
+                if (t != null) setSwing(t);
+              };
               return (
                 <div className="fan-modes">
                   <span className="muted">Swing</span>

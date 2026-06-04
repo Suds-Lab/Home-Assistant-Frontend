@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.23.2
+- Climate swing: recognise abbreviated 2-axis modes (e.g. Off/H/V/H+V), not just off/horizontal/vertical/both, so those also show the Horizontal/Vertical toggles.
+
 ## 1.23.1
 - Climate cards: revert the larger buttons back to their normal size; the roominess now comes from wider gaps between buttons and sections, not bigger buttons.
 
