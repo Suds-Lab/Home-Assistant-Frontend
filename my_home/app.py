@@ -463,9 +463,11 @@ def _email_allowed(email):
     return domain in OAUTH_ALLOWED_DOMAINS or email in OAUTH_ALLOWED_EMAILS
 
 
-def _user_for_email(email):
+def _user_for_email(email, name=""):
     """Find the app user for an OAuth email, creating an un-onboarded one (no
-    devices) on first sign-in so the admin can assign devices later."""
+    devices) on first sign-in so the admin can assign devices later. The display
+    name is taken from the provider (e.g. the Google account name) on creation,
+    falling back to the email's local part."""
     email = email.strip().lower()
     users = load_users()
     found = next(
@@ -478,7 +480,7 @@ def _user_for_email(email):
     record = {
         "username": email,
         "email": email,
-        "displayName": email.split("@")[0],
+        "displayName": (name or "").strip() or email.split("@")[0],
         "provider": "oauth",
         "entities": [],
     }
@@ -573,11 +575,11 @@ def oauth_callback():
     if not _email_allowed(email):
         return _oauth_error_page("Your account isn't allowed to use this app.")
 
-    user = _user_for_email(email)
-    # Hand the session token to the SPA via the URL fragment (never sent to a
-    # server or written to logs), which it stores and strips on load.
-    token = _issue_token(user)
-    return redirect(f"{OAUTH_REDIRECT_BASE}/#oauth_token={token}")
+    user = _user_for_email(email, profile.get("name"))
+    # Hand the session token + display name to the SPA via the URL fragment
+    # (never sent to a server or written to logs); it stores and strips them.
+    frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
+    return redirect(f"{OAUTH_REDIRECT_BASE}/#{frag}")
 
 
 # --- Device routes -------------------------------------------------------

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.1
+- OAuth: use the account's real name from the provider (e.g. the Google name) as the display name on first sign-in, and greet the user by it. Falls back to the email's local part; never overwrites an admin-edited name.
+
 ## 1.22.0
 - Redesigned to match Home Assistant's look: HA blue accent (#03a9f4), HA-style backgrounds/cards (rounded, elevated), Roboto typography.
 - More symmetrical, professional layout - centered tabs and action buttons.
