@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.21.2
+- Fix an oversized Google/OAuth logo (and device icons) for users on a stale cached stylesheet, by giving the inline SVGs/images intrinsic width/height. Bumped the service-worker cache so stale CSS refreshes.
+
 ## 1.21.1
 - OAuth button: fall back to the generic icon if a configured `oauth_logo_url` fails to load (broken/blocked URL).
 
