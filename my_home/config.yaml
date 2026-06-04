@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for "My Home" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
 name: Home Assistent Frontend
-version: "1.18.0"
+version: "1.19.0"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -31,12 +31,38 @@ ports_description:
 # http://supervisor/core/api - no long-lived token needed.
 homeassistant_api: true
 
-# Almost everything is configured live in the app's sidebar tabs (stored in
-# /data): users + their devices in "Manage users", and the Title, App name,
-# icons and allowed device types in "Settings". The only thing that must be
-# set here is the secret used to sign login sessions.
+# Most things are configured live in the app's sidebar tabs (stored in /data):
+# users + devices in "Manage users", and names/icons/device-types plus which
+# login methods (Local / OAuth / Both) are offered in "Settings".
 # A default admin (alice / changeme) is seeded on first run; change it there.
+#
+# OAuth (optional): fill in the credentials below to enable "Sign in with
+# <provider>" on the user dashboard, then turn it on in Settings. Defaults
+# target Google; override the *_url options for any other OIDC provider.
+#   - oauth_redirect_url: the PUBLIC base URL of the dashboard. Add
+#     <that>/api/oauth/callback to the provider's authorised redirect URIs.
+#   - oauth_allowed_domains: restrict sign-in to these email domains
+#     (e.g. ["my.domain"]); leave empty to allow any verified email.
 options:
   jwt_secret: change-me-to-a-long-random-string
+  oauth_client_id: ""
+  oauth_client_secret: ""
+  oauth_redirect_url: ""
+  oauth_provider_name: Google
+  oauth_allowed_domains: []
+  oauth_authorize_url: "https://accounts.google.com/o/oauth2/v2/auth"
+  oauth_token_url: "https://oauth2.googleapis.com/token"
+  oauth_userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo"
+  oauth_scopes: "openid email profile"
 schema:
   jwt_secret: str
+  oauth_client_id: str?
+  oauth_client_secret: str?
+  oauth_redirect_url: str?
+  oauth_provider_name: str?
+  oauth_allowed_domains:
+    - str
+  oauth_authorize_url: str?
+  oauth_token_url: str?
+  oauth_userinfo_url: str?
+  oauth_scopes: str?

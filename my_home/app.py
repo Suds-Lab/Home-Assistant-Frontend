@@ -15,10 +15,12 @@ import base64
 import json
 import mimetypes
 import os
+import secrets
 import threading
 import time
 from pathlib import Path
 from queue import Empty, Queue
+from urllib.parse import urlencode
 
 # Ensure PWA assets are served with the right Content-Type.
 mimetypes.add_type("application/manifest+json", ".webmanifest")
@@ -27,7 +29,7 @@ mimetypes.add_type("text/javascript", ".js")
 import jwt
 import requests
 import websocket  # websocket-client
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 from flask_sock import Sock
 
 try:
@@ -74,6 +76,36 @@ _dt = addon_options.get("device_types")
 if _dt is None:
     _dt = [d.strip() for d in os.environ.get("DEVICE_TYPES", "").split(",") if d.strip()]
 DEVICE_TYPES = set(_dt) if _dt else set()
+
+
+def _opt(key, default=""):
+    return (addon_options.get(key) or os.environ.get(key.upper()) or default)
+
+
+# --- OAuth (OpenID Connect) ----------------------------------------------
+# Credentials live in the add-on config (not the UI). Defaults target Google,
+# but any OIDC provider works by overriding the endpoints. Which login methods
+# are actually OFFERED is chosen by the admin in the Settings tab.
+OAUTH_CLIENT_ID = _opt("oauth_client_id")
+OAUTH_CLIENT_SECRET = _opt("oauth_client_secret")
+# External base URL of the published user dashboard (e.g.
+# https://home.example.com). Used to build the OAuth redirect URI; the
+# provider must have <base>/api/oauth/callback in its allowed redirect list.
+OAUTH_REDIRECT_BASE = _opt("oauth_redirect_url").rstrip("/")
+OAUTH_PROVIDER_NAME = _opt("oauth_provider_name", "Google")
+OAUTH_AUTHORIZE_URL = _opt("oauth_authorize_url", "https://accounts.google.com/o/oauth2/v2/auth")
+OAUTH_TOKEN_URL = _opt("oauth_token_url", "https://oauth2.googleapis.com/token")
+OAUTH_USERINFO_URL = _opt("oauth_userinfo_url", "https://openidconnect.googleapis.com/v1/userinfo")
+OAUTH_SCOPES = _opt("oauth_scopes", "openid email profile")
+# Restrict sign-in to these email domains (e.g. ["my.domain"]). Empty = any.
+_ad = addon_options.get("oauth_allowed_domains")
+if _ad is None:
+    _ad = [d.strip() for d in os.environ.get("OAUTH_ALLOWED_DOMAINS", "").split(",") if d.strip()]
+OAUTH_ALLOWED_DOMAINS = [d.lower().lstrip("@") for d in (_ad or []) if isinstance(d, str) and d.strip()]
+
+
+def oauth_configured():
+    return bool(OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET and OAUTH_REDIRECT_BASE)
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -186,6 +218,18 @@ def cfg_title():
 
 def cfg_emoji():
     return (_load_settings().get("icon") or "").strip() or APP_ICON
+
+
+def cfg_providers():
+    """Which login methods are offered on the user dashboard. The admin's
+    choice (Settings tab: 'local' | 'oauth' | 'both') intersected with what's
+    actually configured. Always leaves at least local enabled as a fallback."""
+    choice = (_load_settings().get("auth_providers") or "local").lower()
+    oauth = oauth_configured() and choice in ("oauth", "both")
+    local = choice in ("local", "both") or not oauth
+    return {"local": local, "oauth": oauth}
+
+
 ICON_EXT = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -331,21 +375,26 @@ def assert_owned(user, entity_id):
         raise ApiError("You do not have access to that device", 403)
 
 
-@app.post("/api/login")
-def login():
-    body = request.get_json(silent=True) or {}
-    username = body.get("username")
-    password = body.get("password")
-    user = next((u for u in load_users() if u["username"] == username), None)
-    if not user or user.get("password") != password:
-        raise ApiError("Invalid username or password", 401)
-    token = jwt.encode(
+def _issue_token(user):
+    return jwt.encode(
         {"username": user["username"], "exp": int(time.time()) + 7 * 24 * 3600},
         JWT_SECRET,
         algorithm="HS256",
     )
+
+
+@app.post("/api/login")
+def login():
+    if not cfg_providers()["local"]:
+        raise ApiError("Password sign-in is disabled", 403)
+    body = request.get_json(silent=True) or {}
+    username = body.get("username")
+    password = body.get("password")
+    user = next((u for u in load_users() if u["username"] == username), None)
+    if not user or not user.get("password") or user.get("password") != password:
+        raise ApiError("Invalid username or password", 401)
     return jsonify(
-        token=token,
+        token=_issue_token(user),
         displayName=user.get("displayName") or user["username"],
     )
 
@@ -354,6 +403,7 @@ def login():
 def session():
     """Tells the UI which experience to render based on the port it arrived on:
     'manage' (Ingress/sidebar) or 'user' (published dashboard)."""
+    providers = cfg_providers()
     return jsonify(
         mode="manage" if is_management() else "user",
         stream=STREAM_ENABLED,
@@ -361,7 +411,140 @@ def session():
         title=cfg_title(),    # heading shown on the login page + dashboard
         appIcon=cfg_emoji(),
         appImage=_app_image_url(),
+        providers=providers,            # which login methods to show
+        oauthName=OAUTH_PROVIDER_NAME,  # label for the OAuth button
     )
+
+
+# --- OAuth sign-in (user dashboard only) ---------------------------------
+
+
+def _oauth_redirect_uri():
+    return f"{OAUTH_REDIRECT_BASE}/api/oauth/callback"
+
+
+def _email_allowed(email):
+    if not OAUTH_ALLOWED_DOMAINS:
+        return True
+    domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+    return domain in OAUTH_ALLOWED_DOMAINS
+
+
+def _user_for_email(email):
+    """Find the app user for an OAuth email, creating an un-onboarded one (no
+    devices) on first sign-in so the admin can assign devices later."""
+    email = email.strip().lower()
+    users = load_users()
+    found = next(
+        (u for u in users
+         if (u.get("email") or "").lower() == email or u["username"].lower() == email),
+        None,
+    )
+    if found:
+        return found
+    record = {
+        "username": email,
+        "email": email,
+        "displayName": email.split("@")[0],
+        "provider": "oauth",
+        "entities": [],
+    }
+    users.append(record)
+    save_users(users)
+    return record
+
+
+def _oauth_error_page(message):
+    html = (
+        "<!doctype html><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>Sign-in failed</title>"
+        "<body style='font-family:system-ui;background:#0f1419;color:#e7edf3;"
+        "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>"
+        f"<div style='max-width:420px;padding:24px;text-align:center'><h2>Sign-in failed</h2>"
+        f"<p style='color:#9aa7b4'>{message}</p>"
+        "<p><a href='./' style='color:#3b82f6'>Back to sign in</a></p></div></body>"
+    )
+    return Response(html, status=400, mimetype="text/html")
+
+
+@app.get("/api/oauth/login")
+def oauth_login():
+    if not oauth_configured():
+        return _oauth_error_page("OAuth is not configured on this server.")
+    # Stateless CSRF token: a short-lived signed value echoed back as `state`.
+    state = jwt.encode(
+        {"n": secrets.token_urlsafe(8), "exp": int(time.time()) + 600},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    params = {
+        "client_id": OAUTH_CLIENT_ID,
+        "redirect_uri": _oauth_redirect_uri(),
+        "response_type": "code",
+        "scope": OAUTH_SCOPES,
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    if len(OAUTH_ALLOWED_DOMAINS) == 1:
+        params["hd"] = OAUTH_ALLOWED_DOMAINS[0]  # Google domain hint
+    return redirect(f"{OAUTH_AUTHORIZE_URL}?{urlencode(params)}")
+
+
+@app.get("/api/oauth/callback")
+def oauth_callback():
+    if not oauth_configured():
+        return _oauth_error_page("OAuth is not configured on this server.")
+    if request.args.get("error"):
+        return _oauth_error_page("Access was denied at the provider.")
+    code = request.args.get("code")
+    state = request.args.get("state")
+    try:
+        jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return _oauth_error_page("This sign-in link expired. Please try again.")
+    if not code:
+        return _oauth_error_page("No authorization code was returned.")
+
+    try:
+        tok = requests.post(
+            OAUTH_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": OAUTH_CLIENT_ID,
+                "client_secret": OAUTH_CLIENT_SECRET,
+                "redirect_uri": _oauth_redirect_uri(),
+                "grant_type": "authorization_code",
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        tok.raise_for_status()
+        access_token = tok.json().get("access_token")
+        info = requests.get(
+            OAUTH_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        info.raise_for_status()
+        profile = info.json()
+    except requests.RequestException:
+        return _oauth_error_page("Could not reach the identity provider.")
+
+    email = (profile.get("email") or "").strip()
+    if not email:
+        return _oauth_error_page("The provider did not return an email address.")
+    if profile.get("email_verified") is False:
+        return _oauth_error_page("Your email address is not verified.")
+    if not _email_allowed(email):
+        return _oauth_error_page("Your account isn't allowed to use this app.")
+
+    user = _user_for_email(email)
+    # Hand the session token to the SPA via the URL fragment (never sent to a
+    # server or written to logs), which it stores and strips on load.
+    token = _issue_token(user)
+    return redirect(f"{OAUTH_REDIRECT_BASE}/#oauth_token={token}")
 
 
 # --- Device routes -------------------------------------------------------
@@ -725,9 +908,16 @@ def admin_entities():
 
 @app.get("/api/admin/settings")
 def admin_get_settings():
-    """Display settings (names + home emoji) for the Settings tab."""
+    """Display + auth settings for the Settings tab."""
     require_admin()
-    return jsonify(title=cfg_title(), name=cfg_name(), icon=cfg_emoji())
+    return jsonify(
+        title=cfg_title(),
+        name=cfg_name(),
+        icon=cfg_emoji(),
+        authProviders=(_load_settings().get("auth_providers") or "local"),
+        oauthConfigured=oauth_configured(),
+        oauthName=OAUTH_PROVIDER_NAME,
+    )
 
 
 @app.post("/api/admin/settings")
@@ -738,6 +928,8 @@ def admin_set_settings():
     for key in ("title", "name", "icon"):
         if key in body and isinstance(body[key], str):
             s[key] = body[key].strip()
+    if body.get("authProviders") in ("local", "oauth", "both"):
+        s["auth_providers"] = body["authProviders"]
     _save_settings(s)
     return jsonify(ok=True)
 
