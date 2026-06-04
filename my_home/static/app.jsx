@@ -1978,9 +1978,12 @@ function App() {
   // and store it (then strip it) before anything reads the token.
   useEffect(() => {
     if (location.hash.includes('oauth_token=')) {
-      const t = new URLSearchParams(location.hash.slice(1)).get('oauth_token');
+      const params = new URLSearchParams(location.hash.slice(1));
+      const t = params.get('oauth_token');
       if (t) {
         setToken(t);
+        const name = params.get('oauth_name');
+        if (name) localStorage.setItem(NAME_KEY, name); // greet OAuth users by name
         history.replaceState(null, '', location.pathname + location.search);
       }
     }
