@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>My Home</title>
+
+    <!-- Set the theme BEFORE first paint (the React app loads via in-browser
+         Babel, which is too late and causes a dark->light flash). Mirrors the
+         themePref/resolveTheme logic in app.jsx, using the same storage key. -->
+    <script>
+      (function () {
+        try {
+          var v = localStorage.getItem('ha_theme_v2');
+          var pref = v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+          var theme =
+            pref === 'system'
+              ? window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : pref;
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Relative href so styles resolve under any path prefix (Ingress). -->
     <link rel="stylesheet" href="./styles.css" />
 

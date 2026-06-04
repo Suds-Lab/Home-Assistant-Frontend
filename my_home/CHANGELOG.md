@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.6
+- Fix a brief theme flash on open: the theme is now set before first paint via a small inline script, instead of after the in-browser React/Babel load.
+
 ## 1.22.5
 - More spacing around the sign-in form and between device cards for a roomier layout.
 
