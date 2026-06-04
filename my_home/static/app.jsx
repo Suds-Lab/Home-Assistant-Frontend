@@ -495,23 +495,58 @@ function DeviceCard({ device, onChange }) {
                 </div>
               </div>
             )}
-            {(a.swing_modes || []).length > 0 && !isOff && (
-              <div className="fan-modes">
-                <span className="muted">Swing</span>
-                <div className="mode-row">
-                  {a.swing_modes.map((sm) => (
-                    <button
-                      key={sm}
-                      className={`mode ${swingMode === sm ? 'selected' : ''}`}
-                      onClick={() => setSwing(sm)}
-                      disabled={busy}
-                    >
-                      {humanize(sm)}
-                    </button>
-                  ))}
+            {(a.swing_modes || []).length > 0 && !isOff && (() => {
+              const modes = a.swing_modes;
+              const lc = modes.map((s) => String(s).toLowerCase());
+              // 2-axis swing (off / horizontal / vertical / both): show two
+              // independent toggles instead of four exclusive buttons, and
+              // derive the single swing_mode HA expects from the pair.
+              const twoAxis = ['off', 'horizontal', 'vertical', 'both'].every((x) =>
+                lc.includes(x)
+              );
+              const modeFor = (target) => modes[lc.indexOf(target)] ?? target;
+              const cur = String(swingMode || '').toLowerCase();
+              const hOn = cur === 'horizontal' || cur === 'both';
+              const vOn = cur === 'vertical' || cur === 'both';
+              const setHV = (h, v) =>
+                setSwing(modeFor(h && v ? 'both' : h ? 'horizontal' : v ? 'vertical' : 'off'));
+              return (
+                <div className="fan-modes">
+                  <span className="muted">Swing</span>
+                  <div className="mode-row">
+                    {twoAxis ? (
+                      <>
+                        <button
+                          className={`mode ${hOn ? 'selected' : ''}`}
+                          onClick={() => setHV(!hOn, vOn)}
+                          disabled={busy}
+                        >
+                          Horizontal
+                        </button>
+                        <button
+                          className={`mode ${vOn ? 'selected' : ''}`}
+                          onClick={() => setHV(hOn, !vOn)}
+                          disabled={busy}
+                        >
+                          Vertical
+                        </button>
+                      </>
+                    ) : (
+                      modes.map((m) => (
+                        <button
+                          key={m}
+                          className={`mode ${swingMode === m ? 'selected' : ''}`}
+                          onClick={() => setSwing(m)}
+                          disabled={busy}
+                        >
+                          {humanize(m)}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         );
       }
