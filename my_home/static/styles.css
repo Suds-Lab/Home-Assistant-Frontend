@@ -192,6 +192,38 @@ section h2 {
   letter-spacing: 0.05em;
 }
 
+/* Collapsible group header on the dashboard (room/type grouping). */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 4px 0;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.section-title {
+  text-align: left;
+}
+
+.section-count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.dashboard-groupby {
+  margin-bottom: 18px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

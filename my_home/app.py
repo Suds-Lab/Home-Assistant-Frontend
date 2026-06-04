@@ -619,13 +619,17 @@ def _device_view(s):
 
 @app.get("/api/devices")
 def devices():
-    """Every entity assigned to the user, with full state + attributes."""
+    """Every entity assigned to the user, with full state + attributes, plus
+    the room/floor it's in (so the dashboard can group by room)."""
     user = current_user()
-    result = [
-        _device_view(s)
-        for s in ha_request("/api/states")
-        if user_can_access(user, s["entity_id"])
-    ]
+    locate = _location_lookup(ha_registries_cached())
+    result = []
+    for s in ha_request("/api/states"):
+        if not user_can_access(user, s["entity_id"]):
+            continue
+        view = _device_view(s)
+        view["area"], view["floor"] = locate(s["entity_id"])
+        result.append(view)
     result.sort(key=lambda d: (d["domain"], d["name"].lower()))
     return jsonify(devices=result)
 
@@ -918,12 +922,28 @@ def ha_registries():
             pass
 
 
-@app.get("/api/admin/entities")
-def admin_entities():
-    """All entities (any domain), for the device picker - annotated with their
-    floor and room (area) when Home Assistant knows them."""
-    require_admin()
+_REG_CACHE = {"ts": 0.0, "data": None}
+_REG_LOCK = threading.Lock()
+
+
+def ha_registries_cached(ttl=300):
+    """ha_registries() with a short TTL cache - the registries rarely change,
+    and this avoids opening a WebSocket on every dashboard refresh."""
+    now = time.time()
+    with _REG_LOCK:
+        cached = _REG_CACHE["data"]
+        if cached is not None and (now - _REG_CACHE["ts"]) < ttl:
+            return cached
     reg = ha_registries()
+    if reg:  # only cache a successful query
+        with _REG_LOCK:
+            _REG_CACHE["data"] = reg
+            _REG_CACHE["ts"] = now
+    return reg
+
+
+def _location_lookup(reg):
+    """Build an entity_id -> (room, floor) resolver from HA's registries."""
     floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
     areas = {a["area_id"]: a for a in reg.get("areas", [])}
     dev_area = {d["id"]: d.get("area_id") for d in reg.get("devices", [])}
@@ -940,6 +960,15 @@ def admin_entities():
             return (None, None)
         return (area.get("name"), floors.get(area.get("floor_id")))
 
+    return locate
+
+
+@app.get("/api/admin/entities")
+def admin_entities():
+    """All entities (any domain), for the device picker - annotated with their
+    floor and room (area) when Home Assistant knows them."""
+    require_admin()
+    locate = _location_lookup(ha_registries_cached())
     allowed = enabled_domains()
     items = []
     for s in ha_request("/api/states"):

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.0
+- Dashboard: when you have several devices, group them by **Type** or **Room** and collapse/expand each section (remembered per browser). The user dashboard now knows each device's room/floor from Home Assistant.
+
 ## 1.23.3
 - Climate cards: more space between the mode/fan/swing buttons (gap 14px → 18px).
 

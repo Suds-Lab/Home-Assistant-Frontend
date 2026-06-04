@@ -8,6 +8,9 @@ const { useState, useEffect, useCallback, useRef } = React;
 const TOKEN_KEY = 'ha_app_token';
 const NAME_KEY = 'ha_app_name';
 const COMPACT_KEY = 'ha_app_compact';
+const GROUPBY_KEY = 'ha_app_groupby'; // 'type' | 'room'
+const COLLAPSED_KEY = 'ha_app_collapsed';
+const GROUPING_THRESHOLD = 8; // show grouping controls once a user has this many devices
 
 // Resolve the API base relative to the current document so it works in dev
 // and behind Home Assistant Ingress (where the app sits under a /…/ prefix).
@@ -688,11 +691,33 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
+  const [groupBy, setGroupBy] = useState(localStorage.getItem(GROUPBY_KEY) || 'type');
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]'));
+    } catch {
+      return new Set();
+    }
+  });
 
   function toggleCompact() {
     setCompact((c) => {
       const next = !c;
       localStorage.setItem(COMPACT_KEY, next ? '1' : '0');
+      return next;
+    });
+  }
+
+  function chooseGroupBy(v) {
+    setGroupBy(v);
+    localStorage.setItem(GROUPBY_KEY, v);
+  }
+
+  function toggleCollapse(key) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
       return next;
     });
   }
@@ -716,7 +741,8 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
     const i = prev.findIndex((d) => d.entity_id === u.entity_id);
     if (i === -1) return [...prev, u.state];
     const next = prev.slice();
-    next[i] = u.state;
+    // Pushed updates don't carry room/floor - keep them from the prior entry.
+    next[i] = { ...prev[i], ...u.state };
     return next;
   }
 
@@ -788,17 +814,35 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
       )
     : devices;
 
+  const hasRooms = devices.some((d) => d.area);
+  const dense = devices.length >= GROUPING_THRESHOLD; // collapsible + group-by
+  const NO_ROOM = 'Other';
+  const byRoom = groupBy === 'room' && hasRooms;
+
+  const groupKeyOf = (d) => (byRoom ? d.area || NO_ROOM : d.domain);
+  const groupLabelOf = (key) => (byRoom ? key : domainLabel(key));
+
   const groups = {};
   for (const d of visible) {
-    if (!groups[d.domain]) groups[d.domain] = [];
-    groups[d.domain].push(d);
+    const k = groupKeyOf(d);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(d);
   }
   for (const list of Object.values(groups)) {
-    list.sort((a, b) => a.name.localeCompare(b.name));
+    // Within a room, keep devices ordered by type then name; within a type, by name.
+    list.sort((a, b) =>
+      byRoom ? a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name) : a.name.localeCompare(b.name)
+    );
   }
-  const domains = Object.keys(groups).sort((x, y) =>
-    domainLabel(x).localeCompare(domainLabel(y))
-  );
+  // Order groups: rooms alphabetically (with "Other" last); types by label.
+  const keys = Object.keys(groups).sort((x, y) => {
+    if (byRoom) {
+      if (x === NO_ROOM) return 1;
+      if (y === NO_ROOM) return -1;
+      return x.localeCompare(y);
+    }
+    return groupLabelOf(x).localeCompare(groupLabelOf(y));
+  });
 
   return (
     <div className={`dashboard${compact ? ' compact' : ''}`}>
@@ -836,6 +880,25 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
           onChange={(e) => setQuery(e.target.value)}
         />
       )}
+      {!loading && dense && hasRooms && (
+        <div className="group-by dashboard-groupby">
+          <span className="muted">Group by</span>
+          <button
+            type="button"
+            className={`seg ${!byRoom ? 'on' : ''}`}
+            onClick={() => chooseGroupBy('type')}
+          >
+            Type
+          </button>
+          <button
+            type="button"
+            className={`seg ${byRoom ? 'on' : ''}`}
+            onClick={() => chooseGroupBy('room')}
+          >
+            Room
+          </button>
+        </div>
+      )}
       {loading ? (
         <p className="muted">Loading your devices…</p>
       ) : devices.length === 0 ? (
@@ -847,19 +910,38 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
             administrator to get set up.
           </p>
         </div>
-      ) : domains.length === 0 ? (
+      ) : keys.length === 0 ? (
         <p className="muted">No devices match “{query}”.</p>
       ) : (
-        domains.map((domain) => (
-          <section key={domain}>
-            <h2>{domainLabel(domain)}</h2>
-            <div className="grid">
-              {groups[domain].map((d) => (
-                <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
-              ))}
-            </div>
-          </section>
-        ))
+        keys.map((key) => {
+          const ckey = `${byRoom ? 'room' : 'type'}:${key}`;
+          const open = !dense || !collapsed.has(ckey);
+          return (
+            <section key={ckey}>
+              {dense ? (
+                <button
+                  type="button"
+                  className="section-head"
+                  onClick={() => toggleCollapse(ckey)}
+                  aria-expanded={open}
+                >
+                  <span className={`acc-caret ${open ? 'open' : ''}`}>▸</span>
+                  <span className="section-title">{groupLabelOf(key)}</span>
+                  <span className="section-count muted">{groups[key].length}</span>
+                </button>
+              ) : (
+                <h2>{groupLabelOf(key)}</h2>
+              )}
+              {open && (
+                <div className="grid">
+                  {groups[key].map((d) => (
+                    <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })
       )}
     </div>
   );
