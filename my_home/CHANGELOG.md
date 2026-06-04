@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.5
+- More spacing around the sign-in form and between device cards for a roomier layout.
+
 ## 1.22.4
 - Climate: lengthen the temperature send delay to 1.5s so more taps are batched into a single update.
 

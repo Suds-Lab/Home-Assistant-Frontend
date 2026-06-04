@@ -86,14 +86,15 @@ button {
 
 .login {
   width: 100%;
-  max-width: 340px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
+  padding: 32px 28px;
 }
 
 .login h1 {
-  margin: 0;
+  margin: 0 0 4px;
 }
 
 .login label {
@@ -131,7 +132,7 @@ button {
 .dashboard {
   max-width: 900px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 24px 20px 40px;
 }
 
 .topbar {
@@ -170,7 +171,7 @@ button {
 }
 
 section {
-  margin-bottom: 28px;
+  margin-bottom: 36px;
 }
 
 section h2 {
@@ -185,7 +186,7 @@ section h2 {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  gap: 20px;
 }
 
 /* Compact view: smaller, denser cards so more devices fit per screen. The grid
