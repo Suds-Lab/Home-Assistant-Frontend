@@ -241,6 +241,12 @@ section h2 {
   font-size: 0.74rem;
   min-height: 28px;
 }
+.compact .fan-modes {
+  margin-top: 12px;
+}
+.compact .fan-modes > .muted {
+  margin-bottom: 6px;
+}
 .compact .switch {
   width: 40px;
   height: 22px;
@@ -436,7 +442,7 @@ section h2 {
 
 /* Climate */
 .climate-readout {
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
 .temp-control {
@@ -444,7 +450,7 @@ section h2 {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  margin: 14px 0;
+  margin: 20px 0;
 }
 
 .temp-control button {
@@ -472,20 +478,20 @@ section h2 {
 .mode-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
-  gap: 8px;
+  gap: 10px;
   align-items: stretch; /* same-row buttons share the tallest height */
 }
 
 .mode {
-  padding: 7px 6px;
-  border-radius: 9px;
+  padding: 11px 10px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
   text-transform: capitalize;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   line-height: 1.2;
-  min-height: 34px;
+  min-height: 44px;
   /* Wrap long labels (and break long single words like "MediumHigh") so the
      button grows vertically instead of the text overflowing. */
   display: flex;
@@ -514,7 +520,7 @@ section h2 {
 
 /* Climate fan-speed row. */
 .fan-modes {
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
 .fan-modes > .muted {
@@ -522,7 +528,7 @@ section h2 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 10px;
 }
 
 /* Other controls inside a glowing card pick up the accent too. */

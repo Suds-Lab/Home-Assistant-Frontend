@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.8
+- Roomier climate cards: taller mode/fan/swing buttons, larger gaps, and more space between the temperature, mode, fan and swing sections. Compact view stays dense.
+
 ## 1.22.7
 - Roomier sign-in form: even spacing between the fields and button, taller inputs, and a full-width Sign in button.
 
