@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.23.0
+- Climate swing: for 2-axis swing (off/horizontal/vertical/both), show independent **Horizontal** and **Vertical** toggles instead of four exclusive buttons, and derive the swing mode from the pair. Other swing setups keep the button list.
+
 ## 1.22.8
 - Roomier climate cards: taller mode/fan/swing buttons, larger gaps, and more space between the temperature, mode, fan and swing sections. Compact view stays dense.
 
