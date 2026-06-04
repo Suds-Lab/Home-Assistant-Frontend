@@ -97,16 +97,23 @@ button {
   margin: 0 0 4px;
 }
 
+/* Space the form rows (username, password, button) evenly. */
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .login label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   font-size: 0.85rem;
   color: var(--muted);
 }
 
 .login input {
-  padding: 10px 12px;
+  padding: 13px 14px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input-bg);
@@ -115,13 +122,15 @@ button {
 }
 
 .login button[type='submit'] {
-  margin-top: 6px;
-  padding: 11px;
+  margin-top: 4px;
+  width: 100%;
+  padding: 14px;
   border: none;
   border-radius: 10px;
   background: var(--accent);
   color: white;
   font-weight: 600;
+  font-size: 1rem;
 }
 
 .login button:disabled {
