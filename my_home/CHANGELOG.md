@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.3
+- Activity log: collapse a run of continuous adjustments (temperature, fan speed, cover position, volume) by the same user on the same device into a single entry showing the final value, instead of logging every step.
+
 ## 1.22.2
 - Climate: the temperature stepper now updates instantly on each tap and sends a single update after you stop, instead of waiting on every press.
 
