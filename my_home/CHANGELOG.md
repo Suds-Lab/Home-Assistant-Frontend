@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.22.7
+- Roomier sign-in form: even spacing between the fields and button, taller inputs, and a full-width Sign in button.
+
 ## 1.22.6
 - Fix a brief theme flash on open: the theme is now set before first paint via a small inline script, instead of after the in-browser React/Babel load.
 
