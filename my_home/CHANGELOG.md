@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.21.1
+- OAuth button: fall back to the generic icon if a configured `oauth_logo_url` fails to load (broken/blocked URL).
+
 ## 1.21.0
 - OAuth: `oauth_allowed_emails` allow-lists individual addresses even outside the allowed domains.
 - OAuth: the sign-in button shows the Google logo for Google, a configurable `oauth_logo_url` for other providers, or a generic icon.

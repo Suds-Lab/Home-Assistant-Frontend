@@ -92,9 +92,19 @@ function GoogleLogo() {
 }
 
 function OAuthLogo({ oauth }) {
+  const [imgFailed, setImgFailed] = useState(false);
   if (oauth.isGoogle) return <GoogleLogo />;
-  if (oauth.logo) return <img className="oauth-logo" src={oauth.logo} alt="" />;
-  // Generic fallback when the provider has no configured logo.
+  if (oauth.logo && !imgFailed) {
+    return (
+      <img
+        className="oauth-logo"
+        src={oauth.logo}
+        alt=""
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+  // Generic fallback: no logo configured, or the configured one failed to load.
   return (
     <svg className="oauth-logo" viewBox="0 0 24 24" aria-hidden="true">
       <path
