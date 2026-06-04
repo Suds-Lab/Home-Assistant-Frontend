@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for "My Home" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
 name: Home Assistent Frontend
-version: "1.20.0"
+version: "1.21.0"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -43,6 +43,9 @@ homeassistant_api: true
 #     <that>/api/oauth/callback to the provider's authorised redirect URIs.
 #   - oauth_allowed_domains: restrict sign-in to these email domains
 #     (e.g. ["my.domain"]); leave empty to allow any verified email.
+#   - oauth_allowed_emails: individual addresses always allowed, even outside
+#     the domains above (e.g. ["guest@gmail.com"]).
+#   - oauth_logo_url: logo for the sign-in button on non-Google providers.
 options:
   jwt_secret: change-me-to-a-long-random-string
   oauth_client_id: ""
@@ -50,10 +53,12 @@ options:
   oauth_redirect_url: ""
   oauth_provider_name: Google
   oauth_allowed_domains: []
+  oauth_allowed_emails: []
   oauth_authorize_url: "https://accounts.google.com/o/oauth2/v2/auth"
   oauth_token_url: "https://oauth2.googleapis.com/token"
   oauth_userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo"
   oauth_scopes: "openid email profile"
+  oauth_logo_url: ""
 schema:
   jwt_secret: str
   oauth_client_id: str?
@@ -62,7 +67,10 @@ schema:
   oauth_provider_name: str?
   oauth_allowed_domains:
     - str
+  oauth_allowed_emails:
+    - str
   oauth_authorize_url: str?
   oauth_token_url: str?
   oauth_userinfo_url: str?
   oauth_scopes: str?
+  oauth_logo_url: str?

@@ -97,15 +97,30 @@ OAUTH_AUTHORIZE_URL = _opt("oauth_authorize_url", "https://accounts.google.com/o
 OAUTH_TOKEN_URL = _opt("oauth_token_url", "https://oauth2.googleapis.com/token")
 OAUTH_USERINFO_URL = _opt("oauth_userinfo_url", "https://openidconnect.googleapis.com/v1/userinfo")
 OAUTH_SCOPES = _opt("oauth_scopes", "openid email profile")
+# Optional logo for the sign-in button on non-Google providers (a URL).
+OAUTH_LOGO_URL = _opt("oauth_logo_url")
+
+
+def _opt_list(key):
+    v = addon_options.get(key)
+    if v is None:
+        v = [x.strip() for x in os.environ.get(key.upper(), "").split(",") if x.strip()]
+    return [x.strip() for x in (v or []) if isinstance(x, str) and x.strip()]
+
+
 # Restrict sign-in to these email domains (e.g. ["my.domain"]). Empty = any.
-_ad = addon_options.get("oauth_allowed_domains")
-if _ad is None:
-    _ad = [d.strip() for d in os.environ.get("OAUTH_ALLOWED_DOMAINS", "").split(",") if d.strip()]
-OAUTH_ALLOWED_DOMAINS = [d.lower().lstrip("@") for d in (_ad or []) if isinstance(d, str) and d.strip()]
+OAUTH_ALLOWED_DOMAINS = [d.lower().lstrip("@") for d in _opt_list("oauth_allowed_domains")]
+# Always-allowed individual emails, even outside the allowed domains. A simple,
+# revocable way to let a specific guest in without widening the domain rule.
+OAUTH_ALLOWED_EMAILS = [e.lower() for e in _opt_list("oauth_allowed_emails")]
 
 
 def oauth_configured():
     return bool(OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET and OAUTH_REDIRECT_BASE)
+
+
+def oauth_is_google():
+    return "accounts.google.com" in OAUTH_AUTHORIZE_URL or OAUTH_PROVIDER_NAME.strip().lower() == "google"
 
 # The app listens on TWO ports:
 #  - INGRESS_PORT: the management UI, reached only through HA's Ingress (the
@@ -427,6 +442,8 @@ def session():
         appImage=_app_image_url(),
         providers=providers,            # which login methods to show
         oauthName=OAUTH_PROVIDER_NAME,  # label for the OAuth button
+        oauthIsGoogle=oauth_is_google(),  # show the Google logo
+        oauthLogo=OAUTH_LOGO_URL,         # custom provider logo (non-Google)
     )
 
 
@@ -438,10 +455,12 @@ def _oauth_redirect_uri():
 
 
 def _email_allowed(email):
-    if not OAUTH_ALLOWED_DOMAINS:
+    # No restriction configured -> any verified email is allowed.
+    if not OAUTH_ALLOWED_DOMAINS and not OAUTH_ALLOWED_EMAILS:
         return True
-    domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
-    return domain in OAUTH_ALLOWED_DOMAINS
+    email = email.lower()
+    domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+    return domain in OAUTH_ALLOWED_DOMAINS or email in OAUTH_ALLOWED_EMAILS
 
 
 def _user_for_email(email):

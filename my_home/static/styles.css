@@ -639,9 +639,19 @@ section h2 {
   font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 .btn-oauth:hover {
   border-color: var(--accent);
+}
+.oauth-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .onboarding {

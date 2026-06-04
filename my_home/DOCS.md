@@ -116,7 +116,10 @@ oauth_allowed_domains: ["my.domain"]             # optional; empty = any verifie
 
 `oauth_allowed_domains` restricts sign-in to those email domains (so only
 `*@my.domain` can get in). Leave it empty (`[]`) to allow any verified email.
-Restart the add-on after saving.
+To let in a specific guest who is *outside* your domain, add their address to
+`oauth_allowed_emails: ["guest@gmail.com"]` - simpler and safer than a one-off
+exception, and you revoke it by removing the line. Restart the add-on after
+saving. (For a non-Google provider, `oauth_logo_url` sets the button's logo.)
 
 ### 4. Turn it on
 

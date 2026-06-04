@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.21.0
+- OAuth: `oauth_allowed_emails` allow-lists individual addresses even outside the allowed domains.
+- OAuth: the sign-in button shows the Google logo for Google, a configurable `oauth_logo_url` for other providers, or a generic icon.
+
 ## 1.20.0
 - Manage users: an **All devices** toggle grants a user every device (including ones added later) and hides the picker. Respects the allowed device types.
 
