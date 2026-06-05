@@ -88,6 +88,19 @@ const adminSetSettings = (s) =>
   request('/admin/settings', { method: 'POST', body: JSON.stringify(s) });
 const adminGetActivity = (limit = 200) => request(`/admin/activity?limit=${limit}`);
 const adminClearActivity = () => request('/admin/activity', { method: 'DELETE' });
+// Live pull of Home Assistant's own logbook for a range (never stored by us).
+const adminHaLogbook = (startISO, endISO, entity) => {
+  const p = new URLSearchParams({ start: startISO });
+  if (endISO) p.set('end', endISO);
+  if (entity) p.set('entity', entity);
+  return request(`/admin/ha-logbook?${p.toString()}`);
+};
+// Live pull of one entity's state history for the chart.
+const adminHaHistory = (entity, startISO, endISO) => {
+  const p = new URLSearchParams({ entity, start: startISO });
+  if (endISO) p.set('end', endISO);
+  return request(`/admin/ha-history?${p.toString()}`);
+};
 
 // --- Components -----------------------------------------------------------
 
@@ -2032,6 +2045,127 @@ function endOfToday() {
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// An interactive, zoomable history graph for one entity - pulled live from
+// Home Assistant's /api/history (never stored). Numeric entities (sensors,
+// temperature) render as a line/area chart; on/off-style entities render as a
+// stepped chart over their discrete states. Drag to zoom, double-click to
+// reset. Built on the vendored uPlot (global `uPlot`).
+function HistoryChart({ entity, label, start, end }) {
+  const elRef = useRef(null);
+  const plotRef = useRef(null);
+  const [state, setState] = useState({ loading: true, error: '', data: null });
+
+  // Fetch the history. The backend returns one or more aligned numeric series
+  // (e.g. a climate's current + target temperature), or a single discrete
+  // series with `levels` for on/off-style entities.
+  useEffect(() => {
+    let alive = true;
+    setState({ loading: true, error: '', data: null });
+    adminHaHistory(entity, start.toISOString(), end.toISOString())
+      .then((d) => {
+        if (!alive) return;
+        const times = d.times || [];
+        const series = d.series || [];
+        if (!times.length || !series.length) {
+          setState({ loading: false, error: '', data: null });
+          return;
+        }
+        setState({
+          loading: false,
+          error: '',
+          data: { numeric: !!d.numeric, unit: d.unit, levels: d.levels || null, times, series },
+        });
+      })
+      .catch((e) => { if (alive) setState({ loading: false, error: e.message, data: null }); });
+    return () => { alive = false; };
+  }, [entity, start, end]);
+
+  // (Re)build the uPlot instance whenever the data changes.
+  useEffect(() => {
+    const el = elRef.current;
+    const data = state.data;
+    if (!el || !data || !window.uPlot) return;
+    const { numeric, levels, unit, times, series } = data;
+    const css = getComputedStyle(el);
+    const axisColor = css.color || '#888';
+    const grid = 'rgba(127,127,127,0.18)';
+    const root = getComputedStyle(document.documentElement);
+    const accent = root.getPropertyValue('--accent').trim() || '#03a9f4';
+    const accent2 = root.getPropertyValue('--accent-2').trim() || '#0f9d58';
+    const palette = [accent, accent2, '#ff9800', '#ab47bc', '#e91e63'];
+    const width = el.clientWidth || 600;
+
+    const single = series.length === 1;
+    const uSeries = [
+      { value: (u, ts) => (ts == null ? '' : new Date(ts * 1000).toLocaleString()) },
+      ...series.map((s, i) => {
+        const su = s.unit || unit;
+        return {
+          label: s.label,
+          stroke: palette[i % palette.length],
+          width: 2,
+          spanGaps: true,
+          fill: numeric && single ? 'rgba(3,169,244,0.10)' : undefined,
+          points: { show: !numeric },
+          paths: numeric ? undefined : uPlot.paths.stepped({ align: 1 }),
+          value: (u, v) =>
+            v == null ? '' : numeric ? `${v}${su ? ` ${su}` : ''}` : (levels[v] ?? v),
+        };
+      }),
+    ];
+
+    const opts = {
+      width,
+      height: 260,
+      padding: [12, 12, 0, 0],
+      scales: { x: { time: true }, y: numeric ? {} : { range: [-0.4, levels.length - 0.6] } },
+      legend: { show: true },
+      cursor: { drag: { x: true, y: false } },
+      series: uSeries,
+      axes: [
+        { stroke: axisColor, grid: { stroke: grid }, ticks: { stroke: grid } },
+        {
+          stroke: axisColor,
+          grid: { stroke: grid },
+          ticks: { stroke: grid },
+          size: numeric ? 52 : 84,
+          splits: numeric ? undefined : (u) => levels.map((_, i) => i),
+          values: numeric
+            ? (u, vals) => vals.map((v) => `${v}${unit ? ` ${unit}` : ''}`)
+            : (u, vals) => vals.map((v) => levels[v] ?? ''),
+        },
+      ],
+    };
+    const u = new uPlot(opts, [times, ...series.map((s) => s.values)], el);
+    plotRef.current = u;
+    const ro = new ResizeObserver(() => u.setSize({ width: el.clientWidth || width, height: 260 }));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      u.destroy();
+      plotRef.current = null;
+    };
+  }, [state.data, entity, label]);
+
+  return (
+    <div className="lb-chart">
+      <div className="lb-chart-head">
+        <span className="lb-chart-title">History · {label || entity}</span>
+        <span className="lb-chart-hint">drag to zoom · double-click to reset</span>
+      </div>
+      {state.loading ? (
+        <p className="muted">Loading history…</p>
+      ) : state.error ? (
+        <div className="error">{state.error}</div>
+      ) : !state.data ? (
+        <p className="muted">No history for this device in this range.</p>
+      ) : (
+        <div className="lb-chart-canvas" ref={elRef} />
+      )}
+    </div>
+  );
+}
+
 // Styled after Home Assistant's logbook: entries grouped by day, each with a
 // round device-type icon, the entity in accent colour, the action, and a
 // time / relative-time / user line. Records this app's own control actions,
@@ -2043,6 +2177,11 @@ function ActivityLog() {
   const [selItems, setSelItems] = useState(() => new Set()); // entity_ids; empty = all
   const [start, setStart] = useState(startOfToday);
   const [end, setEnd] = useState(endOfToday);
+  // 'these' = the app's own activity log; 'all' = also pull Home Assistant's
+  // live logbook (never stored) for every device.
+  const [scope, setScope] = useState('these');
+  const [haItems, setHaItems] = useState([]);
+  const [haLoading, setHaLoading] = useState(false);
 
   const load = useCallback(() => {
     adminGetActivity(1000)
@@ -2053,6 +2192,23 @@ function ActivityLog() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // In "All" mode, pull HA's logbook for the visible range. It's fetched live
+  // and never persisted; our own changes (which HA records as "by system") are
+  // dropped server-side so we don't show them twice.
+  useEffect(() => {
+    if (scope !== 'all') {
+      setHaItems([]);
+      return;
+    }
+    let alive = true;
+    setHaLoading(true);
+    adminHaLogbook(start.toISOString(), end.toISOString())
+      .then((d) => { if (alive) setHaItems(d.entries || []); })
+      .catch((e) => { if (alive) setError(e.message); })
+      .finally(() => { if (alive) setHaLoading(false); });
+    return () => { alive = false; };
+  }, [scope, start, end]);
 
   function shiftDays(n) {
     setStart(new Date(start.getTime() + n * DAY_MS));
@@ -2067,15 +2223,20 @@ function ActivityLog() {
     });
   }
 
-  // Distinct users / items present across the whole log, for the filters.
+  // The pool feeding the list: the app's own log, plus HA's logbook in "All".
+  const pool = scope === 'all' ? [...(items || []), ...haItems] : (items || []);
+
+  // Distinct users / items present, for the filters. Users come only from the
+  // app's own log (HA entries aren't attributable to an app user); items span
+  // everything in the pool so HA-only devices can also be filtered.
   const users = [];
   const itemOpts = [];
-  if (items) {
+  {
     const us = new Set();
     const is = new Set();
-    for (const e of items) {
+    for (const e of pool) {
       const uk = e.username || '';
-      if (!us.has(uk)) {
+      if (uk && !us.has(uk)) {
         us.add(uk);
         users.push({ value: uk, label: e.name || e.username || 'Unknown' });
       }
@@ -2089,13 +2250,21 @@ function ActivityLog() {
 
   const startMs = start.getTime();
   const endMs = end.getTime();
-  const shown = (items || []).filter((e) => {
-    const t = e.ts * 1000;
-    if (t < startMs || t > endMs) return false;
-    if (who && (e.username || '') !== who) return false;
-    if (selItems.size && !selItems.has(e.entity_id)) return false;
-    return true;
-  });
+  const shown = pool
+    .filter((e) => {
+      const t = e.ts * 1000;
+      if (t < startMs || t > endMs) return false;
+      if (who && (e.username || '') !== who) return false;
+      if (selItems.size && !selItems.has(e.entity_id)) return false;
+      return true;
+    })
+    .sort((a, b) => b.ts - a.ts);
+
+  // When exactly one device is in focus, show its interactive history graph.
+  const focusEntity = selItems.size === 1 ? [...selItems][0] : null;
+  const focusLabel = focusEntity
+    ? ((itemOpts.find((o) => o.id === focusEntity) || {}).label || focusEntity)
+    : null;
 
   // Group the (newest-first) entries into calendar days.
   const groups = [];
@@ -2113,8 +2282,32 @@ function ActivityLog() {
     <div className="card activity">
       <div className="activity-head">
         <span className="device-name">Activity</span>
+        <div className="lb-scope" role="tablist" aria-label="Which logs to show">
+          <button
+            role="tab"
+            aria-selected={scope === 'these'}
+            className={scope === 'these' ? 'active' : ''}
+            onClick={() => setScope('these')}
+          >
+            These logs
+          </button>
+          <button
+            role="tab"
+            aria-selected={scope === 'all'}
+            className={scope === 'all' ? 'active' : ''}
+            onClick={() => setScope('all')}
+          >
+            All
+          </button>
+        </div>
         <button className="ghost" onClick={load}>Refresh</button>
       </div>
+      {scope === 'all' && (
+        <p className="lb-scope-note muted">
+          Showing this app's activity plus Home Assistant's live logbook for
+          every device. Pulled from HA on demand - nothing extra is stored.
+        </p>
+      )}
 
       <div className="lb-controls">
         <div className="lb-range">
@@ -2197,8 +2390,16 @@ function ActivityLog() {
           </button>
         </div>
       )}
+      {focusEntity && (
+        <HistoryChart
+          entity={focusEntity}
+          label={focusLabel}
+          start={start}
+          end={end}
+        />
+      )}
       {error && <div className="error">{error}</div>}
-      {items === null ? (
+      {items === null || (scope === 'all' && haLoading && shown.length === 0) ? (
         <p className="muted">Loading…</p>
       ) : shown.length === 0 ? (
         <p className="muted">No activity in this range.</p>
@@ -2225,7 +2426,8 @@ function ActivityLog() {
                       {e.verb}
                     </div>
                     <div className="lb-meta">
-                      {timeLabel(e.ts)} · {relativeTime(e.ts)} · {e.name}
+                      {timeLabel(e.ts)} · {relativeTime(e.ts)}
+                      {e.name ? ` · ${e.name}` : ''}
                     </div>
                   </div>
                 </li>

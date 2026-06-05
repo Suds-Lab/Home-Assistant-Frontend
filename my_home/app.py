@@ -18,9 +18,10 @@ import os
 import secrets
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 # Ensure PWA assets are served with the right Content-Type.
 mimetypes.add_type("application/manifest+json", ".webmanifest")
@@ -1226,6 +1227,166 @@ def admin_clear_activity():
         except OSError:
             pass
     return jsonify(ok=True)
+
+
+def _iso_to_epoch(s):
+    """Parse an HA ISO timestamp to epoch seconds (0 on failure)."""
+    if not s:
+        return 0
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+    except (ValueError, TypeError):
+        return 0
+
+
+def _logbook_verb(e):
+    """Human action text for an HA logbook entry."""
+    msg = e.get("message")
+    if msg:
+        return msg
+    st = e.get("state")
+    if st in ("on", "off", "locked", "unlocked", "open", "closed", "home", "not_home"):
+        return {"on": "turned on", "off": "turned off"}.get(st, st)
+    return f"changed to {st}" if st is not None else "changed"
+
+
+@app.get("/api/admin/ha-logbook")
+def admin_ha_logbook():
+    """Live pull of Home Assistant's own logbook for a time range (never stored).
+    Our app's own changes - which HA records as the Supervisor / "by system" -
+    are dropped, since the app's activity log already shows them with the real
+    user's name. Pass ?entity= to scope to one entity."""
+    require_admin()
+    start, end = request.args.get("start"), request.args.get("end")
+    entity = request.args.get("entity")
+    if not start:
+        raise ApiError("start is required", 400)
+    path = f"/api/logbook/{quote(start)}"
+    qs = []
+    if end:
+        qs.append("end_time=" + quote(end))
+    if entity:
+        qs.append("entity=" + quote(entity))
+    if qs:
+        path += "?" + "&".join(qs)
+    try:
+        raw = ha_request(path) or []
+    except ApiError:
+        raw = []
+
+    # Index our own actions to drop HA's duplicate "by system" entries.
+    ours = {}
+    for a in _load_activity():
+        ours.setdefault(a.get("entity_id"), []).append(a.get("ts") or 0)
+
+    def is_ours(eid, when_ts):
+        return any(abs(t - when_ts) <= 12 for t in ours.get(eid, []))
+
+    out = []
+    for e in raw if isinstance(raw, list) else []:
+        eid = e.get("entity_id")
+        ts = _iso_to_epoch(e.get("when"))
+        if eid and is_ours(eid, ts):
+            continue
+        out.append({
+            "ts": ts,
+            "entity_id": eid,
+            "entity": e.get("name") or eid or "",
+            "domain": (eid.split(".")[0] if eid else e.get("domain")) or "",
+            "verb": _logbook_verb(e),
+            "name": e.get("context_name") or None,  # who/what caused it, if known
+            "source": "ha",
+        })
+    out.sort(key=lambda x: x["ts"], reverse=True)
+    return jsonify(entries=out)
+
+
+# Numeric attributes worth charting per domain, like Home Assistant's own
+# entity history (a climate's current + target temperature, a light's
+# brightness, etc.). Each is (attribute, label, unit-or-None - None means take
+# the unit from the entity's own attributes when present).
+_HISTORY_ATTRS = {
+    "climate": [("current_temperature", "Current", None), ("temperature", "Target", None)],
+    "water_heater": [("current_temperature", "Current", None), ("temperature", "Target", None)],
+    "humidifier": [("current_humidity", "Current", "%"), ("humidity", "Target", "%")],
+    "light": [("brightness", "Brightness", None)],
+    "fan": [("percentage", "Speed", "%")],
+    "media_player": [("volume_level", "Volume", None)],
+    "cover": [("current_position", "Position", "%")],
+}
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+@app.get("/api/admin/ha-history")
+def admin_ha_history():
+    """Live pull of one entity's state history for the chart (never stored).
+
+    Returns one or more numeric series - like HA's own entity history. For a
+    climate entity that's its current + target temperature; for a light its
+    brightness, etc. Entities with no chartable number (locks, switches) fall
+    back to a stepped chart of their discrete state."""
+    require_admin()
+    entity = request.args.get("entity")
+    start, end = request.args.get("start"), request.args.get("end")
+    if not entity or not start:
+        raise ApiError("entity and start are required", 400)
+    domain = entity.split(".")[0]
+    # NOTE: no minimal_response - we need each snapshot's attributes over time.
+    path = f"/api/history/period/{quote(start)}?filter_entity_id={quote(entity)}"
+    if end:
+        path += "&end_time=" + quote(end)
+    path += "&significant_changes_only"
+    try:
+        raw = ha_request(path) or []
+    except ApiError:
+        raw = []
+    states = raw[0] if (isinstance(raw, list) and raw) else []
+    # Every snapshot for one entity shares a timeline, so all series align to it.
+    times = [_iso_to_epoch(s.get("last_changed") or s.get("last_updated")) for s in states]
+
+    def unit_from_states(attr, fallback):
+        if fallback is not None:
+            return fallback
+        for s in states:
+            a = s.get("attributes") or {}
+            u = a.get("unit_of_measurement") or (a.get("temperature_unit")
+                                                 if "temp" in attr else None)
+            if u:
+                return u
+        return None
+
+    series = []
+    unit = None
+    for attr, label, u_default in _HISTORY_ATTRS.get(domain, []):
+        vals = [_num((s.get("attributes") or {}).get(attr)) for s in states]
+        if any(v is not None for v in vals):
+            u = unit_from_states(attr, u_default)
+            series.append({"label": label, "unit": u, "values": vals})
+            unit = unit or u
+
+    if not series:
+        # The entity's own state may itself be numeric (a sensor / number).
+        state_vals = [_num(s.get("state")) for s in states]
+        if any(v is not None for v in state_vals):
+            u = unit_from_states("unit_of_measurement", None)
+            series.append({"label": "Value", "unit": u, "values": state_vals})
+            unit = u
+
+    if series:
+        return jsonify(entity=entity, numeric=True, unit=unit, times=times, series=series)
+
+    # Discrete fallback: a stepped chart over the entity's distinct states.
+    levels = sorted({str(s.get("state")) for s in states if s.get("state") is not None})
+    idx = {lvl: i for i, lvl in enumerate(levels)}
+    vals = [idx.get(str(s.get("state"))) for s in states]
+    return jsonify(entity=entity, numeric=False, levels=levels, times=times,
+                   series=[{"label": entity, "values": vals}])
 
 
 # Bumped if the backup format ever changes incompatibly.

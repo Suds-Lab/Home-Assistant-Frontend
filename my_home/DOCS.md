@@ -203,6 +203,27 @@ calls a service it uses the Supervisor's token, so Home Assistant's own logbook
 can only credit "Supervisor". The Activity tab is the source of truth that
 always shows the actual person. You can clear it at any time.
 
+**These logs / All.** Use the toggle at the top to switch between the app's own
+log (**These logs**) and **All** - which also pulls **Home Assistant's own
+logbook** live for every device, so you see all device events and not just the
+ones triggered through this app. Nothing extra is stored: HA's logbook is
+fetched on demand for the visible range. The app's own changes (which HA records
+as "by system") are filtered out of the HA side so they don't show up twice -
+you still see them as the proper named entry from this app's log.
+
+**History graph.** Tap a device name (or filter to a single device) to open an
+**interactive, zoomable history graph** pulled live from Home Assistant. Like
+HA's own entity history, it charts the meaningful numbers for that device: a
+climate shows its **current and target temperature** as two lines, a light its
+brightness, a fan its speed, a media player its volume, a cover its position. A
+plain numeric sensor shows its value; on/off-style entities (locks, switches)
+fall back to a stepped chart of their state. Drag across it to zoom in;
+double-click to reset.
+
+> Note: a climate device is a single entity - its target and current
+> temperature are *attributes* of it, not separate entities - so both appear on
+> the one device's graph rather than as two devices.
+
 ## Backup & restore
 
 The **Settings** tab has a **Backup & restore** card. **Export** downloads a

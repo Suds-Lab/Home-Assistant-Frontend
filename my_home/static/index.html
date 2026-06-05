@@ -27,6 +27,10 @@
     <!-- Relative href so styles resolve under any path prefix (Ingress). -->
     <link rel="stylesheet" href="./styles.css" />
 
+    <!-- uPlot: tiny, zoomable time-series charts for the per-device history
+         graph (vendored locally, no CDN/internet at runtime). -->
+    <link rel="stylesheet" href="./vendor/uplot.min.css" />
+
     <!-- PWA: installable, full-screen, native-feeling on phones.
          use-credentials so the manifest loads behind a cookie auth gateway
          (Cloudflare Access / Authelia / basic-auth) - the default no-credentials
@@ -44,6 +48,7 @@
          needed at runtime). Babel transforms app.jsx in the browser. -->
     <script src="./vendor/react.production.min.js"></script>
     <script src="./vendor/react-dom.production.min.js"></script>
+    <script src="./vendor/uplot.iife.min.js"></script>
     <script src="./vendor/babel.min.js"></script>
   </head>
   <body>
