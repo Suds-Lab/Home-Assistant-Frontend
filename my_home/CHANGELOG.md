@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.25.0
+- Settings: new **Included entities** list - hand-pick specific entities to always show in the picker and grant to "All devices" users, even when their device type is turned off. Lets you hide a noisy domain (e.g. switches) without losing the few you want. Uses a Gmail-style search + chips field.
+
 ## 1.24.5
 - Polished the grouped dashboard: floor/type/area headers with a divider and accent count pills, rounded accordion rows for areas with hover, and a subtle fade-in when sections expand.
 

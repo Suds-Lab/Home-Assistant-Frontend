@@ -60,6 +60,7 @@ const control = (entity_id, service, data = {}) =>
 // Admin (management screen, reached via the HA sidebar / Ingress).
 const adminGetUsers = () => request('/admin/users');
 const adminGetEntities = () => request('/admin/entities');
+const adminGetAllEntities = () => request('/admin/entities?all=1'); // unfiltered, for the include picker
 const adminSaveUser = (user) =>
   request('/admin/users', { method: 'POST', body: JSON.stringify(user) });
 const adminDeleteUser = (username) =>
@@ -1341,6 +1342,108 @@ function IconSettings() {
 
 // Which sign-in methods the user dashboard offers. OAuth credentials live in
 // the add-on config; this just toggles Local / OAuth / Both.
+// Gmail-recipients-style field: selected entities as removable chips, with a
+// type-to-search box that suggests matches to add.
+function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device…' }) {
+  const [q, setQ] = useState('');
+  const sel = selected instanceof Set ? selected : new Set(selected);
+  const byId = {};
+  for (const e of entities) byId[e.entity_id] = e;
+  const term = q.trim().toLowerCase();
+  const matches = term
+    ? entities
+        .filter(
+          (e) =>
+            !sel.has(e.entity_id) &&
+            (e.name.toLowerCase().includes(term) || e.entity_id.toLowerCase().includes(term))
+        )
+        .slice(0, 8)
+    : [];
+  return (
+    <div className="chips-field">
+      <div className="chips-box">
+        {[...sel].map((id) => {
+          const e = byId[id] || { entity_id: id, name: id };
+          return (
+            <button type="button" key={id} className="chip" onClick={() => onToggle(id)}>
+              {e.name} <span aria-hidden="true">✕</span>
+            </button>
+          );
+        })}
+        <input
+          className="chips-input"
+          value={q}
+          placeholder={sel.size ? '' : placeholder}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+      {matches.length > 0 && (
+        <div className="chips-menu">
+          {matches.map((e) => (
+            <button
+              type="button"
+              key={e.entity_id}
+              className="chips-menu-row"
+              onClick={() => {
+                onToggle(e.entity_id);
+                setQ('');
+              }}
+            >
+              <DomainIcon domain={e.domain} />
+              <span className="chips-menu-name">{e.name}</span>
+              <span className="chips-menu-id muted">{e.entity_id}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Global "always-included" entities - shown in every picker and granted to
+// "All devices" users even when their domain's type is turned off.
+function IncludedEntitiesSettings() {
+  const [all, setAll] = useState(null);
+  const [sel, setSel] = useState(new Set());
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    Promise.all([adminGetAllEntities(), adminGetSettings()])
+      .then(([e, s]) => {
+        setAll(e.entities);
+        setSel(new Set(s.includedEntities || []));
+      })
+      .catch((err) => setStatus(err.message));
+  }, []);
+
+  async function toggle(id) {
+    const next = new Set(sel);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSel(next);
+    setStatus('Saving…');
+    try {
+      await adminSetSettings({ includedEntities: [...next] });
+      setStatus('Saved.');
+    } catch (e) {
+      setStatus(e.message);
+    }
+  }
+
+  if (all === null) return null;
+  return (
+    <div className="card settings-card">
+      <span className="device-name">Included entities</span>
+      <span className="meta">
+        Always show these specific entities in the picker and give them to “All devices” users -
+        even if their type is turned off above. Useful for hiding a noisy domain (e.g. switches)
+        while keeping the few you care about.
+      </span>
+      <EntityChips entities={all} selected={sel} onToggle={toggle} placeholder="Add an entity…" />
+      {status && <span className="muted">{status}</span>}
+    </div>
+  );
+}
+
 function AuthProviderSettings() {
   const [val, setVal] = useState(null);
   const [cfg, setCfg] = useState({ configured: false, name: 'OAuth' });
@@ -1896,6 +1999,7 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
           <NameSettings />
           <IconSettings />
           <DeviceTypesSettings onChange={reload} />
+          <IncludedEntitiesSettings />
           <AuthProviderSettings />
           <BackupSettings />
         </>
