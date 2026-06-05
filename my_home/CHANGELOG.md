@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.28.1
+- Backup: an "Include the activity log" option (on by default) lets you export without the log for a smaller, cleaner backup.
+
 ## 1.28.0
 - Managers get an edit **pencil on every device card** on the dashboard; it opens a popup to rename the device and set its area (written to HA; entity IDs unchanged, so automations keep working). The pencil is hidden for non-managers.
 
