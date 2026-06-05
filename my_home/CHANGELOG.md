@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.29.0
+- Manage users: a **Manager** badge marks manager accounts in the user list.
+- Activity tab is now **full width** on desktop and mobile, no longer overflows on phones, and you can **click a device name to filter to just that device** (with a "Show all" to clear) - like the Home Assistant logbook.
+- Settings: fixed the title/description text running together; cleaner spacing.
+- Manage users: clearer spacing and labels around the two device searches.
+
 ## 1.28.2
 - Manager organizer now only lists devices the app actually exposes (at least one entity of an enabled type or in the Included list), instead of every Home Assistant device; the update endpoint enforces the same.
 
