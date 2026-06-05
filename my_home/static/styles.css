@@ -261,9 +261,29 @@ section h2 {
   white-space: nowrap;
 }
 
-.org-select {
+.org-edit {
   flex-shrink: 0;
-  max-width: 50%;
+  font-size: 1.05rem;
+}
+
+/* Quick-edit dialog form fields */
+.modal-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.modal-form input,
+.modal-form select {
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
 }
 
 /* Area sub-sections nested under a floor: each is a rounded accordion row. */
