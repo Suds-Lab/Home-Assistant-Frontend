@@ -165,6 +165,20 @@ On first run a default admin **`alice` / `changeme`** is created so you can log
 in - change its password (and add everyone else) from the Manage users screen
 right away.
 
+### Manager role
+
+Tick **Manager** when editing a user to make them a manager. A manager:
+
+- always has access to **all devices**, and
+- gets an **Organize** button on their dashboard that opens an area organizer -
+  a list of every Home Assistant device with a per-device area dropdown.
+
+Moving a device to an area (or leaving it **Unassigned**) is written straight
+back to **Home Assistant's device registry**, so the change shows up in HA
+itself and anywhere else. This lets a trusted household member tidy up newly
+added devices (e.g. a fresh MQTT device that arrives Unassigned) without giving
+them Home Assistant admin access.
+
 ## Activity log
 
 The **Activity** tab in the sidebar shows who controlled what, newest first -

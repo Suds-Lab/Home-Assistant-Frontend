@@ -51,7 +51,12 @@ async function request(path, options = {}) {
 const login = (username, password) =>
   request('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
 const getDevices = () => request('/devices');
+const getMe = () => request('/me');
 const getSession = () => request('/session');
+// Manager: organize HA devices into areas.
+const managerGetDevices = () => request('/manager/devices');
+const managerSetDeviceArea = (device_id, area_id) =>
+  request('/manager/device-area', { method: 'POST', body: JSON.stringify({ device_id, area_id }) });
 const getDevice = (entity_id) => request(`/entity/${encodeURIComponent(entity_id)}`);
 // Call a whitelisted service on an entity (backend enforces what's allowed).
 const control = (entity_id, service, data = {}) =>
@@ -687,7 +692,110 @@ function DeviceCard({ device, onChange }) {
   );
 }
 
-function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appIcon = '🏠' }) {
+// Manager-only: move Home Assistant devices between areas (writes to HA).
+function Organizer() {
+  const [data, setData] = useState(null); // { devices, areas }
+  const [error, setError] = useState('');
+  const [savingId, setSavingId] = useState(null);
+
+  const load = useCallback(() => {
+    setError('');
+    managerGetDevices()
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function setArea(device_id, area_id) {
+    setSavingId(device_id);
+    setError('');
+    try {
+      await managerSetDeviceArea(device_id, area_id || null);
+      setData((d) => ({
+        ...d,
+        devices: d.devices.map((dev) =>
+          dev.id === device_id
+            ? { ...dev, area_id: area_id || null, area: (d.areas.find((a) => a.area_id === area_id) || {}).name || null }
+            : dev
+        ),
+      }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  if (!data) {
+    return error ? <div className="error banner">{error}</div> : <p className="muted">Loading devices…</p>;
+  }
+
+  // Group devices by current area; "Unassigned" first so new devices stand out.
+  const groups = {};
+  for (const dev of data.devices) {
+    const k = dev.area || 'Unassigned';
+    (groups[k] = groups[k] || []).push(dev);
+  }
+  const order = Object.keys(groups).sort((a, b) =>
+    a === 'Unassigned' ? -1 : b === 'Unassigned' ? 1 : a.localeCompare(b)
+  );
+
+  return (
+    <div className="organizer">
+      <p className="muted org-intro">
+        Assign each device to a Home Assistant area. Changes are saved to Home Assistant.
+      </p>
+      {error && <div className="error banner">{error}</div>}
+      {data.devices.length === 0 ? (
+        <p className="muted">No devices found in Home Assistant.</p>
+      ) : (
+        order.map((areaName) => (
+          <section key={areaName}>
+            <h2>{areaName}</h2>
+            {groups[areaName].map((dev) => (
+              <div key={dev.id} className="card org-row">
+                <div className="org-info">
+                  <span className="device-name">{dev.name}</span>
+                  {dev.entities.length > 0 && (
+                    <span className="meta">
+                      {dev.entities.slice(0, 3).join(', ')}
+                      {dev.entities.length > 3 ? ` +${dev.entities.length - 3} more` : ''}
+                    </span>
+                  )}
+                </div>
+                <select
+                  className="user-filter org-select"
+                  value={dev.area_id || ''}
+                  disabled={savingId === dev.id}
+                  onChange={(e) => setArea(dev.id, e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {data.areas.map((a) => (
+                    <option key={a.area_id} value={a.area_id}>
+                      {a.floor ? `${a.floor} - ${a.name}` : a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+function Dashboard({
+  displayName,
+  onLogout,
+  live = true,
+  title = 'My Home',
+  appIcon = '🏠',
+  isManager = false,
+}) {
+  const [organizing, setOrganizing] = useState(false);
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -892,7 +1000,16 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
-          {devices.length > 4 && (
+          {isManager && (
+            <button
+              className={`ghost ${organizing ? 'on' : ''}`}
+              onClick={() => setOrganizing((o) => !o)}
+              aria-pressed={organizing}
+            >
+              {organizing ? 'Done' : 'Organize'}
+            </button>
+          )}
+          {!organizing && devices.length > 4 && (
             <button
               className="ghost icon-only"
               onClick={toggleCompact}
@@ -909,6 +1026,11 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
           </button>
         </div>
       </header>
+
+      {organizing ? (
+        <Organizer />
+      ) : (
+      <>{/* normal dashboard */}
 
       {error && <div className="error banner">{error}</div>}
       {!loading && devices.length > 2 && (
@@ -1021,6 +1143,8 @@ function Dashboard({ displayName, onLogout, live = true, title = 'My Home', appI
           );
         })
       )}
+      </>
+      )}
     </div>
   );
 }
@@ -1032,6 +1156,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [password, setPassword] = useState('');
   const [picked, setPicked] = useState(new Set(user?.entities || []));
   const [all, setAll] = useState(!!user?.all);
+  const [manager, setManager] = useState(!!user?.manager);
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState(null); // null = auto
   const [expanded, setExpanded] = useState(() => new Set());
@@ -1062,7 +1187,8 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
-        all,
+        all: all || manager, // managers always get full access
+        manager,
         entities: [...picked],
       });
     } catch (err) {
@@ -1178,16 +1304,29 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         />
       </label>
 
+      <label className="checkbox-row all-toggle">
+        <input type="checkbox" checked={manager} onChange={(e) => setManager(e.target.checked)} />
+        <span>
+          <strong>Manager</strong> - can organize devices into Home Assistant areas (always has
+          full device access)
+        </span>
+      </label>
+
       <h4 className="devices-heading">Devices this user can control</h4>
 
       <label className="checkbox-row all-toggle">
-        <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={all || manager}
+          disabled={manager}
+          onChange={(e) => setAll(e.target.checked)}
+        />
         <span>
           <strong>All devices</strong> - control everything, including devices added later
         </span>
       </label>
 
-      {all ? (
+      {all || manager ? (
         <p className="muted all-note">
           This user can control every device. Turn this off to choose specific devices.
         </p>
@@ -2222,6 +2361,21 @@ function InstallPrompt({ persistent = false, appName = 'My Home', appIcon = '�
 function UserApp({ live, title, appName, appIcon, providers, oauth }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
+  const [isManager, setIsManager] = useState(false);
+
+  // Resolve the signed-in user's role (so managers get the area organizer).
+  useEffect(() => {
+    if (!token) {
+      setIsManager(false);
+      return;
+    }
+    getMe()
+      .then((m) => {
+        setIsManager(!!m.manager);
+        if (m.displayName) setDisplayName(m.displayName);
+      })
+      .catch(() => {});
+  }, [token]);
 
   function handleLogin(tok, name) {
     setToken(tok);
@@ -2235,6 +2389,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
     localStorage.removeItem(NAME_KEY);
     setTok(null);
     setDisplayName('');
+    setIsManager(false);
   }
 
   return (
@@ -2254,6 +2409,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
           live={live}
           title={title}
           appIcon={appIcon}
+          isManager={isManager}
         />
       )}
       <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} />

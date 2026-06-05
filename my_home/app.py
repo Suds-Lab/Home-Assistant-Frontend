@@ -422,9 +422,9 @@ def _domain_assignable(entity_id):
 
 
 def user_can_access(user, entity_id):
-    """An 'all' user owns every assignable entity (including future ones);
-    otherwise it's the explicit list."""
-    if user.get("all"):
+    """An 'all' user (and managers, who always have full access) owns every
+    assignable entity; otherwise it's the explicit list."""
+    if user.get("all") or user.get("manager"):
         return _domain_assignable(entity_id)
     return entity_id in user.get("entities", [])
 
@@ -456,6 +456,18 @@ def login():
     return jsonify(
         token=_issue_token(user),
         displayName=user.get("displayName") or user["username"],
+    )
+
+
+@app.get("/api/me")
+def me():
+    """The signed-in user's display name + role (so the dashboard can show the
+    manager-only area organizer)."""
+    user = current_user()
+    return jsonify(
+        username=user["username"],
+        displayName=user.get("displayName") or user["username"],
+        manager=bool(user.get("manager")),
     )
 
 
@@ -652,6 +664,79 @@ def entity_detail(entity_id):
     user = current_user()
     assert_owned(user, entity_id)
     return jsonify(_device_view(ha_request(f"/api/states/{entity_id}")))
+
+
+# --- Manager: organize devices into Home Assistant areas -----------------
+
+
+def require_manager():
+    user = current_user()
+    if not user.get("manager"):
+        raise ApiError("Manager access required", 403)
+    return user
+
+
+@app.get("/api/manager/devices")
+def manager_devices():
+    """Every HA device with its current area, plus the list of areas - for the
+    manager's area organizer."""
+    require_manager()
+    reg = ha_registries()
+    floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
+    area_by_id = {a["area_id"]: a for a in reg.get("areas", [])}
+    # Friendly names for a device's entities (from current states).
+    names = {}
+    try:
+        for s in ha_request("/api/states"):
+            names[s["entity_id"]] = s.get("attributes", {}).get("friendly_name") or s["entity_id"]
+    except ApiError:
+        pass
+    ents_by_dev = {}
+    for e in reg.get("entities", []):
+        if e.get("device_id"):
+            ents_by_dev.setdefault(e["device_id"], []).append(
+                names.get(e["entity_id"], e["entity_id"])
+            )
+
+    devices = []
+    for d in reg.get("devices", []):
+        aid = d.get("area_id")
+        area = area_by_id.get(aid)
+        ents = sorted(ents_by_dev.get(d["id"], []))
+        devices.append({
+            "id": d["id"],
+            "name": d.get("name_by_user") or d.get("name") or "Unnamed device",
+            "manufacturer": d.get("manufacturer"),
+            "model": d.get("model"),
+            "area_id": aid,
+            "area": area.get("name") if area else None,
+            "floor": floors.get(area.get("floor_id")) if area else None,
+            "entities": ents,
+        })
+    devices.sort(key=lambda x: (x["area"] or "￿", x["name"].lower()))
+    areas = [
+        {"area_id": a["area_id"], "name": a.get("name"), "floor": floors.get(a.get("floor_id"))}
+        for a in reg.get("areas", [])
+    ]
+    areas.sort(key=lambda a: (a["name"] or "").lower())
+    return jsonify(devices=devices, areas=areas)
+
+
+@app.post("/api/manager/device-area")
+def manager_set_device_area():
+    """Move a device to an area (or unassign with area_id=null). Writes through
+    to Home Assistant's device registry, so the change is reflected in HA."""
+    require_manager()
+    body = request.get_json(silent=True) or {}
+    device_id = body.get("device_id")
+    area_id = body.get("area_id") or None
+    if not isinstance(device_id, str) or not device_id:
+        raise ApiError("device_id is required", 400)
+    ha_ws_command(
+        {"type": "config/device_registry/update", "device_id": device_id, "area_id": area_id}
+    )
+    _invalidate_registries()  # so dashboards/picker pick up the new area
+    return jsonify(ok=True)
 
 
 # Services the app may call, per domain. Calls are always scoped to an entity
@@ -934,8 +1019,45 @@ def ha_registries():
             pass
 
 
+def ha_ws_command(payload):
+    """Send one WebSocket command to HA and return its result, or raise ApiError.
+    Used for registry writes (e.g. moving a device to an area)."""
+    try:
+        ws = websocket.create_connection(_ws_url(), timeout=10)
+    except Exception:  # noqa: BLE001
+        raise ApiError("Could not reach Home Assistant", 502)
+    try:
+        json.loads(ws.recv())  # auth_required
+        ws.send(json.dumps({"type": "auth", "access_token": HA_TOKEN}))
+        if json.loads(ws.recv()).get("type") != "auth_ok":
+            raise ApiError("Home Assistant rejected the connection", 502)
+        msg = dict(payload)
+        msg["id"] = 1
+        ws.send(json.dumps(msg))
+        while True:
+            res = json.loads(ws.recv())
+            if res.get("type") == "result" and res.get("id") == 1:
+                if not res.get("success"):
+                    raise ApiError(
+                        (res.get("error") or {}).get("message")
+                        or "Home Assistant rejected the change",
+                        502,
+                    )
+                return res.get("result")
+    finally:
+        try:
+            ws.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 _REG_CACHE = {"ts": 0.0, "data": None}
 _REG_LOCK = threading.Lock()
+
+
+def _invalidate_registries():
+    with _REG_LOCK:
+        _REG_CACHE["ts"] = 0.0
 
 
 def ha_registries_cached(ttl=300):
@@ -1179,6 +1301,7 @@ def admin_list_users():
             "displayName": u.get("displayName", ""),
             "entities": u.get("entities", []),
             "all": bool(u.get("all")),
+            "manager": bool(u.get("manager")),
         }
         for u in load_users()
     ]
@@ -1221,7 +1344,9 @@ def admin_save_user():
     record = existing if existing is not None else {"username": username}
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
-    record["all"] = bool(body.get("all"))  # grant every device (now and future)
+    record["manager"] = bool(body.get("manager"))  # can organize devices into HA areas
+    # Managers always have full device access.
+    record["all"] = bool(body.get("all")) or record["manager"]
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
         record["password"] = password
