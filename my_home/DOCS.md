@@ -161,6 +161,12 @@ source of truth (saved to `/data`). Add, edit, and remove users, and tick each
 person's devices from a searchable list of your real HA entities. The system
 won't let you remove the last admin.
 
+To give **one** user a device whose **type is turned off** (e.g. a single
+`switch.*`), use **Add a specific device** in their editor - it searches every
+entity and assigns it to that user only. (The Settings **Included entities**
+list is the opposite: it shows entities to *everyone* and grants them to
+**All devices** users.)
+
 On first run a default admin **`alice` / `changeme`** is created so you can log
 in - change its password (and add everyone else) from the Manage users screen
 right away.
