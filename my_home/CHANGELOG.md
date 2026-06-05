@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.28.2
+- Manager organizer now only lists devices the app actually exposes (at least one entity of an enabled type or in the Included list), instead of every Home Assistant device; the update endpoint enforces the same.
+
 ## 1.28.1
 - Backup: an "Include the activity log" option (on by default) lets you export without the log for a smaller, cleaner backup.
 

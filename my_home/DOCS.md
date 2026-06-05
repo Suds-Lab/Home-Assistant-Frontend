@@ -177,8 +177,10 @@ Tick **Manager** when editing a user to make them a manager. A manager:
 
 - always has access to **all devices**, and
 - gets an **Organize** button on their dashboard that opens an area organizer -
-  a searchable list of every Home Assistant device, grouped by area. Each device
-  has a **pencil** that opens a quick dialog to **rename** it and set its **area**.
+  a searchable list of the Home Assistant devices the app exposes (those with at
+  least one entity of an enabled type, or in the Included list), grouped by area.
+  Each device has a **pencil** that opens a quick dialog to **rename** it and set
+  its **area**.
 
 Renaming a device or moving it to an area (or leaving it **Unassigned**) is
 written straight back to **Home Assistant's device registry**, so the change
