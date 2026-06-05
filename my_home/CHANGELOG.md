@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.26.1
+- Organize tab: added a device search, and a pencil on each device that opens a quick dialog to rename it and set its area (both written back to Home Assistant).
+
 ## 1.26.0
 - New **Manager** role: managers get an **Organize** view on their dashboard to move Home Assistant devices between areas (and place newly-added ones like MQTT devices). Changes are written back to HA's device registry. Managers always have full device access; set the role in Manage users.
 

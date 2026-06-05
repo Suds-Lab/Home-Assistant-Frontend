@@ -722,20 +722,23 @@ def manager_devices():
     return jsonify(devices=devices, areas=areas)
 
 
-@app.post("/api/manager/device-area")
-def manager_set_device_area():
-    """Move a device to an area (or unassign with area_id=null). Writes through
-    to Home Assistant's device registry, so the change is reflected in HA."""
+@app.post("/api/manager/device")
+def manager_update_device():
+    """Update a device's area and/or name (name_by_user). Only the fields
+    present in the body are changed. Writes through to Home Assistant's device
+    registry, so the change is reflected in HA."""
     require_manager()
     body = request.get_json(silent=True) or {}
     device_id = body.get("device_id")
-    area_id = body.get("area_id") or None
     if not isinstance(device_id, str) or not device_id:
         raise ApiError("device_id is required", 400)
-    ha_ws_command(
-        {"type": "config/device_registry/update", "device_id": device_id, "area_id": area_id}
-    )
-    _invalidate_registries()  # so dashboards/picker pick up the new area
+    update = {"type": "config/device_registry/update", "device_id": device_id}
+    if "area_id" in body:
+        update["area_id"] = body.get("area_id") or None
+    if "name" in body:
+        update["name_by_user"] = (body.get("name") or "").strip() or None
+    ha_ws_command(update)
+    _invalidate_registries()  # so dashboards/picker pick up the change
     return jsonify(ok=True)
 
 

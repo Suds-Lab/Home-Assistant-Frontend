@@ -55,8 +55,8 @@ const getMe = () => request('/me');
 const getSession = () => request('/session');
 // Manager: organize HA devices into areas.
 const managerGetDevices = () => request('/manager/devices');
-const managerSetDeviceArea = (device_id, area_id) =>
-  request('/manager/device-area', { method: 'POST', body: JSON.stringify({ device_id, area_id }) });
+const managerUpdateDevice = (device_id, fields) =>
+  request('/manager/device', { method: 'POST', body: JSON.stringify({ device_id, ...fields }) });
 const getDevice = (entity_id) => request(`/entity/${encodeURIComponent(entity_id)}`);
 // Call a whitelisted service on an entity (backend enforces what's allowed).
 const control = (entity_id, service, data = {}) =>
@@ -692,11 +692,70 @@ function DeviceCard({ device, onChange }) {
   );
 }
 
-// Manager-only: move Home Assistant devices between areas (writes to HA).
+// Quick edit dialog for a device: rename + reassign area (writes to HA).
+function DeviceEditDialog({ device, areas, onClose, onSave }) {
+  const [name, setName] = useState(device.name || '');
+  const [areaId, setAreaId] = useState(device.area_id || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function save() {
+    setBusy(true);
+    setErr('');
+    try {
+      await onSave(device.id, { name: name.trim(), area_id: areaId || null });
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Edit device</h3>
+          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <label>
+          Name
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        <label>
+          Area
+          <select value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+            <option value="">Unassigned</option>
+            {areas.map((a) => (
+              <option key={a.area_id} value={a.area_id}>
+                {a.floor ? `${a.floor} - ${a.name}` : a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {device.entities && device.entities.length > 0 && (
+          <p className="meta">{device.entities.length} entit{device.entities.length === 1 ? 'y' : 'ies'}: {device.entities.slice(0, 4).join(', ')}{device.entities.length > 4 ? '…' : ''}</p>
+        )}
+        {err && <div className="error">{err}</div>}
+        <div className="editor-actions">
+          <button className="btn-primary" onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          <button className="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Manager-only: move Home Assistant devices between areas / rename (writes to HA).
 function Organizer() {
   const [data, setData] = useState(null); // { devices, areas }
   const [error, setError] = useState('');
-  const [savingId, setSavingId] = useState(null);
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState(null); // device being edited
 
   const load = useCallback(() => {
     setError('');
@@ -708,33 +767,44 @@ function Organizer() {
     load();
   }, [load]);
 
-  async function setArea(device_id, area_id) {
-    setSavingId(device_id);
-    setError('');
-    try {
-      await managerSetDeviceArea(device_id, area_id || null);
-      setData((d) => ({
-        ...d,
-        devices: d.devices.map((dev) =>
-          dev.id === device_id
-            ? { ...dev, area_id: area_id || null, area: (d.areas.find((a) => a.area_id === area_id) || {}).name || null }
-            : dev
-        ),
-      }));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSavingId(null);
-    }
+  async function applyUpdate(device_id, fields) {
+    await managerUpdateDevice(device_id, fields);
+    setData((d) => ({
+      ...d,
+      devices: d.devices.map((dev) =>
+        dev.id === device_id
+          ? {
+              ...dev,
+              ...('area_id' in fields
+                ? {
+                    area_id: fields.area_id || null,
+                    area: (d.areas.find((a) => a.area_id === fields.area_id) || {}).name || null,
+                  }
+                : {}),
+              ...(fields.name ? { name: fields.name } : {}),
+            }
+          : dev
+      ),
+    }));
   }
 
   if (!data) {
     return error ? <div className="error banner">{error}</div> : <p className="muted">Loading devices…</p>;
   }
 
+  const term = query.trim().toLowerCase();
+  const visible = term
+    ? data.devices.filter(
+        (d) =>
+          d.name.toLowerCase().includes(term) ||
+          (d.area || '').toLowerCase().includes(term) ||
+          d.entities.some((e) => e.toLowerCase().includes(term))
+      )
+    : data.devices;
+
   // Group devices by current area; "Unassigned" first so new devices stand out.
   const groups = {};
-  for (const dev of data.devices) {
+  for (const dev of visible) {
     const k = dev.area || 'Unassigned';
     (groups[k] = groups[k] || []).push(dev);
   }
@@ -745,11 +815,21 @@ function Organizer() {
   return (
     <div className="organizer">
       <p className="muted org-intro">
-        Assign each device to a Home Assistant area. Changes are saved to Home Assistant.
+        Assign each device to a Home Assistant area, or rename it. Changes are saved to Home
+        Assistant.
       </p>
+      <input
+        type="search"
+        className="search dashboard-search"
+        placeholder="Search devices…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       {error && <div className="error banner">{error}</div>}
       {data.devices.length === 0 ? (
         <p className="muted">No devices found in Home Assistant.</p>
+      ) : visible.length === 0 ? (
+        <p className="muted">No devices match “{query}”.</p>
       ) : (
         order.map((areaName) => (
           <section key={areaName}>
@@ -758,30 +838,32 @@ function Organizer() {
               <div key={dev.id} className="card org-row">
                 <div className="org-info">
                   <span className="device-name">{dev.name}</span>
-                  {dev.entities.length > 0 && (
-                    <span className="meta">
-                      {dev.entities.slice(0, 3).join(', ')}
-                      {dev.entities.length > 3 ? ` +${dev.entities.length - 3} more` : ''}
-                    </span>
-                  )}
+                  <span className="meta">
+                    {dev.area || 'Unassigned'}
+                    {dev.entities.length > 0
+                      ? ` · ${dev.entities.slice(0, 2).join(', ')}${dev.entities.length > 2 ? '…' : ''}`
+                      : ''}
+                  </span>
                 </div>
-                <select
-                  className="user-filter org-select"
-                  value={dev.area_id || ''}
-                  disabled={savingId === dev.id}
-                  onChange={(e) => setArea(dev.id, e.target.value)}
+                <button
+                  className="ghost icon-only org-edit"
+                  title="Edit device"
+                  onClick={() => setEditing(dev)}
                 >
-                  <option value="">Unassigned</option>
-                  {data.areas.map((a) => (
-                    <option key={a.area_id} value={a.area_id}>
-                      {a.floor ? `${a.floor} - ${a.name}` : a.name}
-                    </option>
-                  ))}
-                </select>
+                  ✎
+                </button>
               </div>
             ))}
           </section>
         ))
+      )}
+      {editing && (
+        <DeviceEditDialog
+          device={editing}
+          areas={data.areas}
+          onClose={() => setEditing(null)}
+          onSave={applyUpdate}
+        />
       )}
     </div>
   );
