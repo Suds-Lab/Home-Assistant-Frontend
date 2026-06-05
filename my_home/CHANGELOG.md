@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.27.0
+- Manage users: a per-user **"Add a specific device"** search lets you grant one user any entity (even of a disabled type) without adding it globally - so it doesn't also land on every "All devices" user.
+
 ## 1.26.2
 - Device picker: cleaner, mobile-friendly rows - the entity name sits over a muted entity id (no more crowding/wrapping), larger touch targets, and a clear highlight on selected rows.
 

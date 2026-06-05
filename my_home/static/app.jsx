@@ -1244,6 +1244,14 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Every entity (any type), for the per-user "add a specific device" search -
+  // lets the admin grant one user a disabled-type entity without globalising it.
+  const [allEntities, setAllEntities] = useState([]);
+  useEffect(() => {
+    adminGetAllEntities()
+      .then((e) => setAllEntities(e.entities))
+      .catch(() => {});
+  }, []);
 
   const toggleGroup = (key) =>
     setExpanded((prev) => {
@@ -1434,6 +1442,19 @@ function UserEditor({ user, entities, onSave, onCancel }) {
             </div>
           )}
 
+          <div className="add-specific">
+            <span className="muted add-specific-label">
+              Add a specific device (any type, this user only)
+            </span>
+            <EntityChips
+              entities={allEntities}
+              selected={picked}
+              onToggle={toggleEntity}
+              showChips={false}
+              placeholder="Search all devices…"
+            />
+          </div>
+
           {entities.length === 0 ? (
             <p className="muted">No entities found in Home Assistant.</p>
           ) : (
@@ -1567,7 +1588,7 @@ function IconSettings() {
 // the add-on config; this just toggles Local / OAuth / Both.
 // Gmail-recipients-style field: selected entities as removable chips, with a
 // type-to-search box that suggests matches to add.
-function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device…' }) {
+function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device…', showChips = true }) {
   const [q, setQ] = useState('');
   const sel = selected instanceof Set ? selected : new Set(selected);
   const byId = {};
@@ -1585,18 +1606,19 @@ function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device
   return (
     <div className="chips-field">
       <div className="chips-box">
-        {[...sel].map((id) => {
-          const e = byId[id] || { entity_id: id, name: id };
-          return (
-            <button type="button" key={id} className="chip" onClick={() => onToggle(id)}>
-              {e.name} <span aria-hidden="true">✕</span>
-            </button>
-          );
-        })}
+        {showChips &&
+          [...sel].map((id) => {
+            const e = byId[id] || { entity_id: id, name: id };
+            return (
+              <button type="button" key={id} className="chip" onClick={() => onToggle(id)}>
+                {e.name} <span aria-hidden="true">✕</span>
+              </button>
+            );
+          })}
         <input
           className="chips-input"
           value={q}
-          placeholder={sel.size ? '' : placeholder}
+          placeholder={showChips && sel.size ? '' : placeholder}
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
