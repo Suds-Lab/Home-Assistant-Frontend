@@ -681,8 +681,9 @@ def require_manager():
 
 @app.get("/api/manager/devices")
 def manager_devices():
-    """Every HA device with its current area, plus the list of areas - for the
-    manager's area organizer."""
+    """Devices the manager can organize - those with at least one entity the app
+    exposes (an enabled type, or in the Included list) - with their current area
+    plus the list of areas."""
     require_manager()
     reg = ha_registries()
     floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
@@ -694,15 +695,20 @@ def manager_devices():
             names[s["entity_id"]] = s.get("attributes", {}).get("friendly_name") or s["entity_id"]
     except ApiError:
         pass
-    ents_by_dev = {}
+    ents_by_dev = {}   # device_id -> [friendly name]
+    ids_by_dev = {}    # device_id -> [entity_id]
     for e in reg.get("entities", []):
-        if e.get("device_id"):
-            ents_by_dev.setdefault(e["device_id"], []).append(
-                names.get(e["entity_id"], e["entity_id"])
-            )
+        did = e.get("device_id")
+        if did:
+            ents_by_dev.setdefault(did, []).append(names.get(e["entity_id"], e["entity_id"]))
+            ids_by_dev.setdefault(did, []).append(e["entity_id"])
 
     devices = []
     for d in reg.get("devices", []):
+        # Only devices with at least one app-relevant entity (enabled type or
+        # explicitly included) - not every HA device.
+        if not any(_domain_assignable(eid) for eid in ids_by_dev.get(d["id"], [])):
+            continue
         aid = d.get("area_id")
         area = area_by_id.get(aid)
         ents = sorted(ents_by_dev.get(d["id"], []))
@@ -735,6 +741,12 @@ def manager_update_device():
     device_id = body.get("device_id")
     if not isinstance(device_id, str) or not device_id:
         raise ApiError("device_id is required", 400)
+    # Only devices the app actually exposes (an enabled-type/included entity)
+    # may be managed - matches what the organizer shows.
+    reg = ha_registries()
+    dev_eids = [e["entity_id"] for e in reg.get("entities", []) if e.get("device_id") == device_id]
+    if not any(_domain_assignable(eid) for eid in dev_eids):
+        raise ApiError("That device isn't available to manage", 403)
     update = {"type": "config/device_registry/update", "device_id": device_id}
     if "area_id" in body:
         update["area_id"] = body.get("area_id") or None
