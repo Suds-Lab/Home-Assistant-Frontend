@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.29.1
+- Activity: stack the filter controls vertically on phones so the wide date pickers can't run off the screen edge.
+
 ## 1.29.0
 - Manage users: a **Manager** badge marks manager accounts in the user list.
 - Activity tab is now **full width** on desktop and mobile, no longer overflows on phones, and you can **click a device name to filter to just that device** (with a "Show all" to clear) - like the Home Assistant logbook.

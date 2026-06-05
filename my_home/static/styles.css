@@ -959,6 +959,31 @@ section .grid {
   color: var(--muted);
 }
 
+/* On phones, stack the controls vertically so wide native date inputs (which
+   ignore flex-shrink on iOS/Android) can never run off the edge. */
+@media (max-width: 560px) {
+  .lb-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lb-range {
+    flex-direction: column;
+    align-items: stretch;
+    flex-basis: auto;
+  }
+  .lb-range input {
+    width: 100%;
+  }
+  .lb-dash {
+    display: none;
+  }
+  .user-filter,
+  .lb-multi,
+  .lb-multi > summary {
+    width: 100%;
+  }
+}
+
 .lb-nav {
   display: flex;
   gap: 6px;
