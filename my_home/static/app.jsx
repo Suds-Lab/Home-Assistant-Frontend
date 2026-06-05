@@ -1317,15 +1317,17 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const searching = q.length > 0;
 
   const checkRow = (e) => (
-    <label key={e.entity_id} className="pick-row">
+    <label key={e.entity_id} className={`pick-row ${picked.has(e.entity_id) ? 'picked' : ''}`}>
       <input
         type="checkbox"
         checked={picked.has(e.entity_id)}
         onChange={() => toggleEntity(e.entity_id)}
       />
       <span className="pick-icon" title={domainLabel(e.domain)}><DomainIcon domain={e.domain} /></span>
-      <span className="pick-name">{e.name}</span>
-      <span className="pick-id">{e.entity_id}</span>
+      <span className="pick-text">
+        <span className="pick-name">{e.name}</span>
+        <span className="pick-id">{e.entity_id}</span>
+      </span>
     </label>
   );
 
