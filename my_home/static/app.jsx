@@ -1937,6 +1937,15 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
     reload();
   }, [reload]);
 
+  // Opening an editor refreshes the entity list, so entities just added to the
+  // global "Included entities" list show up in the picker without a page reload.
+  useEffect(() => {
+    if (editing === null) return;
+    adminGetEntities()
+      .then((e) => setEntities(e.entities))
+      .catch(() => {});
+  }, [editing]);
+
   async function handleSave(user) {
     await adminSaveUser(user);
     setEditing(null);
