@@ -1232,8 +1232,11 @@ def admin_export():
         "version": BACKUP_VERSION,
         "users": load_users(),
         "settings": _load_settings(),
-        "activity": _load_activity(),
     }
+    # The activity log can be large and is disposable - allow excluding it
+    # with ?activity=0 (omitted entirely so restoring won't clear an existing log).
+    if request.args.get("activity") not in ("0", "false", "no"):
+        data["activity"] = _load_activity()
     icon = _find_icon()
     if icon:
         try:

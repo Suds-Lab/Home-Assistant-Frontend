@@ -1803,11 +1803,13 @@ function AuthProviderSettings() {
 function BackupSettings() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [includeActivity, setIncludeActivity] = useState(true);
 
   async function exportData() {
     setStatus('');
     try {
-      const res = await fetch(new URL('api/admin/export', document.baseURI));
+      const path = 'api/admin/export' + (includeActivity ? '' : '?activity=0');
+      const res = await fetch(new URL(path, document.baseURI));
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -1858,6 +1860,14 @@ function BackupSettings() {
         ⚠ The backup contains user <strong>passwords in plain text</strong>. Anyone with this file
         can sign in as those users - store it securely and don’t share it.
       </div>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={includeActivity}
+          onChange={(e) => setIncludeActivity(e.target.checked)}
+        />
+        <span>Include the activity log in the export</span>
+      </label>
       <div className="editor-actions">
         <button className="btn-primary" onClick={exportData} disabled={busy}>
           Export
