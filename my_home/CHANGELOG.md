@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.26.2
+- Device picker: cleaner, mobile-friendly rows - the entity name sits over a muted entity id (no more crowding/wrapping), larger touch targets, and a clear highlight on selected rows.
+
 ## 1.26.1
 - Organize tab: added a device search, and a pencil on each device that opens a quick dialog to rename it and set its area (both written back to Home Assistant).
 
