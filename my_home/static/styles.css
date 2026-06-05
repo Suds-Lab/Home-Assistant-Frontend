@@ -233,6 +233,39 @@ section h2 {
   margin-bottom: 18px;
 }
 
+/* Manager area organizer */
+.org-intro {
+  margin: 0 0 16px;
+}
+
+.org-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.org-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.org-info .meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-select {
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
 /* Area sub-sections nested under a floor: each is a rounded accordion row. */
 .area-subgroup {
   margin: 0 0 10px;

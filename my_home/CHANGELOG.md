@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.26.0
+- New **Manager** role: managers get an **Organize** view on their dashboard to move Home Assistant devices between areas (and place newly-added ones like MQTT devices). Changes are written back to HA's device registry. Managers always have full device access; set the role in Manage users.
+
 ## 1.25.1
 - Manage users: the device picker now refreshes when you open a user, so entities just added to the global "Included entities" list appear without reloading the page.
 
