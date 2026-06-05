@@ -646,13 +646,16 @@ def devices():
     """Every entity assigned to the user, with full state + attributes, plus
     the room/floor it's in (so the dashboard can group by room)."""
     user = current_user()
-    locate = _location_lookup(ha_registries_cached())
+    reg = ha_registries_cached()
+    locate = _location_lookup(reg)
+    ent_dev = {e["entity_id"]: e.get("device_id") for e in reg.get("entities", [])}
     result = []
     for s in ha_request("/api/states"):
         if not user_can_access(user, s["entity_id"]):
             continue
         view = _device_view(s)
         view["area"], view["floor"] = locate(s["entity_id"])
+        view["device_id"] = ent_dev.get(s["entity_id"])  # for the manager edit popup
         result.append(view)
     result.sort(key=lambda d: (d["domain"], d["name"].lower()))
     return jsonify(devices=result)
