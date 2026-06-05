@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.24.5
+- Polished the grouped dashboard: floor/type/area headers with a divider and accent count pills, rounded accordion rows for areas with hover, and a subtle fade-in when sections expand.
+
 ## 1.24.4
 - Floor grouping: areas under a floor are now collapsed by default - expand an area to reveal its devices (remembered per browser).
 
