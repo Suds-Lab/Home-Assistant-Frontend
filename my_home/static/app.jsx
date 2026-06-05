@@ -1509,11 +1509,12 @@ function UserEditor({ user, entities, onSave, onCancel }) {
           {entities.length === 0 ? (
             <p className="muted">No entities found in Home Assistant.</p>
           ) : (
-            <>
+            <div className="browse-devices">
+              <span className="muted add-specific-label">Or browse the allowed devices</span>
               <input
                 type="text"
                 className="search"
-                placeholder="Search devices…"
+                placeholder="Filter the list below…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -1561,7 +1562,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
                   );
                 })
               )}
-            </>
+            </div>
           )}
         </>
       )}
@@ -2181,6 +2182,21 @@ function ActivityLog() {
         )}
       </div>
 
+      {selItems.size > 0 && (
+        <div className="lb-filter-note">
+          <span>
+            Showing only{' '}
+            <strong>
+              {[...selItems]
+                .map((id) => (itemOpts.find((o) => o.id === id) || {}).label || id)
+                .join(', ')}
+            </strong>
+          </span>
+          <button type="button" className="lb-clear" onClick={() => setSelItems(new Set())}>
+            Show all
+          </button>
+        </div>
+      )}
       {error && <div className="error">{error}</div>}
       {items === null ? (
         <p className="muted">Loading…</p>
@@ -2198,7 +2214,15 @@ function ActivityLog() {
                   </span>
                   <div className="lb-body">
                     <div className="lb-line">
-                      <span className="lb-entity">{e.entity}</span> {e.verb}
+                      <button
+                        type="button"
+                        className="lb-entity"
+                        title={`Show only ${e.entity}`}
+                        onClick={() => e.entity_id && setSelItems(new Set([e.entity_id]))}
+                      >
+                        {e.entity}
+                      </button>{' '}
+                      {e.verb}
                     </div>
                     <div className="lb-meta">
                       {timeLabel(e.ts)} · {relativeTime(e.ts)} · {e.name}
@@ -2282,7 +2306,7 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
   }
 
   return (
-    <div className="admin">
+    <div className={`admin${tab === 'activity' ? ' admin-wide' : ''}`}>
       <header className="topbar">
         <h1>{title}</h1>
         <div className="topbar-actions">
@@ -2333,7 +2357,10 @@ function Admin({ onBack, standalone, title = 'My Home' }) {
             users.map((u) => (
               <div key={u.username} className="card user-row">
                 <div>
-                  <span className="device-name">{u.displayName || u.username}</span>
+                  <span className="device-name">
+                    {u.displayName || u.username}
+                    {u.manager && <span className="badge badge-manager">Manager</span>}
+                  </span>
                   <div className="meta">
                     {u.username} ·{' '}
                     {u.all

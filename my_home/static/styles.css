@@ -706,6 +706,11 @@ section .grid {
   padding: 20px;
 }
 
+/* The Activity (logbook) view spans the full width on every screen. */
+.admin-wide {
+  max-width: none;
+}
+
 .topbar-actions {
   display: flex;
   gap: 8px;
@@ -934,10 +939,14 @@ section .grid {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .lb-range input {
-  padding: 7px 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input-bg);
@@ -1095,6 +1104,36 @@ section .grid {
 .lb-entity {
   color: var(--accent);
   font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.lb-entity:hover {
+  text-decoration: underline;
+}
+
+/* "Showing only X" banner when filtered to specific entities. */
+.lb-filter-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 0.88rem;
+}
+.lb-clear {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .lb-meta {
@@ -1105,12 +1144,19 @@ section .grid {
 
 .badge {
   font-size: 0.7rem;
+  font-weight: 600;
   background: var(--accent);
   color: #fff;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
   margin-left: 8px;
   vertical-align: middle;
+}
+
+/* Manager badge - distinct soft pill so managers stand out in the user list. */
+.badge-manager {
+  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+  color: var(--accent-2);
 }
 
 .editor h3 {
@@ -1474,7 +1520,27 @@ section .grid {
 }
 
 .settings-card {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+/* Settings cards: put the title and its description on their own lines with
+   breathing room before the control (they were inline spans running together). */
+.settings-card > .device-name {
+  display: block;
+}
+.settings-card > .meta {
+  display: block;
+  margin: 4px 0 14px;
+  line-height: 1.45;
+}
+
+/* Space the two device searches in the user editor apart. */
+.browse-devices {
+  margin-top: 6px;
+}
+.add-specific .chips-field,
+.browse-devices .search {
+  margin-top: 6px;
 }
 
 /* Collapsible group (accordion) */
