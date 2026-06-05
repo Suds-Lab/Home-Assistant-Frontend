@@ -298,7 +298,7 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 // One card for any entity, with controls tailored to its domain.
-function DeviceCard({ device, onChange }) {
+function DeviceCard({ device, onChange, onEdit }) {
   const [busy, setBusy] = useState(false);
   const a = device.attributes || {};
   const [pct, setPct] = useState(
@@ -685,6 +685,16 @@ function DeviceCard({ device, onChange }) {
     <div className={`card device ${accent()}`}>
       <div className="device-head">
         <span className="device-name">{device.name}</span>
+        {onEdit && device.device_id && (
+          <button
+            type="button"
+            className="ghost icon-only device-edit"
+            title="Edit device (name &amp; area)"
+            onClick={onEdit}
+          >
+            ✎
+          </button>
+        )}
       </div>
       <div className="device-state">{prettyState({ state, attributes: a })}</div>
       <div className="controls">{controls()}</div>
@@ -882,6 +892,29 @@ function Dashboard({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  // Manager-only: device/area data for the per-card edit popup.
+  const [mgrData, setMgrData] = useState(null); // { devices, areas }
+  const [editDevice, setEditDevice] = useState(null);
+
+  useEffect(() => {
+    if (!isManager) return;
+    managerGetDevices()
+      .then(setMgrData)
+      .catch(() => {});
+  }, [isManager]);
+
+  function openDeviceEdit(entity) {
+    if (!mgrData || !entity.device_id) return;
+    const dev = mgrData.devices.find((d) => d.id === entity.device_id);
+    setEditDevice(dev || { id: entity.device_id, name: entity.name, area_id: null, entities: [] });
+  }
+
+  async function saveDeviceEdit(device_id, fields) {
+    await managerUpdateDevice(device_id, fields);
+    setEditDevice(null);
+    refresh(); // device cards (names/areas) update
+    managerGetDevices().then(setMgrData).catch(() => {});
+  }
   const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
   const [groupBy, setGroupBy] = useState(localStorage.getItem(GROUPBY_KEY) || 'type');
   const [collapsed, setCollapsed] = useState(() => {
@@ -1207,7 +1240,12 @@ function Dashboard({
                         {aopen && (
                           <div className="grid">
                             {list.map((d) => (
-                              <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                              <DeviceCard
+                                key={d.entity_id}
+                                device={d}
+                                onChange={refresh}
+                                onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
+                              />
                             ))}
                           </div>
                         )}
@@ -1217,7 +1255,12 @@ function Dashboard({
                 ) : (
                   <div className="grid">
                     {groups[key].map((d) => (
-                      <DeviceCard key={d.entity_id} device={d} onChange={refresh} />
+                      <DeviceCard
+                        key={d.entity_id}
+                        device={d}
+                        onChange={refresh}
+                        onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
+                      />
                     ))}
                   </div>
                 ))}
@@ -1226,6 +1269,14 @@ function Dashboard({
         })
       )}
       </>
+      )}
+      {editDevice && (
+        <DeviceEditDialog
+          device={editDevice}
+          areas={mgrData.areas}
+          onClose={() => setEditDevice(null)}
+          onSave={saveDeviceEdit}
+        />
       )}
     </div>
   );

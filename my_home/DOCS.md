@@ -182,7 +182,11 @@ Tick **Manager** when editing a user to make them a manager. A manager:
 
 Renaming a device or moving it to an area (or leaving it **Unassigned**) is
 written straight back to **Home Assistant's device registry**, so the change
-shows up in HA itself and anywhere else. This lets a trusted household member tidy up newly
+shows up in HA itself and anywhere else. Renaming only sets the device's
+display name - entity IDs are left unchanged, so automations keep working.
+
+Managers also get an **edit pencil on each device card** on their dashboard,
+which opens the same rename + area popup without leaving the dashboard. This lets a trusted household member tidy up newly
 added devices (e.g. a fresh MQTT device that arrives Unassigned) without giving
 them Home Assistant admin access.
 

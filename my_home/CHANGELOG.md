@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.28.0
+- Managers get an edit **pencil on every device card** on the dashboard; it opens a popup to rename the device and set its area (written to HA; entity IDs unchanged, so automations keep working). The pencil is hidden for non-managers.
+
 ## 1.27.0
 - Manage users: a per-user **"Add a specific device"** search lets you grant one user any entity (even of a disabled type) without adding it globally - so it doesn't also land on every "All devices" user.
 
