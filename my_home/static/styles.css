@@ -1168,8 +1168,94 @@ section .grid {
   font-size: 0.82rem;
 }
 
+.chip {
+  cursor: pointer;
+}
+
 .chip span {
   opacity: 0.8;
+}
+
+/* Gmail-style entity field: chips + inline search, with a suggestions menu. */
+.chips-field {
+  position: relative;
+}
+
+.chips-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--input-bg);
+}
+
+.chips-box:focus-within {
+  border-color: var(--accent);
+}
+
+.chips-input {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.92rem;
+  padding: 4px 2px;
+  outline: none;
+}
+
+.chips-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 280px;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+}
+
+.chips-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chips-menu-row:hover {
+  background: var(--input-bg);
+}
+
+.chips-menu-row .mdi-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chips-menu-name {
+  flex-shrink: 0;
+}
+
+.chips-menu-id {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .floor-group {

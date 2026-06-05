@@ -237,6 +237,15 @@ def enabled_domains():
     return DEVICE_TYPES or None
 
 
+def included_entities():
+    """Specific entity_ids always available regardless of device-type filter -
+    so a noisy domain (e.g. switch) can be disabled while a few hand-picked
+    entities are still shown in the picker and granted to 'All devices' users."""
+    s = _load_settings()
+    inc = s.get("included_entities")
+    return set(e for e in inc if isinstance(e, str)) if isinstance(inc, list) else set()
+
+
 # Resolve display settings (set in the Settings tab, stored in /data).
 #  * App name  -> browser-tab <title>, PWA / installed-app name. cfg_name().
 #  * Title     -> the heading people see on the login page and dashboard.
@@ -404,9 +413,12 @@ def require_admin():
 
 
 def _domain_assignable(entity_id):
-    """Whether this entity is within the admin's allowed device types."""
+    """Whether this entity is offered/granted: within the allowed device types,
+    or explicitly added to the global included-entities list."""
     allowed = enabled_domains()
-    return allowed is None or entity_id.split(".")[0] in allowed
+    if allowed is None or entity_id.split(".")[0] in allowed:
+        return True
+    return entity_id in included_entities()
 
 
 def user_can_access(user, entity_id):
@@ -965,17 +977,21 @@ def _location_lookup(reg):
 
 @app.get("/api/admin/entities")
 def admin_entities():
-    """All entities (any domain), for the device picker - annotated with their
-    floor and room (area) when Home Assistant knows them."""
+    """Entities for the device picker, annotated with their floor and room.
+    Shows entities whose domain is enabled OR that are in the global
+    included-entities list. Pass ?all=1 to return every entity unfiltered (for
+    the Settings include-picker)."""
     require_admin()
     locate = _location_lookup(ha_registries_cached())
+    show_all = request.args.get("all") in ("1", "true", "yes")
     allowed = enabled_domains()
+    included = included_entities()
     items = []
     for s in ha_request("/api/states"):
         eid = s["entity_id"]
         domain = eid.split(".")[0]
-        if allowed is not None and domain not in allowed:
-            continue  # hidden by the device-types setting
+        if not show_all and allowed is not None and domain not in allowed and eid not in included:
+            continue  # hidden by the device-types setting (and not curated in)
         area, floor = locate(eid)
         items.append({
             "entity_id": eid,
@@ -999,6 +1015,7 @@ def admin_get_settings():
         authProviders=(_load_settings().get("auth_providers") or "local"),
         oauthConfigured=oauth_configured(),
         oauthName=OAUTH_PROVIDER_NAME,
+        includedEntities=sorted(included_entities()),
     )
 
 
@@ -1012,6 +1029,8 @@ def admin_set_settings():
             s[key] = body[key].strip()
     if body.get("authProviders") in ("local", "oauth", "both"):
         s["auth_providers"] = body["authProviders"]
+    if isinstance(body.get("includedEntities"), list):
+        s["included_entities"] = [e for e in body["includedEntities"] if isinstance(e, str)]
     _save_settings(s)
     return jsonify(ok=True)
 
