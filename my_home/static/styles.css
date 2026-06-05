@@ -1167,6 +1167,70 @@ section .grid {
   margin-top: 2px;
 }
 
+/* "These logs / All" segmented toggle in the Activity header. */
+.lb-scope {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.lb-scope button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lb-scope button + button {
+  border-left: 1px solid var(--border);
+}
+.lb-scope button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.lb-scope-note {
+  font-size: 0.82rem;
+  margin: -4px 0 12px;
+}
+
+/* Per-device interactive history chart (uPlot). */
+.lb-chart {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  margin-bottom: 14px;
+  background: var(--card, transparent);
+}
+.lb-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.lb-chart-title {
+  font-weight: 600;
+}
+.lb-chart-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.lb-chart-canvas {
+  width: 100%;
+}
+/* uPlot dark-mode readability: let our axis/legend colors win. */
+.lb-chart .u-legend {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.lb-chart .u-title {
+  display: none;
+}
+
 .badge {
   font-size: 0.7rem;
   font-weight: 600;

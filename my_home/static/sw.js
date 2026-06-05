@@ -1,6 +1,6 @@
 // Service worker for the My Home PWA. Caches the app shell so it loads
 // instantly and works offline; never caches API calls (live data).
-const CACHE = 'myhome-v4';
+const CACHE = 'myhome-v5';
 const SHELL = [
   './',
   './index.html',
@@ -10,6 +10,8 @@ const SHELL = [
   './vendor/react.production.min.js',
   './vendor/react-dom.production.min.js',
   './vendor/babel.min.js',
+  './vendor/uplot.iife.min.js',
+  './vendor/uplot.min.css',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.30.0
+- Activity: a **These logs / All** toggle. **All** also pulls **Home Assistant's own logbook** live for every device (nothing extra is stored) so you see all device events, not just the app's actions. The app's own changes - which HA records as "by system" - are filtered out so they don't appear twice.
+- Activity: tap a device (or filter to one) to open an **interactive, zoomable history graph** pulled live from HA. Like HA's own entity history it plots the meaningful numbers per device - a climate's **current + target temperature** as two lines, a light's brightness, a fan's speed, a media player's volume, a cover's position - and falls back to a stepped chart of the state for on/off-style devices (locks, switches). Drag to zoom, double-click to reset. (Built on the lightweight uPlot library, vendored locally.)
+
 ## 1.29.1
 - Activity: stack the filter controls vertically on phones so the wide date pickers can't run off the screen edge.
 
