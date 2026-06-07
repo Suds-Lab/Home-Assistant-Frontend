@@ -276,28 +276,10 @@ section h2 {
   font-size: 1.05rem;
 }
 
-/* Organize: Devices / Areas sub-tabs */
-.org-tabs {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-  margin-bottom: 18px;
-}
-.org-tabs button {
-  border: none;
-  background: none;
-  color: var(--muted);
-  padding: 8px 18px;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-.org-tabs button + button {
-  border-left: 1px solid var(--border);
-}
-.org-tabs button.active {
-  background: var(--accent);
-  color: #fff;
+/* Organize: Devices / Areas sub-tabs - reuse the app's .tabs/.seg pattern,
+   left-aligned within the organize view. */
+.organize .tabs {
+  justify-content: flex-start;
 }
 
 /* Area organizer (floors → areas) */
@@ -317,15 +299,11 @@ section h2 {
 .area-empty {
   margin: 0 0 10px;
 }
+/* Theming comes from .user-filter (already in the cached stylesheet); this only
+   adds the layout it needs in the area row. */
 .area-floor-select {
   flex-shrink: 0;
   max-width: 45%;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--input-bg);
-  color: var(--text);
-  font-size: 0.85rem;
 }
 
 /* Quick-edit dialog form fields */
