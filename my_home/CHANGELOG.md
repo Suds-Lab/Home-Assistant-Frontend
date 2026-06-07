@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.31.0
+- Organize now has two tabs: **Devices** (move devices into areas, as before) and **Areas & floors** - a Home Assistant overview-style view where a manager can **create areas** and **move them between floors** (and rename them). Floors themselves are still managed in Home Assistant; here they're only assigned.
+- Manager access is no longer forced to "All devices": the **Manager** role now only grants the organize tools, and a manager's own device access (All, or a specific list) is set independently - so you can give a manager just a few devices.
+
 ## 1.30.2
 - iPhone: the dashboard header (and the login/onboarding screens) now keep clear of the **Dynamic Island / notch** and the home indicator by honouring the safe-area insets, instead of sitting right at the top edge.
 

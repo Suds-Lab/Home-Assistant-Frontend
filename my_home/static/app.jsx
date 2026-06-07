@@ -57,6 +57,9 @@ const getSession = () => request('/session');
 const managerGetDevices = () => request('/manager/devices');
 const managerUpdateDevice = (device_id, fields) =>
   request('/manager/device', { method: 'POST', body: JSON.stringify({ device_id, ...fields }) });
+const managerGetAreas = () => request('/manager/areas');
+const managerSaveArea = (fields) =>
+  request('/manager/area', { method: 'POST', body: JSON.stringify(fields) });
 const getDevice = (entity_id) => request(`/entity/${encodeURIComponent(entity_id)}`);
 // Call a whitelisted service on an entity (backend enforces what's allowed).
 const control = (entity_id, service, data = {}) =>
@@ -892,6 +895,214 @@ function Organizer() {
   );
 }
 
+// Create a new area or rename an existing one (and pick a floor when creating).
+function AreaEditDialog({ area, floors, onClose, onSave }) {
+  const isNew = !area.area_id;
+  const [name, setName] = useState(area.name || '');
+  const [floorId, setFloorId] = useState(area.floor_id || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function save() {
+    if (!name.trim()) {
+      setErr('An area name is required');
+      return;
+    }
+    setBusy(true);
+    setErr('');
+    try {
+      const fields = isNew
+        ? { name: name.trim(), floor_id: floorId || null }
+        : { area_id: area.area_id, name: name.trim() };
+      await onSave(fields);
+      onClose();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>{isNew ? 'New area' : 'Rename area'}</h3>
+          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <label>
+          Name
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        {isNew && (
+          <label>
+            Floor
+            <select value={floorId} onChange={(e) => setFloorId(e.target.value)}>
+              <option value="">No floor</option>
+              {floors.map((f) => (
+                <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {err && <div className="error">{err}</div>}
+        <div className="editor-actions">
+          <button className="btn-primary" onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : isNew ? 'Create' : 'Save'}
+          </button>
+          <button className="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Manager-only: group HA areas into floors and create new areas (writes to HA).
+// Floors themselves are managed in Home Assistant - here they're only assigned.
+// Laid out like HA's overview: a section per floor, with the areas inside it.
+function AreaOrganizer() {
+  const [data, setData] = useState(null); // { floors, areas }
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(null); // area being renamed, or {} for new
+
+  const load = useCallback(() => {
+    setError('');
+    managerGetAreas()
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function move(area_id, floor_id) {
+    try {
+      await managerSaveArea({ area_id, floor_id: floor_id || null });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  async function saveArea(fields) {
+    await managerSaveArea(fields);
+    load();
+  }
+
+  if (!data) {
+    return error ? <div className="error banner">{error}</div> : <p className="muted">Loading areas…</p>;
+  }
+
+  // Bucket areas under their floor; areas with no floor go in a trailing group.
+  const byFloor = new Map(data.floors.map((f) => [f.floor_id, []]));
+  const noFloor = [];
+  for (const a of data.areas) {
+    if (a.floor_id && byFloor.has(a.floor_id)) byFloor.get(a.floor_id).push(a);
+    else noFloor.push(a);
+  }
+  const sections = [
+    ...data.floors.map((f) => ({ key: f.floor_id, name: f.name, areas: byFloor.get(f.floor_id) })),
+    { key: '__none', name: 'No floor', areas: noFloor },
+  ];
+
+  return (
+    <div className="area-org">
+      <div className="area-org-head">
+        <p className="muted org-intro">
+          Group your Home Assistant areas into floors, and create new areas. Floors are managed in
+          Home Assistant. Changes are saved to Home Assistant.
+        </p>
+        <button className="btn-primary area-add" onClick={() => setEditing({})}>
+          ＋ New area
+        </button>
+      </div>
+      {error && <div className="error banner">{error}</div>}
+      {data.floors.length === 0 && (
+        <p className="muted">
+          No floors defined in Home Assistant yet. Create floors there, then assign areas to them
+          here.
+        </p>
+      )}
+      {sections.map(
+        (sec) =>
+          (sec.areas.length > 0 || sec.key !== '__none') && (
+            <section key={sec.key}>
+              <h2>{sec.name}</h2>
+              {sec.areas.length === 0 ? (
+                <p className="muted area-empty">No areas on this floor.</p>
+              ) : (
+                sec.areas.map((a) => (
+                  <div key={a.area_id} className="card org-row">
+                    <div className="org-info">
+                      <span className="device-name">{a.name}</span>
+                    </div>
+                    {data.floors.length > 0 && (
+                      <select
+                        className="area-floor-select"
+                        value={a.floor_id || ''}
+                        onChange={(e) => move(a.area_id, e.target.value)}
+                        aria-label={`Floor for ${a.name}`}
+                      >
+                        <option value="">No floor</option>
+                        {data.floors.map((f) => (
+                          <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      className="ghost icon-only org-edit"
+                      title="Rename area"
+                      onClick={() => setEditing(a)}
+                    >
+                      ✎
+                    </button>
+                  </div>
+                ))
+              )}
+            </section>
+          )
+      )}
+      {editing && (
+        <AreaEditDialog
+          area={editing}
+          floors={data.floors}
+          onClose={() => setEditing(null)}
+          onSave={saveArea}
+        />
+      )}
+    </div>
+  );
+}
+
+// Manager-only Organize view: tabs to organize devices into areas, or areas
+// into floors.
+function Organize() {
+  const [tab, setTab] = useState('devices');
+  return (
+    <div className="organize">
+      <div className="org-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'devices'}
+          className={tab === 'devices' ? 'active' : ''}
+          onClick={() => setTab('devices')}
+        >
+          Devices
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'areas'}
+          className={tab === 'areas' ? 'active' : ''}
+          onClick={() => setTab('areas')}
+        >
+          Areas &amp; floors
+        </button>
+      </div>
+      {tab === 'devices' ? <Organizer /> : <AreaOrganizer />}
+    </div>
+  );
+}
+
 function Dashboard({
   displayName,
   onLogout,
@@ -1156,7 +1367,7 @@ function Dashboard({
       </header>
 
       {organizing ? (
-        <Organizer />
+        <Organize />
       ) : (
       <>{/* normal dashboard */}
 
@@ -1341,7 +1552,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
-        all: all || manager, // managers always get full access
+        all,
         manager,
         entities: [...picked],
       });
@@ -1463,8 +1674,8 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       <label className="checkbox-row all-toggle">
         <input type="checkbox" checked={manager} onChange={(e) => setManager(e.target.checked)} />
         <span>
-          <strong>Manager</strong> - can organize devices into Home Assistant areas (always has
-          full device access)
+          <strong>Manager</strong> - can organize devices and areas in Home Assistant (their own
+          device access is set separately, below)
         </span>
       </label>
 
@@ -1473,8 +1684,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       <label className="checkbox-row all-toggle">
         <input
           type="checkbox"
-          checked={all || manager}
-          disabled={manager}
+          checked={all}
           onChange={(e) => setAll(e.target.checked)}
         />
         <span>
@@ -1482,7 +1692,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         </span>
       </label>
 
-      {all || manager ? (
+      {all ? (
         <p className="muted all-note">
           This user can control every device. Turn this off to choose specific devices.
         </p>
