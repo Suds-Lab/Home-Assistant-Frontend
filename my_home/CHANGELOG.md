@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.30.1
+- Activity (All): a busy day's logbook no longer freezes the page - only the most recent 500 entries are rendered, with a note to narrow the date range or filter to a device to see the rest. The server also caps how much it returns.
+- Activity (All): your own actions now show the real **app user's name** instead of a duplicate "by system" row - the match between the app's log and HA's logbook is wider and more robust (handled on both server and client).
+
 ## 1.30.0
 - Activity: a **These logs / All** toggle. **All** also pulls **Home Assistant's own logbook** live for every device (nothing extra is stored) so you see all device events, not just the app's actions. The app's own changes - which HA records as "by system" - are filtered out so they don't appear twice.
 - Activity: tap a device (or filter to one) to open an **interactive, zoomable history graph** pulled live from HA. Like HA's own entity history it plots the meaningful numbers per device - a climate's **current + target temperature** as two lines, a light's brightness, a fan's speed, a media player's volume, a cover's position - and falls back to a stepped chart of the state for on/off-style devices (locks, switches). Drag to zoom, double-click to reset. (Built on the lightweight uPlot library, vendored locally.)

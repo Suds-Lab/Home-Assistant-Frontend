@@ -2044,6 +2044,9 @@ function endOfToday() {
   return d;
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Cap how many rows we actually render - a busy "All" day can hold tens of
+// thousands of logbook entries, which would freeze the page if all rendered.
+const MAX_RENDER = 500;
 
 // An interactive, zoomable history graph for one entity - pulled live from
 // Home Assistant's /api/history (never stored). Numeric entities (sensors,
@@ -2224,7 +2227,27 @@ function ActivityLog() {
   }
 
   // The pool feeding the list: the app's own log, plus HA's logbook in "All".
-  const pool = scope === 'all' ? [...(items || []), ...haItems] : (items || []);
+  // In "All" we also drop any HA row that lines up with one of our own app
+  // actions (same device, within ~90s) so the named app-log entry stands in
+  // for it instead of a bare "by system" duplicate. (The backend does this too;
+  // this is a client-side safety net against clock skew / a tight window.)
+  const appItems = items || [];
+  let pool;
+  if (scope === 'all') {
+    const appByEnt = new Map();
+    for (const a of appItems) {
+      if (!a.entity_id) continue;
+      if (!appByEnt.has(a.entity_id)) appByEnt.set(a.entity_id, []);
+      appByEnt.get(a.entity_id).push(a.ts);
+    }
+    const ha = haItems.filter((e) => {
+      const ts = appByEnt.get(e.entity_id);
+      return !(ts && ts.some((t) => Math.abs(t - e.ts) <= 90));
+    });
+    pool = [...appItems, ...ha];
+  } else {
+    pool = appItems;
+  }
 
   // Distinct users / items present, for the filters. Users come only from the
   // app's own log (HA entries aren't attributable to an app user); items span
@@ -2250,7 +2273,7 @@ function ActivityLog() {
 
   const startMs = start.getTime();
   const endMs = end.getTime();
-  const shown = pool
+  const matched = pool
     .filter((e) => {
       const t = e.ts * 1000;
       if (t < startMs || t > endMs) return false;
@@ -2259,6 +2282,9 @@ function ActivityLog() {
       return true;
     })
     .sort((a, b) => b.ts - a.ts);
+  // Render only the newest MAX_RENDER so a huge logbook can't freeze the page.
+  const overflow = Math.max(0, matched.length - MAX_RENDER);
+  const shown = overflow ? matched.slice(0, MAX_RENDER) : matched;
 
   // When exactly one device is in focus, show its interactive history graph.
   const focusEntity = selItems.size === 1 ? [...selItems][0] : null;
@@ -2399,6 +2425,13 @@ function ActivityLog() {
         />
       )}
       {error && <div className="error">{error}</div>}
+      {overflow > 0 && (
+        <div className="lb-overflow">
+          Showing the {MAX_RENDER.toLocaleString()} most recent of{' '}
+          {matched.length.toLocaleString()} entries. Narrow the date range or
+          filter to a device to see the rest.
+        </div>
+      )}
       {items === null || (scope === 'all' && haLoading && shown.length === 0) ? (
         <p className="muted">Loading…</p>
       ) : shown.length === 0 ? (

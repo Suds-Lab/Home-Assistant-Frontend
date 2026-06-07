@@ -1152,6 +1152,14 @@ section .grid {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   font-size: 0.88rem;
 }
+.lb-overflow {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ff9800 16%, transparent);
+  color: var(--text);
+  font-size: 0.84rem;
+}
 .lb-clear {
   background: none;
   border: none;
