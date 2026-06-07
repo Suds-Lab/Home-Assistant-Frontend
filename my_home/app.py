@@ -1274,19 +1274,27 @@ def admin_ha_logbook():
     except ApiError:
         raw = []
 
-    # Index our own actions to drop HA's duplicate "by system" entries.
+    # Index our own actions to drop HA's duplicate "by system" entries (and keep
+    # the user's name so a match can be attributed to the real app user). The
+    # window is generous so a slightly-delayed logbook record still matches.
     ours = {}
     for a in _load_activity():
-        ours.setdefault(a.get("entity_id"), []).append(a.get("ts") or 0)
+        eid = a.get("entity_id")
+        if eid:
+            ours.setdefault(eid, []).append((a.get("ts") or 0, a.get("name")))
 
-    def is_ours(eid, when_ts):
-        return any(abs(t - when_ts) <= 12 for t in ours.get(eid, []))
+    def app_match(eid, when_ts):
+        for t, name in ours.get(eid, []):
+            if abs(t - when_ts) <= 90:
+                return name or True
+        return None
 
     out = []
     for e in raw if isinstance(raw, list) else []:
         eid = e.get("entity_id")
         ts = _iso_to_epoch(e.get("when"))
-        if eid and is_ours(eid, ts):
+        # Our own change: skip it - the app's log shows it with the real name.
+        if eid and app_match(eid, ts) is not None:
             continue
         out.append({
             "ts": ts,
@@ -1298,7 +1306,16 @@ def admin_ha_logbook():
             "source": "ha",
         })
     out.sort(key=lambda x: x["ts"], reverse=True)
-    return jsonify(entries=out)
+
+    # Cap the payload so a busy day can't flood the client. Newest kept.
+    try:
+        limit = min(int(request.args.get("limit", 4000)), 10000)
+    except (TypeError, ValueError):
+        limit = 4000
+    total = len(out)
+    if total > limit:
+        out = out[:limit]
+    return jsonify(entries=out, total=total, truncated=max(0, total - limit))
 
 
 # Numeric attributes worth charting per domain, like Home Assistant's own
