@@ -173,19 +173,27 @@ right away.
 
 ### Manager role
 
-Tick **Manager** when editing a user to make them a manager. A manager:
+Tick **Manager** when editing a user to make them a manager. A manager gets an
+**Organize** button on their dashboard with two tabs:
 
-- always has access to **all devices**, and
-- gets an **Organize** button on their dashboard that opens an area organizer -
-  a searchable list of the Home Assistant devices the app exposes (those with at
-  least one entity of an enabled type, or in the Included list), grouped by area.
-  Each device has a **pencil** that opens a quick dialog to **rename** it and set
-  its **area**.
+- **Devices** - a searchable list of the Home Assistant devices the app exposes
+  (those with at least one entity of an enabled type, or in the Included list),
+  grouped by area. Each device has a **pencil** that opens a quick dialog to
+  **rename** it and set its **area**.
+- **Areas & floors** - a Home Assistant overview-style view that lists each
+  **floor** with the areas inside it. The manager can **create a new area**
+  (optionally placing it on a floor), **move an area to another floor** (or to
+  *No floor*), and **rename** an area. Floors themselves are created/removed in
+  Home Assistant - here they're only assigned.
 
-Renaming a device or moving it to an area (or leaving it **Unassigned**) is
-written straight back to **Home Assistant's device registry**, so the change
-shows up in HA itself and anywhere else. Renaming only sets the device's
-display name - entity IDs are left unchanged, so automations keep working.
+The manager role grants only these organize tools. A manager's **own device
+access** is set independently in the editor (turn on **All devices**, or pick a
+specific list) - a manager does not have to have access to everything.
+
+Renaming a device or moving it (or an area) is written straight back to **Home
+Assistant's registry**, so the change shows up in HA itself and anywhere else.
+Renaming a device only sets its display name - entity IDs are left unchanged, so
+automations keep working.
 
 Managers also get an **edit pencil on each device card** on their dashboard,
 which opens the same rename + area popup without leaving the dashboard. This lets a trusted household member tidy up newly

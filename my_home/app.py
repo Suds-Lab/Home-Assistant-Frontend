@@ -423,9 +423,10 @@ def _domain_assignable(entity_id):
 
 
 def user_can_access(user, entity_id):
-    """An 'all' user (and managers, who always have full access) owns every
-    assignable entity; otherwise it's the explicit list."""
-    if user.get("all") or user.get("manager"):
+    """An 'all' user owns every assignable entity; otherwise it's the explicit
+    list. The manager role grants organize powers (areas/devices), not blanket
+    device access - so a manager can still be scoped to specific entities."""
+    if user.get("all"):
         return _domain_assignable(entity_id)
     return entity_id in user.get("entities", [])
 
@@ -755,6 +756,59 @@ def manager_update_device():
         update["name_by_user"] = (body.get("name") or "").strip() or None
     ha_ws_command(update)
     _invalidate_registries()  # so dashboards/picker pick up the change
+    return jsonify(ok=True)
+
+
+@app.get("/api/manager/areas")
+def manager_areas():
+    """Floors and areas, for the manager's area organizer. Floors are read-only
+    here (created in Home Assistant); areas can be created and moved between
+    floors via the POST below."""
+    require_manager()
+    reg = ha_registries()
+    floors = [{"floor_id": f["floor_id"], "name": f.get("name")} for f in reg.get("floors", [])]
+    floors.sort(key=lambda f: (f["name"] or "").lower())
+    fname = {f["floor_id"]: f["name"] for f in floors}
+    areas = [
+        {"area_id": a["area_id"], "name": a.get("name"),
+         "floor_id": a.get("floor_id"), "floor": fname.get(a.get("floor_id"))}
+        for a in reg.get("areas", [])
+    ]
+    areas.sort(key=lambda a: (a["name"] or "").lower())
+    return jsonify(floors=floors, areas=areas)
+
+
+@app.post("/api/manager/area")
+def manager_save_area():
+    """Create an area or update an existing one (rename / move to a floor).
+    Writes through to Home Assistant's area registry. Floors themselves are not
+    created or deleted here - only assigned. Pass `area_id` to update, or omit
+    it (with a `name`) to create."""
+    require_manager()
+    body = request.get_json(silent=True) or {}
+    area_id = body.get("area_id")
+    name = (body.get("name") or "").strip()
+    has_floor = "floor_id" in body
+    floor_id = body.get("floor_id") or None
+    # If a floor was given, it must be a real one.
+    if has_floor and floor_id is not None:
+        reg = ha_registries()
+        if not any(f.get("floor_id") == floor_id for f in reg.get("floors", [])):
+            raise ApiError("That floor no longer exists", 400)
+    if area_id:
+        cmd = {"type": "config/area_registry/update", "area_id": area_id}
+        if name:
+            cmd["name"] = name
+        if has_floor:
+            cmd["floor_id"] = floor_id
+    else:
+        if not name:
+            raise ApiError("An area name is required", 400)
+        cmd = {"type": "config/area_registry/create", "name": name}
+        if has_floor and floor_id is not None:
+            cmd["floor_id"] = floor_id
+    ha_ws_command(cmd)
+    _invalidate_registries()
     return jsonify(ok=True)
 
 
@@ -1543,9 +1597,10 @@ def admin_save_user():
     record = existing if existing is not None else {"username": username}
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
-    record["manager"] = bool(body.get("manager"))  # can organize devices into HA areas
-    # Managers always have full device access.
-    record["all"] = bool(body.get("all")) or record["manager"]
+    record["manager"] = bool(body.get("manager"))  # can organize devices/areas in HA
+    # Device access is independent of the manager role: a manager may have "all"
+    # or just a specific set, like any other user.
+    record["all"] = bool(body.get("all"))
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
         record["password"] = password
