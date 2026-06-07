@@ -1038,7 +1038,7 @@ function AreaOrganizer() {
                     </div>
                     {data.floors.length > 0 && (
                       <select
-                        className="area-floor-select"
+                        className="user-filter area-floor-select"
                         value={a.floor_id || ''}
                         onChange={(e) => move(a.area_id, e.target.value)}
                         aria-label={`Floor for ${a.name}`}
@@ -1080,11 +1080,11 @@ function Organize() {
   const [tab, setTab] = useState('devices');
   return (
     <div className="organize">
-      <div className="org-tabs" role="tablist">
+      <div className="tabs" role="tablist">
         <button
           role="tab"
           aria-selected={tab === 'devices'}
-          className={tab === 'devices' ? 'active' : ''}
+          className={`seg${tab === 'devices' ? ' on' : ''}`}
           onClick={() => setTab('devices')}
         >
           Devices
@@ -1092,7 +1092,7 @@ function Organize() {
         <button
           role="tab"
           aria-selected={tab === 'areas'}
-          className={tab === 'areas' ? 'active' : ''}
+          className={`seg${tab === 'areas' ? ' on' : ''}`}
           onClick={() => setTab('areas')}
         >
           Areas &amp; floors

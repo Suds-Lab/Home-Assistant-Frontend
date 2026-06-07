@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.31.1
+- Organize: the **Devices / Areas & floors** sub-tabs and the per-area **floor dropdown** now use the app's themed controls (they were rendering unstyled). Bumped the service-worker cache so the styling refreshes.
+
 ## 1.31.0
 - Organize now has two tabs: **Devices** (move devices into areas, as before) and **Areas & floors** - a Home Assistant overview-style view where a manager can **create areas** and **move them between floors** (and rename them). Floors themselves are still managed in Home Assistant; here they're only assigned.
 - Manager access is no longer forced to "All devices": the **Manager** role now only grants the organize tools, and a manager's own device access (All, or a specific list) is set independently - so you can give a manager just a few devices.
