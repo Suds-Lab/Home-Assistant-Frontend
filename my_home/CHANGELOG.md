@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.30.2
+- iPhone: the dashboard header (and the login/onboarding screens) now keep clear of the **Dynamic Island / notch** and the home indicator by honouring the safe-area insets, instead of sitting right at the top edge.
+
 ## 1.30.1
 - Activity (All): a busy day's logbook no longer freezes the page - only the most recent 500 entries are rendered, with a note to narrow the date range or filter to a device to see the rest. The server also caps how much it returns.
 - Activity (All): your own actions now show the real **app user's name** instead of a duplicate "by system" row - the match between the app's log and HA's logbook is wider and more robust (handled on both server and client).
