@@ -640,6 +640,16 @@ section .grid {
 /* Climate */
 .climate-readout {
   margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+/* A dot between the temperature and humidity readings. */
+.climate-readout > span + span::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--muted);
 }
 
 .temp-control {

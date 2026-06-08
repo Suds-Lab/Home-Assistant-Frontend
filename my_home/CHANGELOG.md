@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.31.3
+- Climate cards now show the **current humidity** next to the current temperature, when the device reports it.
+
 ## 1.31.2
 - Dashboard header: on narrow phones (or with a large accessibility font), the title and the action buttons (Organize, Log out…) no longer overlap - the buttons now wrap onto their own row instead.
 

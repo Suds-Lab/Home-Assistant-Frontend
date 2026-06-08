@@ -482,9 +482,14 @@ function DeviceCard({ device, onChange, onEdit }) {
         };
         return (
           <>
-            {a.current_temperature != null && (
+            {(a.current_temperature != null || a.current_humidity != null) && (
               <div className="climate-readout">
-                <span className="muted">Now {a.current_temperature}°</span>
+                {a.current_temperature != null && (
+                  <span className="muted">Now {a.current_temperature}°</span>
+                )}
+                {a.current_humidity != null && (
+                  <span className="muted">{a.current_humidity}% humidity</span>
+                )}
               </div>
             )}
             <div className="temp-control">
