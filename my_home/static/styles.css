@@ -158,12 +158,17 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px 12px;
+  /* When the title + actions can't fit on one line (narrow phone, or a large
+     accessibility font), let the action group drop to its own row instead of
+     overlapping the title. */
+  flex-wrap: wrap;
   margin-bottom: 20px;
 }
 
 .topbar > div {
   min-width: 0; /* allow the title to wrap instead of shoving the buttons */
+  flex: 1 1 auto;
 }
 
 .topbar h1 {
@@ -755,6 +760,10 @@ section .grid {
   display: flex;
   gap: 8px;
   flex-shrink: 0; /* keep the action group compact; let the title wrap instead */
+  /* If the buttons still can't fit (very narrow screen / huge font), wrap them
+     onto another line, kept to the right, rather than overlapping the title. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* Never wrap "Log out" / "Install": a wrapped label made the action row tall,

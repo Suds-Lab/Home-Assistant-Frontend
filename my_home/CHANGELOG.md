@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.31.2
+- Dashboard header: on narrow phones (or with a large accessibility font), the title and the action buttons (Organize, Log out…) no longer overlap - the buttons now wrap onto their own row instead.
+
 ## 1.31.1
 - Organize: the **Devices / Areas & floors** sub-tabs and the per-area **floor dropdown** now use the app's themed controls (they were rendering unstyled). Bumped the service-worker cache so the styling refreshes.
 
