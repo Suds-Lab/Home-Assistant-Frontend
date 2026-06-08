@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.31.4
+- Climate card humidity now reads cleanly as "Now 24° · 52% humidity" (the temperature and humidity were running together as "24°52% humidity" on a stale stylesheet); the separator/spacing no longer depend on CSS.
+
 ## 1.31.3
 - Climate cards now show the **current humidity** next to the current temperature, when the device reports it.
 
