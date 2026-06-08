@@ -480,16 +480,19 @@ function DeviceCard({ device, onChange, onEdit }) {
               .catch(() => {});
           }, 1500);
         };
+        // Build the readout as one string so the separator/spacing don't depend
+        // on CSS (a stale cached stylesheet was rendering the two spans joined).
+        const readout = [
+          a.current_temperature != null ? `Now ${a.current_temperature}°` : null,
+          a.current_humidity != null ? `${a.current_humidity}% humidity` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
         return (
           <>
-            {(a.current_temperature != null || a.current_humidity != null) && (
+            {readout && (
               <div className="climate-readout">
-                {a.current_temperature != null && (
-                  <span className="muted">Now {a.current_temperature}°</span>
-                )}
-                {a.current_humidity != null && (
-                  <span className="muted">{a.current_humidity}% humidity</span>
-                )}
+                <span className="muted">{readout}</span>
               </div>
             )}
             <div className="temp-control">
