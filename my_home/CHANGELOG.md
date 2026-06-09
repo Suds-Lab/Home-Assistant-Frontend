@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.34.0
+- Subtle **haptic feedback** on tap: a light tick when you toggle a switch, pick a climate mode, step the temperature, change tabs - any control. It fires on press for a natural feel, is kept short and throttled so it never buzzes, and is a graceful no-op where the browser has no Vibration API (so iPhone web and desktop simply feel nothing; Android gets the tick). Disable per-device by setting `localStorage ha_haptics = '0'`.
+
 ## 1.33.0
 - Climate cards: **press and hold** the + / − buttons to keep adjusting the temperature (it speeds up the longer you hold), and the new target is **sent once when you let go** - a more natural, fluid way to set the temperature than tapping repeatedly. A single tap still works, and keyboard users can still step it.
 

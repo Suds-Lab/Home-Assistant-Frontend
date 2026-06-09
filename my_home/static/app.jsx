@@ -48,6 +48,42 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Subtle tap haptics. A short pulse on press-down (which is what feels native)
+// for any control tap. Works on Android (Chrome/Firefox/etc.); a graceful
+// no-op where the Vibration API is unavailable (iOS web, desktop). Throttled so
+// rapid taps / a held button can never turn into a continuous buzz, and kept
+// short so it's a light tick, not an aggressive rumble.
+const HAPTICS_KEY = 'ha_haptics'; // set to '0' to disable
+let _lastHaptic = 0;
+function haptic(ms = 10) {
+  try {
+    if (localStorage.getItem(HAPTICS_KEY) === '0') return;
+    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+    const now = Date.now();
+    if (now - _lastHaptic < 25) return; // never a drone
+    _lastHaptic = now;
+    navigator.vibrate(ms);
+  } catch {
+    /* ignore */
+  }
+}
+let _hapticsBound = false;
+function bindHaptics() {
+  if (_hapticsBound || typeof document === 'undefined') return;
+  _hapticsBound = true;
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const el = t.closest('button, input[type="range"]');
+      if (el && !el.disabled) haptic();
+    },
+    { passive: true }
+  );
+}
+bindHaptics();
+
 const login = (username, password) =>
   request('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
 const getDevices = () => request('/devices');
