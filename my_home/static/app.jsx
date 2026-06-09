@@ -338,6 +338,12 @@ function DeviceCard({ device, onChange, onEdit }) {
   const freezeUntil = useRef(0);
   const commitTimer = useRef(null);
   const tempTimer = useRef(null);
+  // Press-and-hold on the climate +/- buttons: repeat while held, send once on
+  // release. holdDelay = the initial pause before repeating; holdTimer = the
+  // repeat interval; pressing = whether a press is currently in progress.
+  const holdDelay = useRef(null);
+  const holdTimer = useRef(null);
+  const pressing = useRef(false);
   useEffect(() => {
     if (Date.now() >= freezeUntil.current) setState(device.state);
   }, [device]);
@@ -345,6 +351,8 @@ function DeviceCard({ device, onChange, onEdit }) {
     () => () => {
       clearTimeout(commitTimer.current);
       clearTimeout(tempTimer.current);
+      clearTimeout(holdDelay.current);
+      clearInterval(holdTimer.current);
     },
     []
   );
@@ -467,20 +475,71 @@ function DeviceCard({ device, onChange, onEdit }) {
         const min = a.min_temp ?? 16;
         const max = a.max_temp ?? 30;
         const step = a.target_temp_step ?? 0.5;
-        // Update the shown value instantly on every tap, but only send the
-        // final temperature to HA after a short pause - so going 70 -> 64 is
-        // one call, not six, and no press has to wait on a round-trip.
-        const nudge = (delta) => {
+        // Move the shown value instantly; only send the final temperature to HA
+        // when the user lets go (a fallback timer covers a missed release) - so
+        // tapping or holding 70 -> 64 is one call, not six.
+        const commitTemp = () => {
+          clearTimeout(tempTimer.current);
+          control(device.entity_id, 'set_temperature', { temperature: targetRef.current })
+            .then(onChange)
+            .catch(() => {});
+        };
+        const bump = (delta) => {
           const next = Math.min(max, Math.max(min, Number((targetRef.current + delta).toFixed(1))));
+          if (next === targetRef.current) return; // already at the limit
           targetRef.current = next;
           setTarget(next);
-          clearTimeout(tempTimer.current);
-          tempTimer.current = setTimeout(() => {
-            control(device.entity_id, 'set_temperature', { temperature: next })
-              .then(onChange)
-              .catch(() => {});
-          }, 1500);
+          clearTimeout(tempTimer.current); // fallback commit if release is missed
+          tempTimer.current = setTimeout(commitTemp, 2000);
         };
+        // Press-and-hold: one bump immediately (so a tap works), then repeat
+        // after a short delay, accelerating slightly, until release.
+        const startHold = (delta) => {
+          pressing.current = true;
+          bump(delta);
+          clearTimeout(holdDelay.current);
+          holdDelay.current = setTimeout(() => {
+            let n = 0;
+            holdTimer.current = setInterval(() => {
+              n += 1;
+              bump(delta * (n > 12 ? 2 : 1)); // speed up after ~1.5s of holding
+            }, 110);
+          }, 400);
+        };
+        const endHold = () => {
+          if (!pressing.current) return;
+          pressing.current = false;
+          clearTimeout(holdDelay.current);
+          clearInterval(holdTimer.current);
+          holdDelay.current = null;
+          holdTimer.current = null;
+          commitTemp(); // push the final target once, on release
+        };
+        const tempBtn = (delta, label, aria) => (
+          <button
+            type="button"
+            className="temp-btn"
+            disabled={isOff}
+            aria-label={aria}
+            onPointerDown={(e) => {
+              if (isOff) return;
+              e.preventDefault();
+              startHold(delta);
+            }}
+            onPointerUp={endHold}
+            onPointerLeave={endHold}
+            onPointerCancel={endHold}
+            // Keyboard activation fires click with detail 0 (no pointer events).
+            onClick={(e) => {
+              if (e.detail === 0 && !isOff) {
+                bump(delta);
+                commitTemp();
+              }
+            }}
+          >
+            {label}
+          </button>
+        );
         // Build the readout as one string so the separator/spacing don't depend
         // on CSS (a stale cached stylesheet was rendering the two spans joined).
         const readout = [
@@ -497,9 +556,9 @@ function DeviceCard({ device, onChange, onEdit }) {
               </div>
             )}
             <div className="temp-control">
-              <button onClick={() => nudge(-step)} disabled={isOff}>−</button>
+              {tempBtn(-step, '−', 'Decrease temperature')}
               <span className="temp-value">{isOff ? '-' : `${target}°`}</span>
-              <button onClick={() => nudge(step)} disabled={isOff}>+</button>
+              {tempBtn(step, '+', 'Increase temperature')}
             </div>
             <div className="mode-row">
               {(a.hvac_modes || []).map((mode) => (
