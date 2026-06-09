@@ -771,7 +771,8 @@ def manager_areas():
     fname = {f["floor_id"]: f["name"] for f in floors}
     areas = [
         {"area_id": a["area_id"], "name": a.get("name"),
-         "floor_id": a.get("floor_id"), "floor": fname.get(a.get("floor_id"))}
+         "floor_id": a.get("floor_id"), "floor": fname.get(a.get("floor_id")),
+         "icon": a.get("icon")}  # e.g. "mdi:sofa" (or None)
         for a in reg.get("areas", [])
     ]
     areas.sort(key=lambda a: (a["name"] or "").lower())
@@ -810,6 +811,71 @@ def manager_save_area():
     ha_ws_command(cmd)
     _invalidate_registries()
     return jsonify(ok=True)
+
+
+# --- Material Design Icons (fetched once from Iconify, then cached locally) ---
+# Areas (and other things) can carry an arbitrary mdi:* icon. There are ~7000
+# of them, so instead of bundling them we fetch each icon's SVG body once from
+# Iconify and cache it in /data, then serve it ourselves - browsers never call
+# an external service, and it works offline after the first fetch.
+ICON_CACHE_FILE = ICON_DIR / "mdi-icons.json"
+_ICON_CACHE = None
+_ICON_LOCK = threading.Lock()
+_ICON_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def _valid_icon_name(name):
+    return bool(name) and len(name) <= 64 and all(c in _ICON_NAME_CHARS for c in name)
+
+
+def _get_mdi_icon(name):
+    """Return {body,width,height} for an mdi icon, fetching+caching on first use."""
+    global _ICON_CACHE
+    with _ICON_LOCK:
+        if _ICON_CACHE is None:
+            try:
+                _ICON_CACHE = json.loads(ICON_CACHE_FILE.read_text())
+            except (OSError, ValueError):
+                _ICON_CACHE = {}
+        if name in _ICON_CACHE:
+            return _ICON_CACHE[name]
+    try:
+        r = requests.get("https://api.iconify.design/mdi.json",
+                         params={"icons": name}, timeout=8)
+        if r.status_code != 200:
+            return None
+        j = r.json()
+        ic = (j.get("icons") or {}).get(name)
+        if not ic or not ic.get("body"):
+            return None
+        data = {
+            "body": ic["body"],
+            "width": ic.get("width") or j.get("width") or 24,
+            "height": ic.get("height") or j.get("height") or 24,
+        }
+    except (requests.RequestException, ValueError):
+        return None
+    with _ICON_LOCK:
+        _ICON_CACHE[name] = data
+        try:
+            ICON_CACHE_FILE.write_text(json.dumps(_ICON_CACHE))
+        except OSError:
+            pass
+    return data
+
+
+@app.get("/api/icon/mdi/<name>")
+def mdi_icon(name):
+    """The SVG body for one mdi:* icon (e.g. an area's icon). Any signed-in user
+    may read these; they're just public icon shapes."""
+    if not is_management():
+        current_user()  # requires a valid session token otherwise
+    if not _valid_icon_name(name):
+        raise ApiError("Invalid icon name", 400)
+    data = _get_mdi_icon(name)
+    if not data:
+        raise ApiError("Icon not found", 404)
+    return jsonify(data)
 
 
 # Services the app may call, per domain. Calls are always scoped to an entity
