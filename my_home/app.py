@@ -656,7 +656,7 @@ def devices():
         if not user_can_access(user, s["entity_id"]):
             continue
         view = _device_view(s)
-        view["area"], view["floor"] = locate(s["entity_id"])
+        view["area"], view["floor"], view["area_icon"] = locate(s["entity_id"])
         view["device_id"] = ent_dev.get(s["entity_id"])  # for the manager edit popup
         result.append(view)
     result.sort(key=lambda d: (d["domain"], d["name"].lower()))
@@ -1230,8 +1230,8 @@ def _location_lookup(reg):
         aid = ent_area.get(entity_id)
         area = areas.get(aid) if aid else None
         if not area:
-            return (None, None)
-        return (area.get("name"), floors.get(area.get("floor_id")))
+            return (None, None, None)
+        return (area.get("name"), floors.get(area.get("floor_id")), area.get("icon"))
 
     return locate
 
@@ -1253,7 +1253,7 @@ def admin_entities():
         domain = eid.split(".")[0]
         if not show_all and allowed is not None and domain not in allowed and eid not in included:
             continue  # hidden by the device-types setting (and not curated in)
-        area, floor = locate(eid)
+        area, floor, _area_icon = locate(eid)
         items.append({
             "entity_id": eid,
             "name": s.get("attributes", {}).get("friendly_name") or eid,
