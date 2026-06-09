@@ -480,6 +480,7 @@ function DeviceCard({ device, onChange, onEdit }) {
         max="100"
         step={step}
         value={value}
+        style={{ '--fill': `${value}%` }}
         disabled={busy}
         // Move freely while dragging (a light haptic tick per step), and only
         // send to HA on release - like the climate +/- hold.
@@ -659,6 +660,7 @@ function DeviceCard({ device, onChange, onEdit }) {
                         max={fanSpeeds.length - 1}
                         step="1"
                         value={fanIdx}
+                        style={{ '--fill': `${(fanIdx / Math.max(1, fanSpeeds.length - 1)) * 100}%` }}
                         disabled={busy}
                         aria-label="Fan speed"
                         onChange={(e) => {

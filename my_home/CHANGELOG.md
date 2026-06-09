@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.35.1
+- Themed the range sliders (fan speed, brightness, volume) to match the app - HA-blue fill and thumb on a muted track - instead of the browser's default control.
+
 ## 1.35.0
 - Climate units with **named fan speeds** (Low / LowMedium / Medium / MediumHigh / High, etc.) now show those as a **slider** (with a haptic tick per step), reporting the matching `fan_mode` back to Home Assistant - instead of a long row of buttons. **Night** is hidden, and non-speed modes like **Auto** stay as a button. Units with ordinary fan modes are unchanged.
 
