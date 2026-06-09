@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.32.1
+- Dashboard: when grouping by Area or Floor, each area's section header now shows the area's Home Assistant icon (same dynamic mdi icons as the Organize view). Areas without an icon set just show the name.
+
 ## 1.32.0
 - Organize → Areas & floors: each area now shows **its Home Assistant icon** (the `mdi:*` icon set on the area). Icons are fetched on demand and cached by the add-on (served locally, so browsers don't call any external service); areas without an icon get a neutral placeholder.
 

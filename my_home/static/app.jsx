@@ -1388,6 +1388,13 @@ function Dashboard({
     return groupLabelOf(x).localeCompare(groupLabelOf(y));
   });
 
+  // Area name -> its HA mdi icon (for the group headers). Areas without an
+  // icon set simply get no glyph.
+  const areaIconOf = {};
+  for (const d of devices) {
+    if (d.area && d.area_icon && !(d.area in areaIconOf)) areaIconOf[d.area] = d.area_icon;
+  }
+
   // Floor mode nests areas under each floor: returns [[areaName, devices], …].
   const subgroupByArea = (list) => {
     const m = {};
@@ -1507,11 +1514,19 @@ function Dashboard({
                   aria-expanded={open}
                 >
                   <span className={`acc-caret ${open ? 'open' : ''}`}>▸</span>
+                  {mode === 'area' && areaIconOf[key] && (
+                    <MdiIcon icon={areaIconOf[key]} size={20} className="section-icon" />
+                  )}
                   <span className="section-title">{groupLabelOf(key)}</span>
                   <span className="section-count muted">{groups[key].length}</span>
                 </button>
               ) : (
-                <h2>{groupLabelOf(key)}</h2>
+                <h2 className="section-h2">
+                  {mode === 'area' && areaIconOf[key] && (
+                    <MdiIcon icon={areaIconOf[key]} size={20} className="section-icon" />
+                  )}
+                  {groupLabelOf(key)}
+                </h2>
               )}
               {open &&
                 (mode === 'floor' ? (
@@ -1527,6 +1542,9 @@ function Dashboard({
                           aria-expanded={aopen}
                         >
                           <span className={`acc-caret ${aopen ? 'open' : ''}`}>▸</span>
+                          {areaIconOf[area] && (
+                            <MdiIcon icon={areaIconOf[area]} size={18} className="section-icon" />
+                          )}
                           <span>{area}</span>
                           <span className="section-count muted">{list.length}</span>
                         </button>
