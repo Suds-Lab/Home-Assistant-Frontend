@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.35.0
+- Climate units with **named fan speeds** (Low / LowMedium / Medium / MediumHigh / High, etc.) now show those as a **slider** (with a haptic tick per step), reporting the matching `fan_mode` back to Home Assistant - instead of a long row of buttons. **Night** is hidden, and non-speed modes like **Auto** stay as a button. Units with ordinary fan modes are unchanged.
+
 ## 1.34.1
 - Fan speed (and brightness / volume) sliders now give a **light haptic tick on each step** as you drag, and only send to Home Assistant when you let go. The fan slider snaps to the fan's real speed steps, so each "bump" is an actual speed.
 

@@ -318,6 +318,23 @@ function DomainIcon({ domain }) {
 
 // Make raw HA values (hvac/fan modes) readable: "fan_only" -> "fan only".
 const humanize = (s) => String(s == null ? '' : s).replace(/_/g, ' ');
+// Split camelCase too, so "lowMedium" / "mediumHigh" read as "low medium" etc.
+const prettyMode = (s) => humanize(String(s == null ? '' : s).replace(/([a-z])([A-Z])/g, '$1 $2'));
+
+// Ordered ladder for climate fan_mode controls that are named speeds
+// (low..high). Modes not on the ladder (e.g. "auto") are kept as separate
+// buttons; "night" is hidden entirely. Used to render an ordered speed slider.
+const FAN_SPEED_RANK = {
+  silent: 0, quiet: 0, sleep: 0, min: 0, minimum: 0,
+  low: 1,
+  lowmedium: 2, lowmed: 2,
+  medium: 3, med: 3, normal: 3,
+  mediumhigh: 4, medhigh: 4,
+  high: 5,
+  max: 6, maximum: 6, strong: 6, powerful: 7, turbo: 7,
+};
+const FAN_HIDE = new Set(['night']);
+const fanKey = (m) => String(m).toLowerCase().replace(/[\s_-]/g, '');
 
 // States that should highlight a card as "active".
 const ACTIVE_STATES = new Set([
@@ -583,6 +600,21 @@ function DeviceCard({ device, onChange, onEdit }) {
             {label}
           </button>
         );
+        // Fan modes: hide "night"; if the rest form an ordered speed ladder
+        // (low..high) render a slider that reports the equivalent named mode to
+        // HA, and keep any non-speed modes (e.g. "auto") as buttons.
+        const fanModesVisible = (a.fan_modes || []).filter((m) => !FAN_HIDE.has(fanKey(m)));
+        const fanSpeeds = fanModesVisible
+          .filter((m) => fanKey(m) in FAN_SPEED_RANK)
+          .sort((x, y) => FAN_SPEED_RANK[fanKey(x)] - FAN_SPEED_RANK[fanKey(y)]);
+        const fanSpecials = fanModesVisible.filter((m) => !(fanKey(m) in FAN_SPEED_RANK));
+        const fanAsSlider = fanSpeeds.length >= 3;
+        const fanIdx = Math.max(0, fanSpeeds.indexOf(fanMode));
+        const commitFan = (fm) => {
+          setFanMode(fm);
+          fanFreeze.current = Date.now() + 1500;
+          control(device.entity_id, 'set_fan_mode', { fan_mode: fm }).then(onChange).catch(() => {});
+        };
         // Build the readout as one string so the separator/spacing don't depend
         // on CSS (a stale cached stylesheet was rendering the two spans joined).
         const readout = [
@@ -615,21 +647,61 @@ function DeviceCard({ device, onChange, onEdit }) {
                 </button>
               ))}
             </div>
-            {(a.fan_modes || []).length > 0 && !isOff && (
+            {fanModesVisible.length > 0 && !isOff && (
               <div className="fan-modes">
-                <span className="muted">Fan</span>
-                <div className="mode-row">
-                  {a.fan_modes.map((fm) => (
-                    <button
-                      key={fm}
-                      className={`mode ${fanMode === fm ? 'selected' : ''}`}
-                      onClick={() => setFan(fm)}
-                      disabled={busy}
-                    >
-                      {humanize(fm)}
-                    </button>
-                  ))}
-                </div>
+                {fanAsSlider ? (
+                  <>
+                    <label className="slider fan-slider">
+                      Fan: {prettyMode(fanMode)}
+                      <input
+                        type="range"
+                        min="0"
+                        max={fanSpeeds.length - 1}
+                        step="1"
+                        value={fanIdx}
+                        disabled={busy}
+                        aria-label="Fan speed"
+                        onChange={(e) => {
+                          setFanMode(fanSpeeds[Number(e.target.value)]);
+                          fanFreeze.current = Date.now() + 1500; // don't let a push bounce the drag
+                          haptic(8);
+                        }}
+                        onMouseUp={(e) => commitFan(fanSpeeds[Number(e.target.value)])}
+                        onTouchEnd={(e) => commitFan(fanSpeeds[Number(e.target.value)])}
+                      />
+                    </label>
+                    {fanSpecials.length > 0 && (
+                      <div className="mode-row">
+                        {fanSpecials.map((fm) => (
+                          <button
+                            key={fm}
+                            className={`mode ${fanMode === fm ? 'selected' : ''}`}
+                            onClick={() => setFan(fm)}
+                            disabled={busy}
+                          >
+                            {prettyMode(fm)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="muted">Fan</span>
+                    <div className="mode-row">
+                      {fanModesVisible.map((fm) => (
+                        <button
+                          key={fm}
+                          className={`mode ${fanMode === fm ? 'selected' : ''}`}
+                          onClick={() => setFan(fm)}
+                          disabled={busy}
+                        >
+                          {prettyMode(fm)}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {(a.swing_modes || []).length > 0 && !isOff && (() => {
