@@ -454,16 +454,22 @@ function DeviceCard({ device, onChange, onEdit }) {
     }, 250);
   }
 
-  const slider = (label, value, setValue, service, toData) => (
+  const slider = (label, value, setValue, service, toData, step = 1) => (
     <label className="slider">
-      {label}: {value}%
+      {label}: {Math.round(value)}%
       <input
         type="range"
         min="0"
         max="100"
+        step={step}
         value={value}
         disabled={busy}
-        onChange={(e) => setValue(Number(e.target.value))}
+        // Move freely while dragging (a light haptic tick per step), and only
+        // send to HA on release - like the climate +/- hold.
+        onChange={(e) => {
+          setValue(Number(e.target.value));
+          haptic(8);
+        }}
         onMouseUp={(e) => act(service, toData(Number(e.target.value)))}
         onTouchEnd={(e) => act(service, toData(Number(e.target.value)))}
       />
@@ -503,7 +509,8 @@ function DeviceCard({ device, onChange, onEdit }) {
               <Toggle on={on} disabled={busy} onClick={() => setPower(!on)} />
             </div>
             {a.percentage != null && on &&
-              slider('Speed', pct, setPct, 'set_percentage', (v) => ({ percentage: v }))}
+              slider('Speed', pct, setPct, 'set_percentage', (v) => ({ percentage: v }),
+                a.percentage_step || 1)}
           </>
         );
       case 'climate': {
