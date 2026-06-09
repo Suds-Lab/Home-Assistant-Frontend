@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.35.2
+- Climate fan slider now also recognises **numeric** speed lists (e.g. 0-6, or 1-3), not just named ones - it auto-detects whichever scheme the unit uses (numbers or low/med/high) and renders the slider when there are 3+ steps. Non-speed modes like "auto" stay as buttons.
+
 ## 1.35.1
 - Themed the range sliders (fan speed, brightness, volume) to match the app - HA-blue fill and thumb on a muted track - instead of the browser's default control.
 
