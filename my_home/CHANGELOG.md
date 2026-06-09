@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.33.0
+- Climate cards: **press and hold** the + / − buttons to keep adjusting the temperature (it speeds up the longer you hold), and the new target is **sent once when you let go** - a more natural, fluid way to set the temperature than tapping repeatedly. A single tap still works, and keyboard users can still step it.
+
 ## 1.32.3
 - Live updates: fixed **"All devices" users and managers getting no live pushes** - their device states (and newly-added devices) only refreshed on the 30-second safety-net poll. They now receive instant WebSocket updates for everything they can see, like specific-device users always did.
 - A newly-added entity now refreshes the room/floor cache, so it lands in the right area instead of "Other".

@@ -681,6 +681,15 @@ section .grid {
   color: var(--text);
   font-size: 1.4rem;
   line-height: 1;
+  /* Press-and-hold to repeat: stop touch scrolling, the long-press context
+     menu, text selection and double-tap zoom from interrupting the hold. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.temp-control button:active {
+  background: var(--card-active);
 }
 
 .temp-control button:disabled {
