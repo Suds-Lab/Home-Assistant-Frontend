@@ -281,10 +281,10 @@ section h2 {
   font-size: 1.05rem;
 }
 
-/* Organize: Devices / Areas sub-tabs - reuse the app's .tabs/.seg pattern,
-   left-aligned within the organize view. */
-.organize .tabs {
-  justify-content: flex-start;
+/* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control
+   (.lb-scope), left-aligned with room below before the content. */
+.organize-tabs {
+  margin: 0 0 18px;
 }
 
 /* Area organizer (floors → areas) */
