@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.31.5
+- Organize: the Devices / Areas & floors tabs use the connected "split" segmented control again (matching the Activity These/All toggle).
+
 ## 1.31.4
 - Climate card humidity now reads cleanly as "Now 24° · 52% humidity" (the temperature and humidity were running together as "24°52% humidity" on a stale stylesheet); the separator/spacing no longer depend on CSS.
 

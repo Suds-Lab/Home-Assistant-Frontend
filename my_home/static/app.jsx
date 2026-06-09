@@ -1088,11 +1088,11 @@ function Organize() {
   const [tab, setTab] = useState('devices');
   return (
     <div className="organize">
-      <div className="tabs" role="tablist">
+      <div className="lb-scope organize-tabs" role="tablist">
         <button
           role="tab"
           aria-selected={tab === 'devices'}
-          className={`seg${tab === 'devices' ? ' on' : ''}`}
+          className={tab === 'devices' ? 'active' : ''}
           onClick={() => setTab('devices')}
         >
           Devices
@@ -1100,7 +1100,7 @@ function Organize() {
         <button
           role="tab"
           aria-selected={tab === 'areas'}
-          className={`seg${tab === 'areas' ? ' on' : ''}`}
+          className={tab === 'areas' ? 'active' : ''}
           onClick={() => setTab('areas')}
         >
           Areas &amp; floors
