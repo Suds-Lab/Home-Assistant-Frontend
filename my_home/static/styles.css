@@ -659,6 +659,55 @@ section .grid {
   width: 100%;
 }
 
+/* Themed range slider (fan speed, brightness, volume): HA-blue fill + thumb on
+   a muted track. The filled portion is driven by an inline --fill (0-100%);
+   Firefox uses ::-moz-range-progress instead. */
+.slider input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  background-color: var(--switch-bg);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: var(--fill, 0%) 100%;
+}
+.slider input[type='range']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.slider input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  cursor: pointer;
+}
+.slider input[type='range']::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--switch-bg);
+}
+.slider input[type='range']::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
 /* Climate */
 .climate-readout {
   margin-top: 10px;

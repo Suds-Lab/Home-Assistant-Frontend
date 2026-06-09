@@ -1,6 +1,6 @@
 // Service worker for the My Home PWA. Caches the app shell so it loads
 // instantly and works offline; never caches API calls (live data).
-const CACHE = 'myhome-v19';
+const CACHE = 'myhome-v20';
 const SHELL = [
   './',
   './index.html',
