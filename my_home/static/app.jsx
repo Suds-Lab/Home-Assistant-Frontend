@@ -335,6 +335,9 @@ const FAN_SPEED_RANK = {
 };
 const FAN_HIDE = new Set(['night']);
 const fanKey = (m) => String(m).toLowerCase().replace(/[\s_-]/g, '');
+// Some units report fan speeds as plain numbers ("1".."5") instead of named
+// steps - treat those as an ordered ladder too.
+const isNumericMode = (m) => /^-?\d+(?:\.\d+)?$/.test(String(m).trim());
 
 // States that should highlight a card as "active".
 const ACTIVE_STATES = new Set([
@@ -605,10 +608,21 @@ function DeviceCard({ device, onChange, onEdit }) {
         // (low..high) render a slider that reports the equivalent named mode to
         // HA, and keep any non-speed modes (e.g. "auto") as buttons.
         const fanModesVisible = (a.fan_modes || []).filter((m) => !FAN_HIDE.has(fanKey(m)));
-        const fanSpeeds = fanModesVisible
-          .filter((m) => fanKey(m) in FAN_SPEED_RANK)
-          .sort((x, y) => FAN_SPEED_RANK[fanKey(x)] - FAN_SPEED_RANK[fanKey(y)]);
-        const fanSpecials = fanModesVisible.filter((m) => !(fanKey(m) in FAN_SPEED_RANK));
+        const numericFan = fanModesVisible.filter(isNumericMode);
+        let fanSpeeds;
+        let fanSpecials;
+        if (numericFan.length >= 3) {
+          // Numeric speed list ("1".."5"): order by value; keep any non-numeric
+          // modes (e.g. "auto") as buttons.
+          fanSpeeds = [...numericFan].sort((x, y) => parseFloat(x) - parseFloat(y));
+          fanSpecials = fanModesVisible.filter((m) => !isNumericMode(m));
+        } else {
+          // Named ladder (low..high); non-ladder modes (auto, etc.) as buttons.
+          fanSpeeds = fanModesVisible
+            .filter((m) => fanKey(m) in FAN_SPEED_RANK)
+            .sort((x, y) => FAN_SPEED_RANK[fanKey(x)] - FAN_SPEED_RANK[fanKey(y)]);
+          fanSpecials = fanModesVisible.filter((m) => !(fanKey(m) in FAN_SPEED_RANK));
+        }
         const fanAsSlider = fanSpeeds.length >= 3;
         const fanIdx = Math.max(0, fanSpeeds.indexOf(fanMode));
         const commitFan = (fm) => {
