@@ -166,16 +166,31 @@ ACTIVITY_FILE = ICON_DIR / "activity.json"
 ACTIVITY_MAX = 1000  # keep the most recent N actions
 
 
+# Settings are read on hot paths (including the live-broadcast access check, once
+# per state change), so cache them briefly to avoid a disk read every time.
+_SETTINGS_CACHE = {"ts": 0.0, "data": None}
+_SETTINGS_TTL = 3.0
+
+
 def _load_settings():
+    now = time.time()
+    c = _SETTINGS_CACHE
+    if c["data"] is not None and now - c["ts"] < _SETTINGS_TTL:
+        return dict(c["data"])  # a copy, so callers can mutate freely
     try:
-        return json.loads(SETTINGS_FILE.read_text())
+        data = json.loads(SETTINGS_FILE.read_text())
     except (OSError, ValueError):
-        return {}
+        data = {}
+    c["data"] = data
+    c["ts"] = now
+    return dict(data)
 
 
 def _save_settings(data):
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+    _SETTINGS_CACHE["data"] = dict(data)  # refresh the cache immediately
+    _SETTINGS_CACHE["ts"] = time.time()
 
 
 _ACTIVITY_LOCK = threading.Lock()
@@ -1001,9 +1016,14 @@ def _broadcast(entity_id, new_state):
     view = _device_view(new_state) if new_state else None
     payload = json.dumps({"entity_id": entity_id, "state": view})
     with _SUB_LOCK:
-        for sub in list(SUBSCRIBERS):
-            if entity_id in sub["owned"]:
-                sub["q"].put(payload)
+        subs = list(SUBSCRIBERS)
+    for sub in subs:
+        # Push to anyone who can see this entity - which for "All devices" users
+        # and managers is everything they're allowed, not a fixed list. (Using
+        # a static owned-set missed them, since they own devices via the flag,
+        # not an explicit entity list.)
+        if user_can_access(sub["user"], entity_id):
+            sub["q"].put(payload)
 
 
 def _ws_loop():
@@ -1044,6 +1064,11 @@ def _ws_loop():
                     STATE_CACHE.pop(eid, None)
                 else:
                     STATE_CACHE[eid] = new
+                # A brand-new entity (no prior state) may belong to a device/area
+                # we haven't cached - refresh the registry so its room/floor is
+                # right on the next fetch.
+                if data.get("old_state") is None and new is not None:
+                    _invalidate_registries()
                 _broadcast(eid, new)
         except Exception as err:  # noqa: BLE001
             _CACHE_READY.clear()
@@ -1068,8 +1093,7 @@ def stream():
     live update whenever one changes. EventSource can't set headers, so the
     session token comes as a query param."""
     user = user_from_token(request.args.get("token"))
-    owned = set(user.get("entities", []))
-    sub = {"q": Queue(), "owned": owned}
+    sub = {"q": Queue(), "user": user}
 
     def events():
         with _SUB_LOCK:
@@ -1106,7 +1130,7 @@ def ws_stream(ws):
     except ApiError:
         ws.close()
         return
-    sub = {"q": Queue(), "owned": set(user.get("entities", []))}
+    sub = {"q": Queue(), "user": user}
     with _SUB_LOCK:
         SUBSCRIBERS.append(sub)
     try:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.32.3
+- Live updates: fixed **"All devices" users and managers getting no live pushes** - their device states (and newly-added devices) only refreshed on the 30-second safety-net poll. They now receive instant WebSocket updates for everything they can see, like specific-device users always did.
+- A newly-added entity now refreshes the room/floor cache, so it lands in the right area instead of "Other".
+- Settings are cached for a few seconds so the per-event access check on the live stream doesn't hit the disk each time.
+
 ## 1.32.2
 - Manager again gets **All devices by default** - ticking Manager turns on All and hides the device picker, exactly like choosing "All devices". You can still **add specific extra entities** on top (including ones whose type is turned off) via the per-user search, for both Manager and "All devices" users.
 - Fixed: those per-user "specific device" extras now reliably grant access even when the user has "All devices" (previously they were ignored for All users).
