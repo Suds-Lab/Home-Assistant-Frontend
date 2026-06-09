@@ -1639,7 +1639,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
-        all,
+        all: all || manager, // managers always get all devices
         manager,
         entities: [...picked],
       });
@@ -1655,6 +1655,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const filtered = entities.filter(match);
 
   const byId = {};
+  for (const e of allEntities) byId[e.entity_id] = e; // names for any specific (incl. disabled types)
   for (const e of entities) byId[e.entity_id] = e;
   const hasAreas = entities.some((e) => e.area);
   const hasFloors = entities.some((e) => e.floor);
@@ -1761,8 +1762,8 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       <label className="checkbox-row all-toggle">
         <input type="checkbox" checked={manager} onChange={(e) => setManager(e.target.checked)} />
         <span>
-          <strong>Manager</strong> - can organize devices and areas in Home Assistant (their own
-          device access is set separately, below)
+          <strong>Manager</strong> - can organize devices and areas in Home Assistant (and gets
+          access to all devices, like the option below)
         </span>
       </label>
 
@@ -1771,7 +1772,8 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       <label className="checkbox-row all-toggle">
         <input
           type="checkbox"
-          checked={all}
+          checked={all || manager}
+          disabled={manager}
           onChange={(e) => setAll(e.target.checked)}
         />
         <span>
@@ -1779,10 +1781,43 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         </span>
       </label>
 
-      {all ? (
-        <p className="muted all-note">
-          This user can control every device. Turn this off to choose specific devices.
-        </p>
+      {all || manager ? (
+        <>
+          <p className="muted all-note">
+            {manager ? 'Managers control every device. ' : 'This user can control every device. '}
+            You can still add specific extras below (e.g. a device whose type is turned off)
+            {manager ? '.' : ', or turn this off to pick devices individually.'}
+          </p>
+          {selected.length > 0 && (
+            <div className="selected-box">
+              <div className="selected-head">{selected.length} added - tap to remove</div>
+              <div className="chips">
+                {selected.map((e) => (
+                  <button
+                    type="button"
+                    key={e.entity_id}
+                    className="chip"
+                    onClick={() => toggleEntity(e.entity_id)}
+                  >
+                    {e.name} <span aria-hidden="true">✕</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="add-specific">
+            <span className="muted add-specific-label">
+              Add a specific device (any type, this user only)
+            </span>
+            <EntityChips
+              entities={allEntities}
+              selected={picked}
+              onToggle={toggleEntity}
+              showChips={false}
+              placeholder="Search all devices…"
+            />
+          </div>
+        </>
       ) : (
         <>
           {selected.length > 0 && (

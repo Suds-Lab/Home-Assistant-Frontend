@@ -423,12 +423,14 @@ def _domain_assignable(entity_id):
 
 
 def user_can_access(user, entity_id):
-    """An 'all' user owns every assignable entity; otherwise it's the explicit
-    list. The manager role grants organize powers (areas/devices), not blanket
-    device access - so a manager can still be scoped to specific entities."""
-    if user.get("all"):
+    """Explicitly-assigned entities are always owned (any type - that's the
+    per-user 'add a specific device' override). Beyond that, an 'all' user (and
+    managers, who get all devices) owns every assignable entity."""
+    if entity_id in user.get("entities", []):
+        return True
+    if user.get("all") or user.get("manager"):
         return _domain_assignable(entity_id)
-    return entity_id in user.get("entities", [])
+    return False
 
 
 def assert_owned(user, entity_id):
@@ -1664,9 +1666,9 @@ def admin_save_user():
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
     record["manager"] = bool(body.get("manager"))  # can organize devices/areas in HA
-    # Device access is independent of the manager role: a manager may have "all"
-    # or just a specific set, like any other user.
-    record["all"] = bool(body.get("all"))
+    # Managers get all devices by default (like the "All devices" option); you
+    # can still grant extra specific entities on top via the per-user list.
+    record["all"] = bool(body.get("all")) or record["manager"]
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
         record["password"] = password

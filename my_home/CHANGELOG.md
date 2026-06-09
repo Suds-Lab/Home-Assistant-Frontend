@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.32.2
+- Manager again gets **All devices by default** - ticking Manager turns on All and hides the device picker, exactly like choosing "All devices". You can still **add specific extra entities** on top (including ones whose type is turned off) via the per-user search, for both Manager and "All devices" users.
+- Fixed: those per-user "specific device" extras now reliably grant access even when the user has "All devices" (previously they were ignored for All users).
+
 ## 1.32.1
 - Dashboard: when grouping by Area or Floor, each area's section header now shows the area's Home Assistant icon (same dynamic mdi icons as the Organize view). Areas without an icon set just show the name.
 
