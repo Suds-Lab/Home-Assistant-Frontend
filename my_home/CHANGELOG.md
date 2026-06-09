@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.32.0
+- Organize → Areas & floors: each area now shows **its Home Assistant icon** (the `mdi:*` icon set on the area). Icons are fetched on demand and cached by the add-on (served locally, so browsers don't call any external service); areas without an icon get a neutral placeholder.
+
 ## 1.31.5
 - Organize: the Devices / Areas & floors tabs use the connected "split" segmented control again (matching the Activity These/All toggle).
 

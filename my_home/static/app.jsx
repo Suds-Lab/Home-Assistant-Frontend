@@ -60,6 +60,7 @@ const managerUpdateDevice = (device_id, fields) =>
 const managerGetAreas = () => request('/manager/areas');
 const managerSaveArea = (fields) =>
   request('/manager/area', { method: 'POST', body: JSON.stringify(fields) });
+const getMdiIcon = (name) => request(`/icon/mdi/${encodeURIComponent(name)}`);
 const getDevice = (entity_id) => request(`/entity/${encodeURIComponent(entity_id)}`);
 // Call a whitelisted service on an entity (backend enforces what's allowed).
 const control = (entity_id, service, data = {}) =>
@@ -903,6 +904,63 @@ function Organizer() {
   );
 }
 
+// Render an arbitrary Material Design Icon by name ("mdi:sofa" or "sofa"),
+// fetched once from the backend and cached in-memory. Falls back to a neutral
+// room glyph while loading, on failure, or when no icon is set.
+const _mdiCache = new Map(); // name -> {body,width,height} | null (failed)
+function MdiIcon({ icon, size = 22, className = '' }) {
+  const name = icon ? String(icon).replace(/^mdi:/, '') : '';
+  const [data, setData] = useState(() => (name ? _mdiCache.get(name) : undefined));
+  useEffect(() => {
+    if (!name) return;
+    if (_mdiCache.has(name)) {
+      setData(_mdiCache.get(name));
+      return;
+    }
+    let alive = true;
+    getMdiIcon(name)
+      .then((d) => {
+        _mdiCache.set(name, d);
+        if (alive) setData(d);
+      })
+      .catch(() => {
+        _mdiCache.set(name, null);
+        if (alive) setData(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [name]);
+
+  if (name && data) {
+    return (
+      <svg
+        className={`mdi-icon ${className}`}
+        viewBox={`0 0 ${data.width || 24} ${data.height || 24}`}
+        width={size}
+        height={size}
+        fill="currentColor"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: data.body }}
+      />
+    );
+  }
+  return (
+    <svg
+      className={`mdi-icon ${className}`}
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+    </svg>
+  );
+}
+
 // Create a new area or rename an existing one (and pick a floor when creating).
 function AreaEditDialog({ area, floors, onClose, onSave }) {
   const isNew = !area.area_id;
@@ -1041,6 +1099,9 @@ function AreaOrganizer() {
               ) : (
                 sec.areas.map((a) => (
                   <div key={a.area_id} className="card org-row">
+                    <span className="area-icon" aria-hidden="true">
+                      <MdiIcon icon={a.icon} />
+                    </span>
                     <div className="org-info">
                       <span className="device-name">{a.name}</span>
                     </div>

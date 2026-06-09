@@ -304,6 +304,17 @@ section h2 {
 .area-empty {
   margin: 0 0 10px;
 }
+.area-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--input-bg);
+  color: var(--accent);
+}
 /* Theming comes from .user-filter (already in the cached stylesheet); this only
    adds the layout it needs in the area row. */
 .area-floor-select {
