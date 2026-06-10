@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.8
+- **iOS haptics now fire on taps.** The tick is triggered on `click` instead of a passive `pointerdown` - iOS only plays the switch haptic from inside a real click. Buttons, toggles, climate modes, tabs etc. now buzz on both iOS and Android. (Sliders still tick per step on Android only; iOS has no per-step click while dragging.)
+
 ## 1.37.7
 - Added a temporary **haptics diagnostic page** (open the dashboard URL with `?haptictest=1`) to identify which iOS trigger actually fires on a device - a real-switch tap, a programmatic hidden/visible switch click, or the Vibration API. Used to pin down why iOS haptics aren't firing; not shown in normal use.
 

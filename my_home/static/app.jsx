@@ -110,16 +110,16 @@ let _hapticsBound = false;
 function bindHaptics() {
   if (_hapticsBound || typeof document === 'undefined') return;
   _hapticsBound = true;
-  document.addEventListener(
-    'pointerdown',
-    (e) => {
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const el = t.closest('button, input[type="range"]');
-      if (el && !el.disabled) haptic();
-    },
-    { passive: true }
-  );
+  // Fire on `click`, not `pointerdown`: iOS only plays the switch haptic when
+  // the toggle happens inside a real click/tap (a passive pointerdown doesn't
+  // count). Android's vibrate is fine here too. Sliders haptic per step via
+  // their own onChange (works on Android; iOS has no per-step click).
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const el = t.closest('button');
+    if (el && !el.disabled) haptic();
+  });
 }
 bindHaptics();
 
