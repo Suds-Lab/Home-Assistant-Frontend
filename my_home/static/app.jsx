@@ -3487,6 +3487,122 @@ function VersionTag() {
   );
 }
 
+// Diagnostic page (open the dashboard with ?haptictest=1) to find which iOS
+// haptic trigger actually fires on a given device. Tap each; report which buzz.
+function HapticDebug() {
+  const [log, setLog] = useState([]);
+  const add = (m) => setLog((l) => [m, ...l].slice(0, 25));
+  const hiddenRef = useRef(null);
+  const visibleRef = useRef(null);
+
+  // Build the app's exact hidden switch once (isolated from haptic()'s throttle).
+  useEffect(() => {
+    const id = 'dbg-hidden-switch';
+    const label = document.createElement('label');
+    label.setAttribute('for', id);
+    label.setAttribute('aria-hidden', 'true');
+    label.textContent = 'h';
+    label.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = id;
+    input.setAttribute('switch', '');
+    input.style.all = 'initial';
+    input.style.appearance = 'auto';
+    input.style.display = 'none';
+    label.appendChild(input);
+    document.body.appendChild(label);
+    hiddenRef.current = label;
+    return () => {
+      try {
+        document.body.removeChild(label);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  const setSwitch = (el) => {
+    if (el) el.setAttribute('switch', '');
+  };
+  const rowStyle = { display: 'flex', gap: 10, alignItems: 'center', margin: '8px 0' };
+
+  return (
+    <div className="centered">
+      <div className="card" style={{ width: '100%', maxWidth: 460, textAlign: 'left' }}>
+        <h3>Haptics debug · v{APP_VERSION}</h3>
+        <p className="muted">Tap each control, then tell me which ones you actually feel.</p>
+
+        <h4>A · Real switch - flip it with your finger</h4>
+        <label style={rowStyle}>
+          <input type="checkbox" ref={setSwitch} />
+          <span>direct tap on a real iOS switch</span>
+        </label>
+
+        <h4>B · Programmatic, from a button tap</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              try {
+                hiddenRef.current && hiddenRef.current.click();
+                add('B1 hidden-switch .click() fired');
+              } catch (e) {
+                add('B1 error: ' + e.message);
+              }
+            }}
+          >
+            B1 · hidden switch .click() (the app's method)
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              try {
+                visibleRef.current && visibleRef.current.click();
+                add('B2 visible-switch .click() fired');
+              } catch (e) {
+                add('B2 error: ' + e.message);
+              }
+            }}
+          >
+            B2 · visible switch .click()
+          </button>
+          <label style={rowStyle}>
+            <input
+              type="checkbox"
+              ref={(el) => {
+                setSwitch(el);
+                visibleRef.current = el;
+              }}
+            />
+            <span>(the visible switch B2 toggles)</span>
+          </label>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              add('B3 navigator.vibrate = ' + typeof navigator.vibrate);
+              try {
+                if (navigator.vibrate) navigator.vibrate(40);
+              } catch (e) {
+                add('B3 error: ' + e.message);
+              }
+            }}
+          >
+            B3 · navigator.vibrate(40)
+          </button>
+        </div>
+
+        <h4>C · Log</h4>
+        <ul className="muted" style={{ fontSize: '0.8rem', maxHeight: 160, overflow: 'auto', paddingLeft: 18 }}>
+          {log.map((m, i) => (
+            <li key={i}>{m}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(null); // null = loading
   // App name -> browser tab + installed-app name. Title -> visible heading.
@@ -3550,7 +3666,9 @@ function App() {
   }, [session, appName, appIcon, appImage]);
 
   let content;
-  if (session === null) {
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('haptictest')) {
+    content = <HapticDebug />;
+  } else if (session === null) {
     content = (
       <div className="centered">
         <p className="muted">Loading…</p>
