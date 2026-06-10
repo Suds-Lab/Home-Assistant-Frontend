@@ -665,47 +665,55 @@ section .grid {
 .slider input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
-  height: 8px;
-  border-radius: 999px;
+  width: 100%;
+  height: 22px; /* hit area + room for the thumb; the track is drawn shorter */
+  background: transparent;
   outline: none;
   cursor: pointer;
-  background-color: var(--switch-bg);
-  background-image: linear-gradient(var(--accent), var(--accent));
-  background-repeat: no-repeat;
-  background-size: var(--fill, 0%) 100%;
 }
 .slider input[type='range']:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* WebKit: a 6px track with the HA-blue fill (driven by --fill) + centered thumb. */
+.slider input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--switch-bg);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: var(--fill, 0%) 100%;
 }
 .slider input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 20px;
   height: 20px;
+  margin-top: -7px; /* center the 20px thumb on the 6px track */
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--card);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
-.slider input[type='range']::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--card);
-  cursor: pointer;
-}
+/* Firefox: track + native progress fill + thumb. */
 .slider input[type='range']::-moz-range-track {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: var(--switch-bg);
 }
 .slider input[type='range']::-moz-range-progress {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: var(--accent);
+}
+.slider input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
 }
 
 /* Climate */
@@ -798,6 +806,10 @@ section .grid {
 /* Climate fan-speed row. */
 .fan-modes {
   margin-top: 20px;
+}
+/* Space the "auto" (etc.) buttons below the fan-speed slider. */
+.fan-slider + .mode-row {
+  margin-top: 14px;
 }
 
 .fan-modes > .muted {
