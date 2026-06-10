@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.5
+- The running build version is now shown as a small label in the bottom corner of every screen, so you can confirm which version is live at a glance (handy on a phone, where checking page source isn't).
+
 ## 1.37.4
 - The app now loads **fresh every time**: the service worker is **network-first** (cached copies are used only when offline), so a new build is never served stale - no more cache-version juggling to see updates.
 - The running build is stamped into the page automatically from the add-on version - visible as `?v=` on the CSS/JS and an `app-version` meta tag - so you can always tell which version is live.

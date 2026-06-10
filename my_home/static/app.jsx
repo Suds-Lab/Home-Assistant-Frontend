@@ -3471,6 +3471,22 @@ function emojiToPng(emoji, size = 180) {
 
 // Top-level: the backend tells us which port we're on (Ingress/sidebar =
 // management, published = user dashboard) and whether live push is enabled.
+// The running build, read from the <meta name="app-version"> the server stamps
+// from config.yaml - shown as a small label so you can tell which version is live.
+const APP_VERSION =
+  (typeof document !== 'undefined' &&
+    document.querySelector('meta[name="app-version"]')?.getAttribute('content')) ||
+  '';
+
+function VersionTag() {
+  if (!APP_VERSION || APP_VERSION === '__APP_VERSION__') return null;
+  return (
+    <div className="version-tag" aria-hidden="true">
+      v{APP_VERSION}
+    </div>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(null); // null = loading
   // App name -> browser tab + installed-app name. Title -> visible heading.
@@ -3533,23 +3549,32 @@ function App() {
     setLinkHref('apple-touch-icon', touch);
   }, [session, appName, appIcon, appImage]);
 
+  let content;
   if (session === null) {
-    return (
+    content = (
       <div className="centered">
         <p className="muted">Loading…</p>
       </div>
     );
+  } else if (session.mode === 'manage') {
+    content = <Admin standalone title={title} />;
+  } else {
+    content = (
+      <UserApp
+        live={session.stream}
+        title={title}
+        appName={appName}
+        appIcon={appIcon}
+        providers={providers}
+        oauth={oauth}
+      />
+    );
   }
-  if (session.mode === 'manage') return <Admin standalone title={title} />;
   return (
-    <UserApp
-      live={session.stream}
-      title={title}
-      appName={appName}
-      appIcon={appIcon}
-      providers={providers}
-      oauth={oauth}
-    />
+    <>
+      {content}
+      <VersionTag />
+    </>
   );
 }
 

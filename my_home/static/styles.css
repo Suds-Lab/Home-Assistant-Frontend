@@ -50,6 +50,20 @@ body {
   font-size: 0.9rem;
 }
 
+/* Small, unobtrusive build-version label, pinned out of the way (clear of the
+   iPhone home indicator) and never intercepting taps. */
+.version-tag {
+  position: fixed;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  font-size: 0.66rem;
+  color: var(--muted);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
 .error {
   color: var(--error);
   font-size: 0.9rem;
