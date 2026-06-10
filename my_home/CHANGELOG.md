@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.2
+- More breathing room between the fan-speed slider and the "Auto" button below it.
+
 ## 1.37.1
 - Sliders now theme reliably across browsers (drawn via the track element with a properly centered thumb, instead of a thin styled input that could render the thumb oddly), so the fan-speed, brightness and volume sliders all look consistent.
 - More space between the fan-speed slider and the "Auto" button below it.

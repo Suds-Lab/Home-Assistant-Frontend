@@ -808,8 +808,11 @@ section .grid {
   margin-top: 20px;
 }
 /* Space the "auto" (etc.) buttons below the fan-speed slider. */
+.fan-slider {
+  margin-bottom: 6px;
+}
 .fan-slider + .mode-row {
-  margin-top: 14px;
+  margin-top: 22px;
 }
 
 .fan-modes > .muted {
