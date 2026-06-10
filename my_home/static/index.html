@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Stamped by the server from config.yaml; check it to see which build is
+         live. The same version cache-busts the JS/CSS below (?v=). -->
+    <meta name="app-version" content="__APP_VERSION__" />
     <title>My Home</title>
 
     <!-- Set the theme BEFORE first paint (the React app loads via in-browser
@@ -24,8 +27,9 @@
       })();
     </script>
 
-    <!-- Relative href so styles resolve under any path prefix (Ingress). -->
-    <link rel="stylesheet" href="./styles.css" />
+    <!-- Relative href so styles resolve under any path prefix (Ingress).
+         ?v=… is stamped by the server so each release loads fresh CSS/JS. -->
+    <link rel="stylesheet" href="./styles.css?v=__APP_VERSION__" />
 
     <!-- uPlot: tiny, zoomable time-series charts for the per-device history
          graph (vendored locally, no CDN/internet at runtime). -->
@@ -53,6 +57,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="text/babel" src="./app.jsx" data-presets="react"></script>
+    <script type="text/babel" src="./app.jsx?v=__APP_VERSION__" data-presets="react"></script>
   </body>
 </html>

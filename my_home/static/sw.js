@@ -1,25 +1,12 @@
-// Service worker for the My Home PWA. Caches the app shell so it loads
-// instantly and works offline; never caches API calls (live data).
-const CACHE = 'myhome-v27';
-const SHELL = [
-  './',
-  './index.html',
-  './styles.css',
-  './app.jsx',
-  './manifest.webmanifest',
-  './vendor/react.production.min.js',
-  './vendor/react-dom.production.min.js',
-  './vendor/babel.min.js',
-  './vendor/uplot.iife.min.js',
-  './vendor/uplot.min.css',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-];
+// Service worker for the My Home PWA.
+//
+// NETWORK-FIRST: when online, every asset is fetched fresh from the server, so a
+// new build is *never* served stale - no cache-version bumping needed. The cache
+// is only a fallback for when the device is offline. API calls are never touched.
+const CACHE = 'myhome'; // fixed name; it's just the offline fallback store
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
-  );
+self.addEventListener('install', () => {
+  self.skipWaiting(); // take over as soon as the new SW is byte-different
 });
 
 self.addEventListener('activate', (e) => {
@@ -33,27 +20,29 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Let everything dynamic hit the network: API, the SSE stream, non-GET.
+  // Let everything dynamic hit the network untouched: API, the SSE stream, non-GET.
   if (e.request.method !== 'GET' || url.pathname.includes('/api/')) return;
 
-  // Stale-while-revalidate: serve the cached shell instantly, but always
-  // refetch in the background and update the cache, so an updated add-on
-  // (new CSS/JS) reaches users on the next load instead of being stuck.
+  // Network-first: always try the network (bypassing the HTTP cache so it's
+  // genuinely fresh), update the offline copy, and only fall back to cache when
+  // the network is unavailable.
   e.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE);
-      const cached = await cache.match(e.request);
-      const network = fetch(e.request)
-        .then((res) => {
-          if (res && res.ok) cache.put(e.request, res.clone());
-          return res;
-        })
-        .catch(() => null);
-      return (
-        cached ||
-        (await network) ||
-        (e.request.mode === 'navigate' ? cache.match('./index.html') : Response.error())
-      );
-    })()
+    fetch(e.request, { cache: 'no-cache' })
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      })
+      .catch(() =>
+        caches
+          .match(e.request)
+          .then(
+            (cached) =>
+              cached ||
+              (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error())
+          )
+      )
   );
 });

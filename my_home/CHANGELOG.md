@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.37.4
+- The app now loads **fresh every time**: the service worker is **network-first** (cached copies are used only when offline), so a new build is never served stale - no more cache-version juggling to see updates.
+- The running build is stamped into the page automatically from the add-on version - visible as `?v=` on the CSS/JS and an `app-version` meta tag - so you can always tell which version is live.
+
 ## 1.37.3
 - iOS haptics fix: match the reference web-haptics element setup exactly (the hidden switch now uses `all:initial` + `appearance:auto` and `display:none`, not `opacity`/`pointer-events:none`, which were suppressing the toggle). This is what made it not fire on iOS even though the technique itself works there.
 
