@@ -315,6 +315,33 @@ const DOMAIN_LABELS = {
 const domainLabel = (d) =>
   DOMAIN_LABELS[d] || d.charAt(0).toUpperCase() + d.slice(1).replace(/_/g, ' ');
 
+// A search input with a clear (✕) button that appears once there's text.
+function SearchBox({ value, onChange, placeholder, className = '', ...rest }) {
+  return (
+    <div className={`search-wrap ${className}`}>
+      <input
+        type="search"
+        className="search"
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        {...rest}
+      />
+      {value && (
+        <button
+          type="button"
+          className="search-clear"
+          aria-label="Clear search"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onChange({ target: { value: '' } })}
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Material Design Icons (the icon set Home Assistant uses), inlined as SVG
 // path data so there's no font/CDN dependency.
 const DOMAIN_MDI = {
@@ -1078,9 +1105,8 @@ function Organizer() {
         Assign each device to a Home Assistant area, or rename it. Changes are saved to Home
         Assistant.
       </p>
-      <input
-        type="search"
-        className="search dashboard-search"
+      <SearchBox
+        className="dashboard-search"
         placeholder="Search devices…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -1674,9 +1700,8 @@ function Dashboard({
 
       {error && <div className="error banner">{error}</div>}
       {!loading && devices.length > 2 && (
-        <input
-          type="search"
-          className="search dashboard-search"
+        <SearchBox
+          className="dashboard-search"
           placeholder="Search devices…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -2081,9 +2106,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
           ) : (
             <div className="browse-devices">
               <span className="muted add-specific-label">Or browse the allowed devices</span>
-              <input
-                type="text"
-                className="search"
+              <SearchBox
                 placeholder="Filter the list below…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

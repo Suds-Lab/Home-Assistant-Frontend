@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.0
+- Search bars (the dashboard search, the Organize device search, and the device filter in the user editor) now have a **clear (✕) button** that appears once you've typed, to wipe the search in one tap.
+
 ## 1.36.1
 - iOS haptics fix: the hidden switch element is now mounted in the page body and kept in the DOM (it was wrongly placed in `<head>` and removed right after clicking, which prevented the haptic from firing), matching the reference web-haptics implementation.
 
