@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.36.0
+- Tap haptics now also fire on **iOS**, not just Android. iOS Safari has no Vibration API, so on iOS we use the hidden `<input type="checkbox" switch>` technique (toggling it makes the system play its switch haptic); Android keeps using the Vibration API. Pure browser code - no libraries or build step. (Note: Apple reportedly closed the programmatic-trigger path in iOS 26.5, so it may not fire on the very latest iOS.)
+
 ## 1.35.2
 - Climate fan slider now also recognises **numeric** speed lists (e.g. 0-6, or 1-3), not just named ones - it auto-detects whichever scheme the unit uses (numbers or low/med/high) and renders the slider when there are 3+ steps. Non-speed modes like "auto" stay as buttons.
 
