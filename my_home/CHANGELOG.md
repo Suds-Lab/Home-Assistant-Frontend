@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.6
+- Fix the version label showing **"vdev"**: `config.yaml` is now included in the add-on image, so the app can read its real version at runtime (the Dockerfile wasn't copying it).
+
 ## 1.37.5
 - The running build version is now shown as a small label in the bottom corner of every screen, so you can confirm which version is live at a glance (handy on a phone, where checking page source isn't).
 

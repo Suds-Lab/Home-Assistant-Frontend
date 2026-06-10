@@ -10,7 +10,9 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py users.json ./
+# config.yaml is copied too so the app can read its own version at runtime
+# (shown as the build label / asset ?v=); without it the version reads "dev".
+COPY app.py users.json config.yaml ./
 COPY static/ ./static/
 
 # 4000 = management (Ingress, not published); 8099 = user dashboard (published).
