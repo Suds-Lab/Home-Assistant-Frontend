@@ -67,19 +67,23 @@ let _lastHaptic = 0;
 let _iosSwitch = null;
 function _iosHapticEl() {
   if (_iosSwitch || typeof document === 'undefined' || !document.body) return _iosSwitch;
+  // Mirror the reference web-haptics setup exactly (that's what actually fires
+  // on iOS): a body-mounted <label for=id> wrapping <input type=checkbox switch>
+  // with all:initial then appearance:auto, both display:none. Clicking the label
+  // toggles the switch, which makes iOS play its switch haptic.
   const id = 'ha-haptic-switch';
   const label = document.createElement('label');
   label.setAttribute('for', id);
   label.setAttribute('aria-hidden', 'true');
-  // Off-screen + transparent (NOT display:none, which can stop the haptic) and
-  // non-interactive so it never intercepts real taps.
-  label.style.cssText =
-    'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;';
+  label.textContent = 'Haptic feedback';
+  label.style.display = 'none';
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.id = id;
   input.setAttribute('switch', '');
+  input.style.all = 'initial';
   input.style.appearance = 'auto';
+  input.style.display = 'none';
   label.appendChild(input);
   document.body.appendChild(label);
   _iosSwitch = label;

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.3
+- iOS haptics fix: match the reference web-haptics element setup exactly (the hidden switch now uses `all:initial` + `appearance:auto` and `display:none`, not `opacity`/`pointer-events:none`, which were suppressing the toggle). This is what made it not fire on iOS even though the technique itself works there.
+
 ## 1.37.2
 - More breathing room between the fan-speed slider and the "Auto" button below it.
 
