@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.36.1
+- iOS haptics fix: the hidden switch element is now mounted in the page body and kept in the DOM (it was wrongly placed in `<head>` and removed right after clicking, which prevented the haptic from firing), matching the reference web-haptics implementation.
+
 ## 1.36.0
 - Tap haptics now also fire on **iOS**, not just Android. iOS Safari has no Vibration API, so on iOS we use the hidden `<input type="checkbox" switch>` technique (toggling it makes the system play its switch haptic); Android keeps using the Vibration API. Pure browser code - no libraries or build step. (Note: Apple reportedly closed the programmatic-trigger path in iOS 26.5, so it may not fire on the very latest iOS.)
 

@@ -61,6 +61,30 @@ const _coarsePointer =
     ? window.matchMedia('(pointer: coarse)').matches
     : false;
 let _lastHaptic = 0;
+// A persistent, rendered-but-invisible <input type=checkbox switch> in the body.
+// Toggling it makes iOS Safari (17.4+) play its switch haptic. It must live in
+// the body (not head) and stay in the DOM - removing it cancels the haptic.
+let _iosSwitch = null;
+function _iosHapticEl() {
+  if (_iosSwitch || typeof document === 'undefined' || !document.body) return _iosSwitch;
+  const id = 'ha-haptic-switch';
+  const label = document.createElement('label');
+  label.setAttribute('for', id);
+  label.setAttribute('aria-hidden', 'true');
+  // Off-screen + transparent (NOT display:none, which can stop the haptic) and
+  // non-interactive so it never intercepts real taps.
+  label.style.cssText =
+    'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.id = id;
+  input.setAttribute('switch', '');
+  input.style.appearance = 'auto';
+  label.appendChild(input);
+  document.body.appendChild(label);
+  _iosSwitch = label;
+  return _iosSwitch;
+}
 function haptic(ms = 10) {
   try {
     if (localStorage.getItem(HAPTICS_KEY) === '0') return;
@@ -71,18 +95,9 @@ function haptic(ms = 10) {
       navigator.vibrate(ms); // Android et al.
       return;
     }
-    if (!_coarsePointer || typeof document === 'undefined') return; // skip desktop
-    // iOS: a fresh hidden switch, toggled, fires the system haptic.
-    const label = document.createElement('label');
-    label.ariaHidden = 'true';
-    label.style.display = 'none';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.setAttribute('switch', '');
-    label.appendChild(input);
-    document.head.appendChild(label);
-    label.click();
-    document.head.removeChild(label);
+    if (!_coarsePointer) return; // skip desktop
+    const el = _iosHapticEl(); // iOS: toggle the switch to fire the system haptic
+    if (el) el.click();
   } catch {
     /* ignore */
   }
