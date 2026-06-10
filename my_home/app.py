@@ -44,6 +44,22 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+
+def _read_version():
+    """The add-on version from config.yaml - the single source of truth used to
+    cache-bust the front-end assets (?v=) so a new build always loads fresh."""
+    try:
+        for line in (BASE_DIR / "config.yaml").read_text().splitlines():
+            s = line.strip()
+            if s.startswith("version:"):
+                return s.split(":", 1)[1].strip().strip("\"'") or "dev"
+    except OSError:
+        pass
+    return "dev"
+
+
+APP_VERSION = _read_version()
+
 # --- Configuration -------------------------------------------------------
 
 # Home Assistant writes add-on settings here and injects SUPERVISOR_TOKEN.
@@ -1767,9 +1783,19 @@ def app_icon():
     return send_from_directory(STATIC_DIR / "icons", "icon-512.png")
 
 
+def _serve_index():
+    """index.html with the current version stamped into the asset URLs (?v=) so
+    each release busts the browser/service-worker cache. Served no-cache so the
+    page itself is always fresh and can point at the right asset versions."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace("__APP_VERSION__", APP_VERSION)
+    return Response(html, mimetype="text/html",
+                    headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/")
 def index():
-    return send_from_directory(STATIC_DIR, "index.html")
+    return _serve_index()
 
 
 @app.get("/<path:filename>")
@@ -1778,7 +1804,7 @@ def static_files(filename):
     if target.is_file():
         return send_from_directory(STATIC_DIR, filename)
     # SPA fallback: anything that isn't a real file returns index.html.
-    return send_from_directory(STATIC_DIR, "index.html")
+    return _serve_index()
 
 
 # Start the HA WebSocket listener as soon as the module is imported, so it runs
