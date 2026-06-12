@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.2
+- The theme button now **toggles** instead of cycling through three states. From **System**, the first tap flips to the opposite of whatever's currently shown (System-light → Dark, System-dark → Light); after that it just switches **Light ↔ Dark**. (It no longer cycles back to System from the button.)
+
 ## 2.0.1
 - Fix: the exported backup file is now named **`control-center-backup.json`** (was the old `my-home-backup.json`). Existing backup files still restore regardless of their name.
 - Fix: the default **logo** beside the title now scales with the heading, so it no longer looks too small on the larger login-page title. (Emoji header icons were already correct.)
