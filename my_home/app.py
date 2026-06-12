@@ -1794,6 +1794,13 @@ def _serve_index():
                     headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/api/version")
+def api_version():
+    """The running build version, so an open page can detect a new deploy and
+    reload itself (no manual refresh needed). Public - it's just a string."""
+    return jsonify(version=APP_VERSION)
+
+
 @app.get("/")
 def index():
     return _serve_index()

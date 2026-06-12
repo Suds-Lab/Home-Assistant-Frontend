@@ -136,6 +136,7 @@ const login = (username, password) =>
   request('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
 const getDevices = () => request('/devices');
 const getMe = () => request('/me');
+const getServerVersion = () => request('/version'); // for auto-reload on new deploys
 const getSession = () => request('/session');
 // Manager: organize HA devices into areas.
 const managerGetDevices = () => request('/manager/devices');
@@ -3532,6 +3533,32 @@ function App() {
     getSession()
       .then(setSession)
       .catch(() => setSession({ mode: 'user', stream: false }));
+  }, []);
+
+  // Auto-reload when a newer build is deployed (the add-on restarts on update,
+  // so the running page would otherwise keep old code until a manual refresh).
+  // We compare the server's version to the one this page was built with; on a
+  // mismatch we reload once (network-first SW then serves the fresh code). No
+  // loop: after reload APP_VERSION matches again.
+  useEffect(() => {
+    if (!APP_VERSION || APP_VERSION === '__APP_VERSION__') return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const { version } = await getServerVersion();
+        if (!stopped && version && version !== APP_VERSION) location.reload();
+      } catch {
+        /* offline / transient - ignore */
+      }
+    };
+    const id = setInterval(check, 60000);
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   useEffect(() => {

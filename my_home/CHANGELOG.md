@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.38.0
+- The app now **auto-reloads when a new version is deployed** - no manual refresh. It checks the server's version on a timer and whenever you return to the app, and reloads once if it changed (the network-first service worker then serves the fresh code). The live WebSocket only carries device state; picking up new app *code* needs a reload, which is now automatic.
+
 ## 1.37.11
 - Fix: taps that disable their own button - like the **climate mode / fan / swing** buttons - now give haptic feedback too. The tick is now captured before the button disables itself (previously it was skipped because the button was already disabled by the time the haptic ran).
 
