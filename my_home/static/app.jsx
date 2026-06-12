@@ -1522,18 +1522,36 @@ function Dashboard({
     });
   }
 
+  // Live-connection state for the "Connection lost" toast.
+  const [connected, setConnected] = useState(true);
+  const [lost, setLost] = useState(false);
+  const reconnectRef = useRef(null);
+
   // Fallback fetch (used for first paint and if the live stream drops).
   const refresh = useCallback(async () => {
     try {
       const data = await getDevices();
       setDevices(data.devices || []);
       setError('');
+      setConnected(true);
     } catch (err) {
       setError(err.message);
+      setConnected(false);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Only show "connection lost" after a short grace, so a quick blip (or the
+  // add-on restarting during an update) doesn't flash the toast.
+  useEffect(() => {
+    if (connected) {
+      setLost(false);
+      return;
+    }
+    const t = setTimeout(() => setLost(true), 2500);
+    return () => clearTimeout(t);
+  }, [connected]);
 
   // Apply one pushed change to the device list.
   function applyUpdate(prev, u) {
@@ -1552,6 +1570,7 @@ function Dashboard({
     // Polling mode (e.g. local preview): no persistent connection, so the page
     // reaches network-idle and stays interactive/screenshottable.
     if (!live) {
+      reconnectRef.current = refresh;
       const id = setInterval(refresh, 3000);
       return () => clearInterval(id);
     }
@@ -1571,6 +1590,7 @@ function Dashboard({
       u.searchParams.set('token', getToken() || '');
       ws = new WebSocket(u.href);
       ws.onopen = () => {
+        setConnected(true);
         if (opened) refresh(); // reconnect: catch up on anything missed
         opened = true;
       };
@@ -1584,6 +1604,7 @@ function Dashboard({
         if (m && m.entity_id) setDevices((prev) => applyUpdate(prev, m));
       };
       ws.onclose = () => {
+        setConnected(false);
         if (!stopped) retry = setTimeout(connect, 3000);
       };
       ws.onerror = () => {
@@ -1592,6 +1613,15 @@ function Dashboard({
         } catch {}
       };
     }
+    // "Retry now": drop the socket and reconnect immediately (and re-sync REST).
+    reconnectRef.current = () => {
+      clearTimeout(retry);
+      try {
+        ws && ws.close();
+      } catch {}
+      connect();
+      refresh();
+    };
     connect();
 
     // Safety net so the dashboard can't go stale if the socket is unavailable.
@@ -1852,6 +1882,19 @@ function Dashboard({
           onClose={() => setEditDevice(null)}
           onSave={saveDeviceEdit}
         />
+      )}
+      {lost && (
+        <div className="conn-toast" role="status" aria-live="polite">
+          <span className="conn-spinner" aria-hidden="true" />
+          <span>Connection lost. Reconnecting…</span>
+          <button
+            type="button"
+            className="conn-retry"
+            onClick={() => reconnectRef.current && reconnectRef.current()}
+          >
+            Retry now
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.39.0
+- Added a **"Connection lost. Reconnecting…"** toast on the dashboard when the live connection to the add-on drops, with a **Retry now** button. It clears itself once the connection is back, and only appears after a brief grace so quick blips (or the add-on restarting during an update) don't flash it.
+
 ## 1.38.0
 - The app now **auto-reloads when a new version is deployed** - no manual refresh. It checks the server's version on a timer and whenever you return to the app, and reloads once if it changed (the network-first service worker then serves the fresh code). The live WebSocket only carries device state; picking up new app *code* needs a reload, which is now automatic.
 
