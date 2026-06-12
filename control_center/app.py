@@ -1,4 +1,4 @@
-"""My Home - a small Home Assistant companion app (Flask backend).
+"""Control Center - a small Home Assistant companion app (Flask backend).
 
 Shows each logged-in person only their own lights and AC and lets them control
 them, talking to Home Assistant through this backend so the HA token never
@@ -86,8 +86,8 @@ JWT_SECRET = (
     or "dev-secret-change-me"
 )
 # Display name + icon shown in the UI / browser tab. Configurable.
-APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "My Home"
-APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or "🏠"
+APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "Control Center"
+APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or ""
 # Entity domains assignable in Manage users (empty list = all domains).
 _dt = addon_options.get("device_types")
 if _dt is None:
@@ -1568,7 +1568,10 @@ def admin_ha_history():
                    series=[{"label": entity, "values": vals}])
 
 
-# Bumped if the backup format ever changes incompatibly.
+# Bumped if the backup format ever changes incompatibly. The literal is kept as
+# "my_home_backup" (the pre-2.0 name) on purpose: it's the compatibility marker
+# stamped into exported backups, so changing it would reject backups that existing
+# installs already exported. Same reasoning as keeping the add-on slug.
 BACKUP_TYPE = "my_home_backup"
 BACKUP_VERSION = 1
 
@@ -1610,7 +1613,7 @@ def admin_import():
     require_admin()
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or body.get("type") != BACKUP_TYPE:
-        raise ApiError("That doesn't look like a My Home backup file.", 400)
+        raise ApiError("That doesn't look like a Control Center backup file.", 400)
 
     users = body.get("users")
     if not isinstance(users, list):
@@ -1827,7 +1830,7 @@ if __name__ == "__main__":
 
     user_srv = make_server("0.0.0.0", USER_PORT, app, threaded=True)
     threading.Thread(target=user_srv.serve_forever, daemon=True).start()
-    print(f"My Home -> HA at {HA_URL}")
+    print(f"Control Center -> HA at {HA_URL}")
     print(f"  management (Ingress): http://0.0.0.0:{INGRESS_PORT}")
     print(f"  user dashboard:       http://0.0.0.0:{USER_PORT}")
     make_server("0.0.0.0", INGRESS_PORT, app, threaded=True).serve_forever()

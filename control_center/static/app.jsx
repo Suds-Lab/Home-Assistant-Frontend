@@ -1,4 +1,4 @@
-// My Home - React UI loaded from a CDN and transformed in the browser by
+// Control Center - React UI loaded from a CDN and transformed in the browser by
 // Babel (no npm, no build step). All components live in this one file.
 
 const { useState, useEffect, useCallback, useRef } = React;
@@ -230,10 +230,20 @@ function OAuthLogo({ oauth }) {
   );
 }
 
+// Brand glyph shown beside the title (and on the install prompt): a custom
+// emoji if one is set in Settings, otherwise the default Control Center logo.
+function BrandIcon({ icon, className = 'app-icon' }) {
+  return icon ? (
+    <span className={className}>{icon}</span>
+  ) : (
+    <img className={className} src="./icons/icon.svg" alt="" />
+  );
+}
+
 function Login({
   onLogin,
-  title = 'My Home',
-  appIcon = '🏠',
+  title = 'Control Center',
+  appIcon = '',
   providers = { local: true, oauth: false },
   oauth = { name: 'OAuth', isGoogle: false, logo: '' },
 }) {
@@ -264,7 +274,7 @@ function Login({
   return (
     <div className="centered">
       <div className="card login">
-        <h1><span className="app-icon">{appIcon}</span> {title}</h1>
+        <h1><BrandIcon icon={appIcon} /> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
 
         {providers.local && (
@@ -1441,8 +1451,8 @@ function Dashboard({
   displayName,
   onLogout,
   live = true,
-  title = 'My Home',
-  appIcon = '🏠',
+  title = 'Control Center',
+  appIcon = '',
   isManager = false,
 }) {
   const [organizing, setOrganizing] = useState(false);
@@ -1706,7 +1716,7 @@ function Dashboard({
     <div className={`dashboard${compact ? ' compact' : ''}`}>
       <header className="topbar">
         <div>
-          <h1><span className="app-icon">{appIcon}</span> {title}</h1>
+          <h1><BrandIcon icon={appIcon} /> {title}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
@@ -2574,11 +2584,11 @@ function NameSettings() {
       </label>
       <label>
         App name (browser tab &amp; installed app)
-        <input type="text" value={s.name} onChange={set('name')} placeholder="My Home" />
+        <input type="text" value={s.name} onChange={set('name')} placeholder="Control Center" />
       </label>
       <label>
-        Home icon (an emoji)
-        <input type="text" value={s.icon} onChange={set('icon')} placeholder="🏠" />
+        Header icon - emoji (optional; the logo is shown by default)
+        <input type="text" value={s.icon} onChange={set('icon')} placeholder="🎛️" />
       </label>
       <div className="editor-actions">
         <button className="btn-primary" onClick={save}>Save</button>
@@ -3113,7 +3123,7 @@ function ActivityLog() {
   );
 }
 
-function Admin({ onBack, standalone, title = 'My Home' }) {
+function Admin({ onBack, standalone, title = 'Control Center' }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
   const [editing, setEditing] = useState(null); // {user} or {} for new
@@ -3363,7 +3373,7 @@ function InstallButton() {
 
 // Floating install banner. On the lockscreen (`persistent`) it stays put until
 // the app is installed; on the dashboard it's dismissible.
-function InstallPrompt({ persistent = false, appName = 'My Home', appIcon = '🏠' }) {
+function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon = '' }) {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const [deferred, setDeferred] = useState(deferredInstall);
@@ -3404,7 +3414,7 @@ function InstallPrompt({ persistent = false, appName = 'My Home', appIcon = '�
 
   return (
     <div className="install-banner">
-      <div className="install-icon">{appIcon}</div>
+      <BrandIcon icon={appIcon} className="install-icon" />
       <div className="install-text">
         <strong>Install {appName}</strong>
         <span className="muted">
@@ -3546,9 +3556,9 @@ function VersionTag() {
 function App() {
   const [session, setSession] = useState(null); // null = loading
   // App name -> browser tab + installed-app name. Title -> visible heading.
-  const appName = session?.appName || 'My Home';
+  const appName = session?.appName || 'Control Center';
   const title = session?.title || appName;
-  const appIcon = session?.appIcon || '🏠';
+  const appIcon = session?.appIcon || '';
   const appImage = session?.appImage || null;
   const providers = session?.providers || { local: true, oauth: false };
   const oauth = {
@@ -3607,19 +3617,10 @@ function App() {
   useEffect(() => {
     if (!session) return;
     document.title = appName;
-    // Favicon: a custom image when configured, else the emoji icon.
-    let href;
-    if (appImage) {
-      href = new URL(appImage, document.baseURI).href;
-    } else {
-      const svg =
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
-        "<text x='50%' y='52%' dominant-baseline='central' text-anchor='middle' font-size='52'>" +
-        appIcon +
-        '</text></svg>';
-      href = 'data:image/svg+xml,' + encodeURIComponent(svg);
-    }
-    setLinkHref('icon', href);
+    // Favicon / install icon: a custom uploaded image when configured, else the
+    // bundled Control Center logo. (The header emoji is a separate flourish; the
+    // installable icon defaults to the brand logo.)
+    setLinkHref('icon', appImage ? new URL(appImage, document.baseURI).href : './icons/icon.svg');
 
     // iOS ignores the web manifest for "Add to Home Screen" - it reads these
     // tags from the live DOM instead. Keep them in sync with the configured
@@ -3627,9 +3628,9 @@ function App() {
     setMetaContent('apple-mobile-web-app-title', appName);
     const touch = appImage
       ? new URL(appImage, document.baseURI).href
-      : emojiToPng(appIcon) || './icons/apple-touch-icon.png';
+      : './icons/apple-touch-icon.png';
     setLinkHref('apple-touch-icon', touch);
-  }, [session, appName, appIcon, appImage]);
+  }, [session, appName, appImage]);
 
   let content;
   if (session === null) {

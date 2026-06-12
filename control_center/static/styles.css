@@ -1,13 +1,13 @@
-/* Palette mirrors Home Assistant's default themes (primary #03a9f4, the same
-   backgrounds, card colours, dividers and text tones) so the app feels native
-   inside HA and consistent on the user dashboard. */
+/* Control Center palette: brand blue accent (#5B8DB8) from the logo, on neutral
+   dark/light surfaces. Navy (#1C3A5E) is the brand surface colour (PWA chrome /
+   status bar); #7AB3E0 is the light highlight. */
 :root {
   --bg: #111111;
   --card: #1c1c1c;
   --card-active: #2a2a2a;
   --text: #e1e1e1;
   --muted: #9b9b9b;
-  --accent: #03a9f4;
+  --accent: #5B8DB8;
   --accent-2: #0f9d58;
   --error: #f44336;
   --border: rgba(225, 225, 225, 0.12);
@@ -20,10 +20,10 @@
 [data-theme='light'] {
   --bg: #f4f5f7;
   --card: #ffffff;
-  --card-active: #e8f4fb;
+  --card-active: #e6eef5;
   --text: #212121;
   --muted: #727272;
-  --accent: #03a9f4;
+  --accent: #5B8DB8;
   --accent-2: #0f9d58;
   --error: #d32f2f;
   --border: rgba(0, 0, 0, 0.12);
@@ -623,6 +623,20 @@ section .grid {
 .install-icon {
   font-size: 1.7rem;
   line-height: 1;
+}
+
+/* When the brand glyph is the logo image (the default) rather than an emoji. */
+img.app-icon {
+  height: 1.4rem;
+  width: 1.4rem;
+  border-radius: 6px;
+  vertical-align: -0.22em;
+}
+img.install-icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .install-text {

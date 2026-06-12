@@ -1,4 +1,4 @@
-# My Home - a simple Home Assistant companion app
+# Control Center - a simple Home Assistant companion app
 
 A small web app with a basic login that shows each person **only their own**
 lights and air conditioning, and lets them control them. It talks to your
@@ -6,11 +6,11 @@ Home Assistant instance through a small Python backend that keeps your Home
 Assistant token private (the browser never sees it).
 
 This repo is a **Home Assistant add-on repository** - the add-on lives in the
-`my_home/` subfolder:
+`control_center/` subfolder:
 
 ```
 repository.yaml      Marks this repo as an HA add-on repository
-my_home/             The add-on
+control_center/             The add-on
   config.yaml          Add-on manifest
   Dockerfile           Builds the add-on image
   app.py               Flask backend (login + talks to Home Assistant)
@@ -28,10 +28,10 @@ On Home Assistant OS / Supervised:
 
 1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories**.
 2. Paste `https://github.com/Suds-Lab/Home-Assistant-Frontend` and **Add**.
-3. The **My Home** add-on appears in the store. Open it → **Install**.
+3. The **Control Center** add-on appears in the store. Open it → **Install**.
 4. **Configuration** tab: set `jwt_secret` (a long random string). **Start** the
    add-on. (Users are *not* configured here - see step 5.)
-5. Open **My Home** in the sidebar. A default admin **`alice` / `changeme`** is
+5. Open **Control Center** in the sidebar. A default admin **`alice` / `changeme`** is
    created on first run - log in, change its password, and add everyone else
    from the **Manage users** screen. Point household members at
    `http://<your-home-assistant>:8099` for their dashboard.
@@ -44,7 +44,7 @@ Updates then arrive as a normal **Update** button when you push new commits.
 1. Open Home Assistant in your browser.
 2. Click your **profile** (bottom-left), open the **Security** tab.
 3. Under **Long-lived access tokens**, click **Create Token**, name it
-   (e.g. "My Home App"), and copy the token.
+   (e.g. "Control Center App"), and copy the token.
 
 ### b) Configure the backend
 Copy `.env.example` to `.env` and fill in:
@@ -90,7 +90,7 @@ shows controls tailored to each:
 | `media_player` | prev / play-pause / next + volume |
 | `scene`, `script` | activate / run |
 | `automation` | trigger + enable toggle |
-| `button` | press |
+| `button`, `input_button` | press |
 | `vacuum` | start / pause / dock |
 | anything else (e.g. `sensor`) | read-only state display |
 
@@ -121,7 +121,7 @@ not available on it at all.
 
 ### Managing users (no file editing)
 
-Open the **My Home** tab in the HA sidebar - it goes straight to the management
+Open the **Control Center** tab in the HA sidebar - it goes straight to the management
 screen. There you add, edit, and delete users and tick each person's devices
 from a **searchable, grouped list of all your real Home Assistant entities** -
 no typing entity IDs. Accounts are saved to a persistent store
@@ -185,7 +185,7 @@ at least one device see the dashboard.
 **Other providers:** override `oauth_authorize_url`, `oauth_token_url`,
 `oauth_userinfo_url`, `oauth_scopes` and `oauth_provider_name` for any OIDC
 provider. (The full walkthrough is also in the add-on's **Documentation** tab /
-[`my_home/DOCS.md`](my_home/DOCS.md).)
+[`control_center/DOCS.md`](control_center/DOCS.md).)
 
 ## 2. Run it (standalone / dev)
 
@@ -194,9 +194,9 @@ From the repo root:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r my_home/requirements.txt
-copy my_home\.env.example .env   # then fill in HA_URL + HA_TOKEN
-python my_home/app.py
+pip install -r control_center/requirements.txt
+copy control_center\.env.example .env   # then fill in HA_URL + HA_TOKEN
+python control_center/app.py
 ```
 
 This serves both ports from one process:
@@ -210,15 +210,15 @@ This serves both ports from one process:
 Instead of adding the repository URL (see **Install it** above), you can drop
 the add-on onto the machine directly:
 
-1. **Copy the `my_home/` folder** into `/addons/my_home/` on your HA machine.
+1. **Copy the `control_center/` folder** into `/addons/control_center/` on your HA machine.
    Easiest ways to get files there: the **Samba share**, **Studio Code Server**,
    or **Advanced SSH & Web Terminal** add-ons.
 2. In Home Assistant go to **Settings → Add-ons → Add-on Store**, open the
-   **⋮** menu (top-right) → **Check for updates**. "My Home" appears under
+   **⋮** menu (top-right) → **Check for updates**. "Control Center" appears under
    **Local add-ons**.
 3. Click it → **Install** (this builds the image; takes a few minutes).
 4. Open the **Configuration** tab and set `jwt_secret`. **Start** the add-on.
-5. Thanks to Ingress, **My Home** appears as its own admin tab in the Home
+5. Thanks to Ingress, **Control Center** appears as its own admin tab in the Home
    Assistant sidebar (like the Terminal / Mosquitto add-ons) - click it to open
    the **management** screen right inside HA. No separate password: HA already
    authenticated you as an admin.
@@ -243,13 +243,16 @@ Notes:
 ## Installable app (PWA)
 
 The user dashboard is a Progressive Web App. On a first visit it shows an
-**Install** banner; installing adds a "My Home" icon to the phone's home screen
+**Install** banner; installing adds a "Control Center" icon to the phone's home screen
 and runs full-screen with no browser chrome - it feels like a native app, and
 the app shell is cached so it loads instantly (and offline).
 
 - **Android / desktop Chrome:** tap **Install** in the banner (or the browser's
   install button).
 - **iOS Safari:** the banner says to use **Share → Add to Home Screen**.
+- Taps give subtle **haptic feedback** on phones that support it (iOS and Android).
+- Every screen has a **theme toggle** (top corner) for **System / Light / Dark**,
+  remembered per device.
 - ⚠️ Installing (and the service worker / offline cache) needs a **secure
   context** - i.e. `https://` or `localhost`. Over plain `http://<ip>:8099` on
   a LAN, Android won't offer install and offline won't work, though iOS
@@ -262,7 +265,9 @@ the app shell is cached so it loads instantly (and offline).
   relays state changes to each browser over a **WebSocket** (`/api/ws`), so the
   UI reflects any change (the app, a physical switch, an automation) within a
   fraction of a second - no polling. The browser reconnects and re-syncs over
-  REST automatically, so it can't go stale.
+  REST automatically, so it can't go stale; if the link drops it shows a
+  **"Connection lost. Reconnecting…"** notice with a **Retry now** button. When a
+  new version is deployed, open dashboards **reload themselves** to pick it up.
   - Behind a reverse proxy, allow the WebSocket upgrade on `/api/ws` (nginx:
     `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection upgrade;`
     - Cloudflare passes WebSockets through automatically). If you can't proxy

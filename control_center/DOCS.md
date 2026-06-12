@@ -1,4 +1,4 @@
-# My Home
+# Control Center
 
 A per-user device dashboard. Each person sees and controls **only the devices
 assigned to them** - lights, switches, fans, climate, covers, locks, media
@@ -6,7 +6,7 @@ players and more.
 
 There are two interfaces:
 
-- **Management** - the **My Home** tab in the HA sidebar (admin-only, via
+- **Management** - the **Control Center** tab in the HA sidebar (admin-only, via
   Ingress). Add/edit users and assign their devices. No separate password; HA's
   own login protects it, like the Terminal add-on.
 - **User dashboard** - published at `http://<home-assistant>:8099`. Household
@@ -15,7 +15,7 @@ There are two interfaces:
 ## Installation
 
 1. Install the add-on and click **Start**.
-2. Open the **My Home** tab in the sidebar - it goes straight to the management
+2. Open the **Control Center** tab in the sidebar - it goes straight to the management
    screen (no login).
 3. Add your household members under **Manage users** and assign each their
    devices.
@@ -40,11 +40,17 @@ in `/data`):
 - **Title** - the heading people see on the **login page** and the **dashboard**.
 - **App name** - the **browser-tab title** and the name of the **installed
   home-screen (PWA) app**. The Title falls back to this when left blank.
-- **Home icon** - an emoji used beside the title and as the browser-tab favicon.
-- **App icon** - an **uploaded image** used for the PWA / favicon (overrides the
-  emoji).
+- **Header icon** - an *optional* emoji shown beside the title. Leave it blank
+  to show the **Control Center logo** (the default).
+- **App icon** - an **uploaded image** that becomes the browser favicon and the
+  installed PWA / home-screen icon, overriding the default logo. Without an
+  upload, the built-in logo is used everywhere.
 - **Device types** - which entity domains can be assigned in **Manage users**.
 - **Sign-in methods** - Local password, OAuth, or both (see below).
+
+Each screen also has a **theme toggle** in the top corner to switch between
+**System** (default), **Light** and **Dark**. The choice is per-device and
+remembered in the browser.
 
 ## Sign-in with Google / OAuth
 
@@ -156,7 +162,7 @@ Supervisor proxy using its auto-injected token.
 
 ## Managing users
 
-The sidebar **My Home** tab opens the management screen directly - the single
+The sidebar **Control Center** tab opens the management screen directly - the single
 source of truth (saved to `/data`). Add, edit, and remove users, and tick each
 person's devices from a searchable list of your real HA entities. The system
 won't let you remove the last admin.
@@ -242,6 +248,36 @@ icon. Keep it somewhere safe (it contains passwords).
 If you uninstall and reinstall the add-on, open Settings → **Restore from
 file** and pick that JSON to bring everything back exactly as it was. Restoring
 replaces all current users, assignments and settings.
+
+## Live updates
+
+The dashboard updates in **real time** over a WebSocket: any change - from the
+app, a physical switch, or an automation - appears within a fraction of a second,
+with no refresh. If the connection drops, a **"Connection lost. Reconnecting…"**
+notice appears with a **Retry now** button; it clears itself and re-syncs once
+the connection is back. When a new version of the app is deployed, open
+dashboards **reload themselves** to pick it up - no manual refresh needed. The
+build version is shown as a small label in the corner of each screen.
+
+## Installable app (PWA)
+
+The user dashboard is a Progressive Web App. On a phone or desktop it offers an
+**Install** prompt; installing adds a **Control Center** icon to the home screen
+and runs full-screen, like a native app, with the app shell cached so it loads
+instantly (and shows the last-seen state offline).
+
+- **Android / desktop Chrome:** tap **Install** in the prompt (or the browser's
+  install button).
+- **iOS Safari:** use **Share → Add to Home Screen**.
+- Install and the offline cache need a **secure context** (`https://` or
+  `localhost`). Over plain `http://<ip>:8099` Android won't offer install, though
+  iOS "Add to Home Screen" still gives a full-screen shortcut.
+- Taps give subtle **haptic feedback** on phones that support it (iOS and
+  Android).
+
+> Changing the **App icon** after people have installed the PWA won't update an
+> icon that's already on a home screen - iOS (and some Android launchers) freeze
+> it at install time. Remove and re-add the app to pick up a new icon.
 
 ## Supported devices
 
