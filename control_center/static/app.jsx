@@ -3313,13 +3313,18 @@ function ThemeToggle() {
     }
   }, [pref]);
 
-  const NEXT = { system: 'light', light: 'dark', dark: 'system' };
+  // From System, flip to the opposite of whatever is currently shown; after that
+  // just toggle Light <-> Dark (the button no longer cycles back to System).
+  const nextPref = (p) =>
+    p === 'light' ? 'dark'
+    : p === 'dark' ? 'light'
+    : resolveTheme('system') === 'light' ? 'dark' : 'light';
   const ICON = { system: '🌗', light: '☀️', dark: '🌙' };
   const TITLE = { system: 'Theme: System', light: 'Theme: Light', dark: 'Theme: Dark' };
   return (
     <button
       className="ghost icon-only"
-      onClick={() => setPref(NEXT[pref])}
+      onClick={() => setPref(nextPref(pref))}
       title={TITLE[pref]}
       aria-label={TITLE[pref]}
     >
