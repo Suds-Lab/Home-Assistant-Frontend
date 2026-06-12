@@ -2479,7 +2479,7 @@ function BackupSettings() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'my-home-backup.json';
+      a.download = 'control-center-backup.json';
       document.body.appendChild(a);
       a.click();
       a.remove();

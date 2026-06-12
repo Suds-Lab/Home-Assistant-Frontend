@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+- Fix: the exported backup file is now named **`control-center-backup.json`** (was the old `my-home-backup.json`). Existing backup files still restore regardless of their name.
+- Fix: the default **logo** beside the title now scales with the heading, so it no longer looks too small on the larger login-page title. (Emoji header icons were already correct.)
+
 ## 2.0.0
 **Rebrand: "My Home" is now Control Center.** A new name, a new logo, and a blue theme throughout - no change to how the add-on works or to your existing setup.
 

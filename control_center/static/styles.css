@@ -625,12 +625,14 @@ section .grid {
   line-height: 1;
 }
 
-/* When the brand glyph is the logo image (the default) rather than an emoji. */
+/* When the brand glyph is the logo image (the default) rather than an emoji.
+   Sized in em so it scales with the heading it sits in (bigger on the login
+   title, smaller in the dashboard topbar) - just like an emoji would. */
 img.app-icon {
-  height: 1.4rem;
-  width: 1.4rem;
-  border-radius: 6px;
-  vertical-align: -0.22em;
+  height: 1.1em;
+  width: 1.1em;
+  border-radius: 0.2em;
+  vertical-align: -0.2em;
 }
 img.install-icon {
   width: 1.7rem;
