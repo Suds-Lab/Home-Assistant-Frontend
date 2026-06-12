@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.37.11
+- Fix: taps that disable their own button - like the **climate mode / fan / swing** buttons - now give haptic feedback too. The tick is now captured before the button disables itself (previously it was skipped because the button was already disabled by the time the haptic ran).
+
 ## 1.37.10
 - Fix: un-checking **Manager** no longer leaves **All devices** stuck on. Managers get full device access from the role itself, so the "All devices" flag is now independent - turning off Manager reveals the real all-devices choice (and we no longer store a redundant `all` on managers).
 

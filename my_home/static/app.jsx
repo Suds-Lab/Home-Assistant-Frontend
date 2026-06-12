@@ -114,12 +114,21 @@ function bindHaptics() {
   // the toggle happens inside a real click/tap (a passive pointerdown doesn't
   // count). Android's vibrate is fine here too. Sliders haptic per step via
   // their own onChange (works on Android; iOS has no per-step click).
-  document.addEventListener('click', (e) => {
-    const t = e.target;
-    if (!t || !t.closest) return;
-    const el = t.closest('button');
-    if (el && !el.disabled) haptic();
-  });
+  //
+  // Capture phase (the `true`): some buttons (climate modes, etc.) disable
+  // themselves the instant they're clicked, and a bubble-phase listener runs
+  // after React has flipped them to disabled - so it would skip the haptic. In
+  // capture we run before that, while the button is still enabled.
+  document.addEventListener(
+    'click',
+    (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const el = t.closest('button');
+      if (el && !el.disabled) haptic();
+    },
+    true
+  );
 }
 bindHaptics();
 
