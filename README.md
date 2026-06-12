@@ -1,11 +1,11 @@
-# Control Center - a simple Home Assistant companion app
+# Control Center: a simple Home Assistant companion app
 
 A small web app with a basic login that shows each person **only their own**
 lights and air conditioning, and lets them control them. It talks to your
 Home Assistant instance through a small Python backend that keeps your Home
 Assistant token private (the browser never sees it).
 
-This repo is a **Home Assistant add-on repository** - the add-on lives in the
+This repo is a **Home Assistant add-on repository**; the add-on lives in the
 `control_center/` subfolder:
 
 ```
@@ -16,11 +16,11 @@ control_center/             The add-on
   app.py               Flask backend (login + talks to Home Assistant)
   requirements.txt     Python dependencies
   users.json           Seed accounts + which entities each may control
-  static/              The web UI (React vendored locally - no build step)
+  static/              The web UI (React vendored locally, no build step)
 ```
 
-The frontend is React, but vendored locally and transformed in the browser by
-Babel - so there is **no npm and no build step** anywhere.
+The frontend is React, vendored locally and transformed in the browser by
+Babel, so there's **no npm and no build step**.
 
 ## Install it (add-on repository)
 
@@ -30,9 +30,9 @@ On Home Assistant OS / Supervised:
 2. Paste `https://github.com/Suds-Lab/Home-Assistant-Frontend` and **Add**.
 3. The **Control Center** add-on appears in the store. Open it → **Install**.
 4. **Configuration** tab: set `jwt_secret` (a long random string). **Start** the
-   add-on. (Users are *not* configured here - see step 5.)
+   add-on. (Users are *not* configured here; see step 5.)
 5. Open **Control Center** in the sidebar. A default admin **`alice` / `changeme`** is
-   created on first run - log in, change its password, and add everyone else
+   created on first run; log in, change its password, and add everyone else
    from the **Manage users** screen. Point household members at
    `http://<your-home-assistant>:8099` for their dashboard.
 
@@ -48,14 +48,14 @@ Updates then arrive as a normal **Update** button when you push new commits.
 
 ### b) Configure the backend
 Copy `.env.example` to `.env` and fill in:
-- `HA_URL` - your Home Assistant address, e.g. `http://homeassistant.local:8123`
+- `HA_URL`: your Home Assistant address, e.g. `http://homeassistant.local:8123`
   or `http://192.168.1.50:8123` (no trailing slash).
-- `HA_TOKEN` - the token you just created.
-- `JWT_SECRET` - any long random string.
+- `HA_TOKEN`: the token you just created.
+- `JWT_SECRET`: any long random string.
 
 ### c) Set up users and their devices
 
-The easiest way is the built-in **Manage users** screen (see below) - but the
+The easiest way is the built-in **Manage users** screen (see below), but the
 first admin account has to be seeded in a file. Edit [`users.json`](users.json):
 each user has a username, password, display name, an optional `admin` flag, and
 the list of **entity IDs** they're allowed to control:
@@ -76,7 +76,7 @@ Tools → States**.
 
 ### Supported device types
 
-Assign **any** entity to a user - the dashboard groups devices by type and
+Assign **any** entity to a user; the dashboard groups devices by type and
 shows controls tailored to each:
 
 | Type | Controls |
@@ -113,7 +113,7 @@ arrives on:
 | **Auth** | HA's own login (admin-only, like Terminal) | the app account you created |
 | **Does** | add/edit/delete users, assign devices | control only *their* devices |
 
-The management port (4000) is **never published** - it's reachable only through
+The management port (4000) is **never published**; it's reachable only through
 Home Assistant's Ingress, so a request there is trusted as an authenticated HA
 admin (no separate password). The user port (8099) is published for household
 members and is protected by the app's per-user login; the admin endpoints are
@@ -121,22 +121,22 @@ not available on it at all.
 
 ### Managing users (no file editing)
 
-Open the **Control Center** tab in the HA sidebar - it goes straight to the management
-screen. There you add, edit, and delete users and tick each person's devices
-from a **searchable, grouped list of all your real Home Assistant entities** -
-no typing entity IDs. Accounts are saved to a persistent store
+Open the **Control Center** tab in the HA sidebar, which goes straight to the
+management screen. There you add, edit, and delete users and tick each person's
+devices from a **searchable, grouped list of all your real Home Assistant
+entities** (no typing entity IDs). Accounts are saved to a persistent store
 (`/data/users.json` in the add-on, `users.json` standalone) and survive
 restarts. Passwords left blank on edit are kept, and the system won't let you
 remove the last admin.
 
 `users.json` is only the **initial seed** (it bootstraps a default admin on
 first run). Once the store exists, the **Manage users** screen is the single
-source of truth - users are *not* set in the add-on's Configuration tab.
+source of truth; users are *not* set in the add-on's Configuration tab.
 
 ## Sign-in with Google / OAuth
 
 The user dashboard can authenticate household members with Google (or any
-OpenID Connect provider) instead of - or alongside - a local password. The
+OpenID Connect provider) instead of, or alongside, a local password. The
 OAuth credentials live in the **add-on Configuration**; you then choose the
 sign-in methods in **Settings → Sign-in methods** (Local / Google / Both).
 
@@ -200,9 +200,9 @@ python control_center/app.py
 ```
 
 This serves both ports from one process:
-- **http://localhost:4000** - the management screen (opens directly, no login,
+- **http://localhost:4000**: the management screen (opens directly, no login,
   since this port stands in for HA's Ingress).
-- **http://localhost:8099** - the user dashboard; log in with a user from
+- **http://localhost:8099**: the user dashboard; log in with a user from
   `users.json`.
 
 ## 3. Install locally without the repository (alternative)
@@ -219,13 +219,13 @@ the add-on onto the machine directly:
 3. Click it → **Install** (this builds the image; takes a few minutes).
 4. Open the **Configuration** tab and set `jwt_secret`. **Start** the add-on.
 5. Thanks to Ingress, **Control Center** appears as its own admin tab in the Home
-   Assistant sidebar (like the Terminal / Mosquitto add-ons) - click it to open
+   Assistant sidebar (like the Terminal / Mosquitto add-ons); click it to open
    the **management** screen right inside HA. No separate password: HA already
    authenticated you as an admin.
 6. A default admin (**`alice` / `changeme`**) is seeded on first run. Use
    **Manage users** to change it and add household members + their devices.
 7. Tell each member to open **`http://<your-home-assistant>:8099`** and log in
-   with the account you created - that's their personal device dashboard. (Make
+   with the account you created; that's their personal device dashboard. (Make
    sure port 8099 is enabled in the add-on's **Network** section.)
 
 The add-on also gets a proper **Documentation** tab (from `DOCS.md`) and an
@@ -233,7 +233,7 @@ icon/logo in the store and sidebar (`icon.png` / `logo.png`).
 
 Notes:
 - Requires an install with the Supervisor (HA OS or Supervised). Plain Docker
-  (HA Container) or pip (Core) installs don't have add-ons - use the standalone
+  (HA Container) or pip (Core) installs don't have add-ons; use the standalone
   run above and a `panel_iframe:` sidebar link instead.
 - `homeassistant_api: true` in `config.yaml` grants the proxied API access; the
   app talks to `http://supervisor/core/api` with the injected `SUPERVISOR_TOKEN`.
@@ -244,7 +244,7 @@ Notes:
 
 The user dashboard is a Progressive Web App. On a first visit it shows an
 **Install** banner; installing adds a "Control Center" icon to the phone's home screen
-and runs full-screen with no browser chrome - it feels like a native app, and
+and runs full-screen with no browser chrome; it feels like a native app, and
 the app shell is cached so it loads instantly (and offline).
 
 - **Android / desktop Chrome:** tap **Install** in the banner (or the browser's
@@ -254,7 +254,7 @@ the app shell is cached so it loads instantly (and offline).
 - Every screen has a **theme toggle** (top corner) for **System / Light / Dark**,
   remembered per device.
 - ⚠️ Installing (and the service worker / offline cache) needs a **secure
-  context** - i.e. `https://` or `localhost`. Over plain `http://<ip>:8099` on
+  context**, i.e. `https://` or `localhost`. Over plain `http://<ip>:8099` on
   a LAN, Android won't offer install and offline won't work, though iOS
   "Add to Home Screen" still gives a full-screen shortcut. To get the full
   experience, serve it over HTTPS (e.g. a reverse proxy, or Home Assistant's
@@ -264,18 +264,18 @@ the app shell is cached so it loads instantly (and offline).
 - **Real-time updates.** The backend holds one WebSocket to Home Assistant and
   relays state changes to each browser over a **WebSocket** (`/api/ws`), so the
   UI reflects any change (the app, a physical switch, an automation) within a
-  fraction of a second - no polling. The browser reconnects and re-syncs over
+  fraction of a second, with no polling. The browser reconnects and re-syncs over
   REST automatically, so it can't go stale; if the link drops it shows a
   **"Connection lost. Reconnecting…"** notice with a **Retry now** button. When a
   new version is deployed, open dashboards **reload themselves** to pick it up.
   - Behind a reverse proxy, allow the WebSocket upgrade on `/api/ws` (nginx:
-    `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection upgrade;`
-    - Cloudflare passes WebSockets through automatically). If you can't proxy
+    `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection upgrade;`).
+    Cloudflare passes WebSockets through automatically. If you can't proxy
     WebSockets, set `STREAM=0` to fall back to polling.
 - The browser only ever talks to this backend. Your Home Assistant token lives
   only in `.env` (standalone) or never exists at all (add-on, via Supervisor).
 - Login issues a 7-day session token (JWT). Each request is checked against the
   user's allowed entity list, so users can't control devices that aren't theirs.
-- Passwords are stored in plain text for simplicity - keep `users.json` (or the
+- Passwords are stored in plain text for simplicity; keep `users.json` (or the
   add-on config) private. This is intended for a trusted home network. For
   internet exposure, put it behind HTTPS and consider hashed passwords.
