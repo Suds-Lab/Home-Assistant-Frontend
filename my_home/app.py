@@ -1706,9 +1706,10 @@ def admin_save_user():
     record["username"] = username  # apply rename
     record["displayName"] = body.get("displayName") or username
     record["manager"] = bool(body.get("manager"))  # can organize devices/areas in HA
-    # Managers get all devices by default (like the "All devices" option); you
-    # can still grant extra specific entities on top via the per-user list.
-    record["all"] = bool(body.get("all")) or record["manager"]
+    # Store "all" as-is. Managers already get full device access via the manager
+    # flag (see user_can_access), so we don't force all=true for them - doing so
+    # left "All devices" stuck on after un-managing someone.
+    record["all"] = bool(body.get("all"))
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
         record["password"] = password

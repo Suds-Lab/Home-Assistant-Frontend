@@ -1853,7 +1853,10 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [password, setPassword] = useState('');
   const [picked, setPicked] = useState(new Set(user?.entities || []));
-  const [all, setAll] = useState(!!user?.all);
+  // Managers get full access via the role itself, so a manager's stored "all"
+  // flag is redundant - treat it as off here so un-checking Manager reveals the
+  // real (non-manager) "All devices" choice instead of staying stuck on.
+  const [all, setAll] = useState(!!user?.all && !user?.manager);
   const [manager, setManager] = useState(!!user?.manager);
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState(null); // null = auto
@@ -1893,7 +1896,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         original: user?.username || '',
         displayName: displayName.trim(),
         password,
-        all: all || manager, // managers always get all devices
+        all, // manager already grants full access on the backend; don't force it
         manager,
         entities: [...picked],
       });
