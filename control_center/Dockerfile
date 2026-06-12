@@ -1,4 +1,4 @@
-# "My Home" Home Assistant add-on (Python / Flask).
+# "Control Center" Home Assistant add-on (Python / Flask).
 FROM python:3.12-alpine
 
 ENV PYTHONUNBUFFERED=1 \

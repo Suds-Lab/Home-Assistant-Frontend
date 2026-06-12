@@ -1,7 +1,9 @@
-# Home Assistant add-on manifest for "My Home" (Python / Flask).
+# Home Assistant add-on manifest for "Control Center" (Python / Flask).
 # Docs: https://developers.home-assistant.io/docs/add-ons/configuration
-name: Home Assistent Frontend
-version: "1.39.0"
+# NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
+# install's /data is keyed to it, so changing it would orphan existing data.
+name: Control Center
+version: "2.0.0"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -12,20 +14,20 @@ arch:
   - armhf
   - i386
 
-# The "My Home" sidebar tab (Ingress) is the ADMIN MANAGEMENT UI - manage users
-# and assign their devices. Ingress routes it through HA's own auth, and it's
-# admin-only (panel_admin defaults to true), like the Terminal add-on.
+# The "Control Center" sidebar tab (Ingress) is the ADMIN MANAGEMENT UI - manage
+# users and assign their devices. Ingress routes it through HA's own auth, and
+# it's admin-only (panel_admin defaults to true), like the Terminal add-on.
 ingress: true
 ingress_port: 4000
-panel_icon: mdi:account-cog
-panel_title: Frontend Manager
+panel_icon: mdi:tune-vertical
+panel_title: Control Center
 
 # The household-facing device dashboard is published here. Members open it at
 # http://<home-assistant>:8099 and log in with the app account an admin created.
 ports:
   8099/tcp: 8099
 ports_description:
-  8099/tcp: My Home user dashboard (per-user device control)
+  8099/tcp: Control Center user dashboard (per-user device control)
 
 # Grants a Supervisor token + proxied access to the core API at
 # http://supervisor/core/api - no long-lived token needed.

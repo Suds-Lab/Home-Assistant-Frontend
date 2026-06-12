@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.0
+**Rebrand: "My Home" is now Control Center.** A new name, a new logo, and a blue theme throughout - no change to how the add-on works or to your existing setup.
+
+- **New name everywhere it's shown.** The add-on title, browser tab, Home Assistant sidebar panel, login screen, dashboard header, install prompt, and the installed PWA all now read **Control Center**.
+- **New logo.** A custom mark (two bars, a divider with an indicator dot, and a dial arc) on a deep-navy background is now the default icon - used for the header, browser favicon, PWA/home-screen icon, maskable icon, and Apple touch icon. The icon art is rendered from a single source SVG so every size stays crisp, and the background is full-bleed so it looks right whether or not the platform crops it to a rounded shape.
+- **The header shows the logo by default.** Previously it showed a house emoji. The Settings → *Header icon* field still lets you set an emoji instead, and as before an **uploaded app icon overrides the default** everywhere. The upload/override mechanism is unchanged - only the built-in default art changed.
+- **New blue theme.** Accent `#5B8DB8`, navy surfaces and PWA theme-color `#1C3A5E`, and a `#7AB3E0` highlight, with backgrounds kept neutral. Both light and dark modes are re-themed.
+
+**Upgrading from 1.x - what to expect**
+- **All your data is preserved.** Users, passwords, device assignments, settings, and the activity log carry over untouched. The add-on's identity (its slug) is unchanged, so Home Assistant maps the same `/data` to the renamed add-on - there is nothing to migrate.
+- **Old backups still restore.** Backup files exported by 1.x versions are still accepted by the import in this version.
+- **Refresh once.** The app auto-reloads to pick up the new build; if you don't see the new branding immediately, refresh the page.
+- **PWA icon on phones:** iOS (and some Android launchers) freeze a home-screen icon at install time. To get the new logo there, remove the app from your home screen and re-add it. The in-browser favicon and in-app logo update on their own.
+
 ## 1.39.0
 - Added a **"Connection lost. Reconnecting…"** toast on the dashboard when the live connection to the add-on drops, with a **Retry now** button. It clears itself once the connection is back, and only appears after a brief grace so quick blips (or the add-on restarting during an update) don't flash it.
 

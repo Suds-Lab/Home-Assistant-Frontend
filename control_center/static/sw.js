@@ -1,9 +1,9 @@
-// Service worker for the My Home PWA.
+// Service worker for the Control Center PWA.
 //
 // NETWORK-FIRST: when online, every asset is fetched fresh from the server, so a
 // new build is *never* served stale - no cache-version bumping needed. The cache
 // is only a fallback for when the device is offline. API calls are never touched.
-const CACHE = 'myhome'; // fixed name; it's just the offline fallback store
+const CACHE = 'control-center'; // fixed name; it's just the offline fallback store
 
 self.addEventListener('install', () => {
   self.skipWaiting(); // take over as soon as the new SW is byte-different

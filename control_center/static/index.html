@@ -6,7 +6,7 @@
     <!-- Stamped by the server from config.yaml; check it to see which build is
          live. The same version cache-busts the JS/CSS below (?v=). -->
     <meta name="app-version" content="__APP_VERSION__" />
-    <title>My Home</title>
+    <title>Control Center</title>
 
     <!-- Set the theme BEFORE first paint (the React app loads via in-browser
          Babel, which is too late and causes a dark->light flash). Mirrors the
@@ -40,13 +40,14 @@
          (Cloudflare Access / Authelia / basic-auth) - the default no-credentials
          manifest fetch gets blocked there and silently breaks install. -->
     <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
-    <meta name="theme-color" content="#0f1419" />
+    <meta name="theme-color" content="#1C3A5E" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="My Home" />
+    <meta name="apple-mobile-web-app-title" content="Control Center" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-    <link rel="icon" href="./icons/icon-192.png" />
+    <link rel="icon" href="./icons/icon.svg" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
 
     <!-- React + Babel vendored locally (no npm, no build step, no CDN/internet
          needed at runtime). Babel transforms app.jsx in the browser. -->
