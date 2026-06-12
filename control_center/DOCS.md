@@ -1,22 +1,22 @@
 # Control Center
 
 A per-user device dashboard. Each person sees and controls **only the devices
-assigned to them** - lights, switches, fans, climate, covers, locks, media
+assigned to them**: lights, switches, fans, climate, covers, locks, media
 players and more.
 
 There are two interfaces:
 
-- **Management** - the **Control Center** tab in the HA sidebar (admin-only, via
+- **Management**: the **Control Center** tab in the HA sidebar (admin-only, via
   Ingress). Add/edit users and assign their devices. No separate password; HA's
   own login protects it, like the Terminal add-on.
-- **User dashboard** - published at `http://<home-assistant>:8099`. Household
+- **User dashboard**: published at `http://<home-assistant>:8099`. Household
   members open it in any browser and log in with the account you created.
 
 ## Installation
 
 1. Install the add-on and click **Start**.
-2. Open the **Control Center** tab in the sidebar - it goes straight to the management
-   screen (no login).
+2. Open the **Control Center** tab in the sidebar, which goes straight to the
+   management screen (no login).
 3. Add your household members under **Manage users** and assign each their
    devices.
 4. Send each member to `http://<your-home-assistant>:8099` to log in and
@@ -37,16 +37,16 @@ jwt_secret: a-long-random-string   # signs login sessions
 Everything else is configured live in the sidebar's **Settings** tab (stored
 in `/data`):
 
-- **Title** - the heading people see on the **login page** and the **dashboard**.
-- **App name** - the **browser-tab title** and the name of the **installed
+- **Title**: the heading people see on the **login page** and the **dashboard**.
+- **App name**: the **browser-tab title** and the name of the **installed
   home-screen (PWA) app**. The Title falls back to this when left blank.
-- **Header icon** - an *optional* emoji shown beside the title. Leave it blank
+- **Header icon**: an *optional* emoji shown beside the title. Leave it blank
   to show the **Control Center logo** (the default).
-- **App icon** - an **uploaded image** that becomes the browser favicon and the
+- **App icon**: an **uploaded image** that becomes the browser favicon and the
   installed PWA / home-screen icon, overriding the default logo. Without an
   upload, the built-in logo is used everywhere.
-- **Device types** - which entity domains can be assigned in **Manage users**.
-- **Sign-in methods** - Local password, OAuth, or both (see below).
+- **Device types**: which entity domains can be assigned in **Manage users**.
+- **Sign-in methods**: Local password, OAuth, or both (see below).
 
 Each screen also has a **theme toggle** in the top corner to switch between
 **System** (default), **Light** and **Dark**. The choice is per-device and
@@ -71,13 +71,13 @@ Your **redirect URI** is that plus `/api/oauth/callback`:
 https://home.example.com/api/oauth/callback
 ```
 
-The provider **requires** this exact URL to be registered (step 2) - it will
+The provider **requires** this exact URL to be registered (step 2); it will
 only redirect back to addresses you've whitelisted.
 
 #### Behind Cloudflare Tunnel / a reverse proxy
 
 This works without anything special. Point your tunnel's public hostname at the
-add-on's **user-dashboard port `8099`** (e.g. `service: http://<HA-IP>:8099`) -
+add-on's **user-dashboard port `8099`** (e.g. `service: http://<HA-IP>:8099`);
 the `/api/oauth/*` routes are served by that same app, so no extra route is
 needed. Set `oauth_redirect_url` to your **public HTTPS hostname**
 (`https://home.example.com`); the add-on builds the redirect from that config
@@ -88,7 +88,7 @@ nothing breaks across the tunnel.
 
 > If you also put **Cloudflare Access** (or any login gateway) in front of this
 > hostname, either drop it here and rely on this app's OAuth, or add a bypass
-> for `/api/oauth/*` - otherwise the gateway's own login page can intercept the
+> for `/api/oauth/*`; otherwise the gateway's own login page can intercept the
 > callback.
 
 ### 2. Create Google OAuth credentials
@@ -123,9 +123,10 @@ oauth_allowed_domains: ["my.domain"]             # optional; empty = any verifie
 `oauth_allowed_domains` restricts sign-in to those email domains (so only
 `*@my.domain` can get in). Leave it empty (`[]`) to allow any verified email.
 To let in a specific guest who is *outside* your domain, add their address to
-`oauth_allowed_emails: ["guest@gmail.com"]` - simpler and safer than a one-off
-exception, and you revoke it by removing the line. Restart the add-on after
-saving. (For a non-Google provider, `oauth_logo_url` sets the button's logo.)
+`oauth_allowed_emails: ["guest@gmail.com"]`. That's simpler and safer than a
+one-off exception, and you revoke it by removing the line. Restart the add-on
+after saving. (For a non-Google provider, `oauth_logo_url` sets the button's
+logo.)
 
 ### 4. Turn it on
 
@@ -142,7 +143,7 @@ at least one assigned device see the dashboard.
 
 ### Other (non-Google) providers
 
-Any OpenID Connect provider works - set the endpoints to match it:
+Any OpenID Connect provider works; set the endpoints to match it:
 
 ```yaml
 oauth_provider_name: "Authentik"
@@ -156,25 +157,25 @@ The provider must return an `email` (and ideally `email_verified`) from its
 userinfo endpoint, and you must register the same `/api/oauth/callback`
 redirect URI with it.
 
-**Users are not configured here** - manage them in the app (see below). No Home
+**Users are not configured here**; manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the
 Supervisor proxy using its auto-injected token.
 
 ## Managing users
 
-The sidebar **Control Center** tab opens the management screen directly - the single
-source of truth (saved to `/data`). Add, edit, and remove users, and tick each
-person's devices from a searchable list of your real HA entities. The system
-won't let you remove the last admin.
+The sidebar **Control Center** tab opens the management screen directly, the
+single source of truth (saved to `/data`). Add, edit, and remove users, and
+tick each person's devices from a searchable list of your real HA entities. The
+system won't let you remove the last admin.
 
 To give **one** user a device whose **type is turned off** (e.g. a single
-`switch.*`), use **Add a specific device** in their editor - it searches every
+`switch.*`), use **Add a specific device** in their editor; it searches every
 entity and assigns it to that user only. (The Settings **Included entities**
 list is the opposite: it shows entities to *everyone* and grants them to
 **All devices** users.)
 
 On first run a default admin **`alice` / `changeme`** is created so you can log
-in - change its password (and add everyone else) from the Manage users screen
+in; change its password (and add everyone else) from the Manage users screen
 right away.
 
 ### Manager role
@@ -182,33 +183,33 @@ right away.
 Tick **Manager** when editing a user to make them a manager. A manager gets an
 **Organize** button on their dashboard with two tabs:
 
-- **Devices** - a searchable list of the Home Assistant devices the app exposes
+- **Devices**: a searchable list of the Home Assistant devices the app exposes
   (those with at least one entity of an enabled type, or in the Included list),
   grouped by area. Each device has a **pencil** that opens a quick dialog to
   **rename** it and set its **area**.
-- **Areas & floors** - a Home Assistant overview-style view that lists each
+- **Areas & floors**: a Home Assistant overview-style view that lists each
   **floor** with the areas inside it. The manager can **create a new area**
   (optionally placing it on a floor), **move an area to another floor** (or to
   *No floor*), and **rename** an area. Floors themselves are created/removed in
-  Home Assistant - here they're only assigned.
+  Home Assistant; here they're only assigned.
 
 The manager role grants only these organize tools. A manager's **own device
 access** is set independently in the editor (turn on **All devices**, or pick a
-specific list) - a manager does not have to have access to everything.
+specific list); a manager does not have to have access to everything.
 
 Renaming a device or moving it (or an area) is written straight back to **Home
 Assistant's registry**, so the change shows up in HA itself and anywhere else.
-Renaming a device only sets its display name - entity IDs are left unchanged, so
+Renaming a device only sets its display name; entity IDs are left unchanged, so
 automations keep working.
 
 Managers also get an **edit pencil on each device card** on their dashboard,
-which opens the same rename + area popup without leaving the dashboard. This lets a trusted household member tidy up newly
-added devices (e.g. a fresh MQTT device that arrives Unassigned) without giving
-them Home Assistant admin access.
+which opens the same rename + area popup without leaving the dashboard. This
+lets a trusted household member tidy up newly added devices (e.g. a fresh MQTT
+device that arrives Unassigned) without giving them Home Assistant admin access.
 
 ## Activity log
 
-The **Activity** tab in the sidebar shows who controlled what, newest first -
+The **Activity** tab in the sidebar shows who controlled what, newest first;
 each entry names the real app user (e.g. "Alice set the temperature to 21°
 Bedroom AC"). This is the app's own record, stored in `/data`.
 
@@ -218,11 +219,11 @@ can only credit "Supervisor". The Activity tab is the source of truth that
 always shows the actual person. You can clear it at any time.
 
 **These logs / All.** Use the toggle at the top to switch between the app's own
-log (**These logs**) and **All** - which also pulls **Home Assistant's own
+log (**These logs**) and **All**, which also pulls **Home Assistant's own
 logbook** live for every device, so you see all device events and not just the
 ones triggered through this app. Nothing extra is stored: HA's logbook is
 fetched on demand for the visible range. The app's own changes (which HA records
-as "by system") are filtered out of the HA side so they don't show up twice -
+as "by system") are filtered out of the HA side so they don't show up twice;
 you still see them as the proper named entry from this app's log.
 
 **History graph.** Tap a device name (or filter to a single device) to open an
@@ -234,14 +235,14 @@ plain numeric sensor shows its value; on/off-style entities (locks, switches)
 fall back to a stepped chart of their state. Drag across it to zoom in;
 double-click to reset.
 
-> Note: a climate device is a single entity - its target and current
-> temperature are *attributes* of it, not separate entities - so both appear on
-> the one device's graph rather than as two devices.
+> Note: a climate device is a single entity (its target and current temperature
+> are *attributes* of it, not separate entities), so both appear on the one
+> device's graph rather than as two devices.
 
 ## Backup & restore
 
 The **Settings** tab has a **Backup & restore** card. **Export** downloads a
-single JSON file containing everything in `/data` - users, passwords, each
+single JSON file containing everything in `/data`: users, passwords, each
 user's device assignments, all settings, the activity log and the uploaded app
 icon. Keep it somewhere safe (it contains passwords).
 
@@ -251,12 +252,12 @@ replaces all current users, assignments and settings.
 
 ## Live updates
 
-The dashboard updates in **real time** over a WebSocket: any change - from the
-app, a physical switch, or an automation - appears within a fraction of a second,
+The dashboard updates in **real time** over a WebSocket: any change (from the
+app, a physical switch, or an automation) appears within a fraction of a second,
 with no refresh. If the connection drops, a **"Connection lost. Reconnecting…"**
 notice appears with a **Retry now** button; it clears itself and re-syncs once
 the connection is back. When a new version of the app is deployed, open
-dashboards **reload themselves** to pick it up - no manual refresh needed. The
+dashboards **reload themselves** to pick it up; no manual refresh needed. The
 build version is shown as a small label in the corner of each screen.
 
 ## Installable app (PWA)
@@ -276,8 +277,8 @@ instantly (and shows the last-seen state offline).
   Android).
 
 > Changing the **App icon** after people have installed the PWA won't update an
-> icon that's already on a home screen - iOS (and some Android launchers) freeze
-> it at install time. Remove and re-add the app to pick up a new icon.
+> icon that's already on a home screen, because iOS (and some Android launchers)
+> freeze it at install time. Remove and re-add the app to pick up a new icon.
 
 ## Supported devices
 
@@ -291,5 +292,5 @@ state and attributes.
 
 - Access is enforced server-side: users can only control entities assigned to
   them, and only through a fixed allow-list of services.
-- Passwords are stored in plain text in the user store - keep it private. This
+- Passwords are stored in plain text in the user store; keep it private. This
   is intended for a trusted home network.
