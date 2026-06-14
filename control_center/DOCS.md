@@ -305,6 +305,16 @@ state and attributes.
 - Passwords are stored **hashed** (PBKDF2-HMAC-SHA256 with a per-password salt);
   the store never holds plaintext, and any legacy plaintext is upgraded to a
   hash automatically. Keep the store private regardless.
-- **Login is rate-limited** (per username + IP) to slow brute-force attempts.
+- **Login is rate-limited** per username to slow brute-force attempts (the
+  spoofable client `X-Forwarded-For` is ignored), with constant-time password
+  checks that don't reveal whether a username exists.
 - The session-signing secret is auto-generated and persisted on first run unless
   you set `jwt_secret`; rotate it from **Settings - Session security**.
+- **Device IDs and time ranges are validated** before any Home Assistant call, so
+  a logged-in user can't smuggle a path into the HA API.
+- Responses send `X-Content-Type-Options: nosniff`. Set `block_iframe_embedding:
+  true` to also send `X-Frame-Options: DENY` on the user dashboard
+  (anti-clickjacking); off by default so it won't break a `panel_iframe` embed,
+  and the management UI is always exempt.
+- Standalone only: the management port binds to `127.0.0.1` by default
+  (`INGRESS_BIND=0.0.0.0` to override). The add-on keeps it behind Ingress.

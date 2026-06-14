@@ -17,6 +17,7 @@ import hmac
 import json
 import mimetypes
 import os
+import re
 import secrets
 import threading
 import time
@@ -143,6 +144,11 @@ def _opt_bool(key):
 # unless the admin explicitly opts into "anyone with a verified email" here.
 OAUTH_ALLOW_ANY = _opt_bool("oauth_allow_any")
 
+# Opt-in clickjacking protection: send X-Frame-Options: DENY on the user
+# dashboard. Off by default so it never breaks a panel_iframe embed; the
+# management UI (which runs inside HA's Ingress iframe) is always exempt.
+BLOCK_IFRAME = _opt_bool("block_iframe_embedding")
+
 
 def oauth_configured():
     return bool(OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET and OAUTH_REDIRECT_BASE)
@@ -159,6 +165,10 @@ def oauth_is_google():
 #    and protected by the app's own per-user login.
 INGRESS_PORT = int(os.environ.get("INGRESS_PORT") or os.environ.get("PORT") or 4000)
 USER_PORT = int(os.environ.get("USER_PORT") or 8099)
+# Standalone only: which interface the (unauthenticated, port-trusted) management
+# port binds to. Defaults to localhost so it isn't exposed on the LAN; set
+# INGRESS_BIND=0.0.0.0 to opt back in. The add-on uses gunicorn, not this path.
+INGRESS_BIND = os.environ.get("INGRESS_BIND", "127.0.0.1")
 
 # Real-time push (SSE) is on by default. Set STREAM=0 to make the dashboard
 # poll instead - useful for local preview tools that wait for network-idle
@@ -492,9 +502,11 @@ def ha_request(path, method="GET", payload=None):
             timeout=15,
         )
     except requests.RequestException as err:
-        raise ApiError(f"Could not reach Home Assistant: {err}", 502)
+        print(f"HA connection error for {method} {path}: {err}")
+        raise ApiError("Couldn't reach Home Assistant.", 502)
     if not res.ok:
-        raise ApiError(f"HA request failed ({res.status_code}): {res.text}", 502)
+        print(f"HA request failed ({res.status_code}) for {method} {path}: {res.text[:500]}")
+        raise ApiError("Couldn't reach Home Assistant. Check the add-on logs for details.", 502)
     # Some service calls return an empty body.
     return res.json() if res.text else None
 
@@ -580,8 +592,26 @@ def user_can_access(user, entity_id):
     return False
 
 
+_ENTITY_ID_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+_SAFE_TS_RE = re.compile(r"^[0-9T:.+\- Zz]+$")
+
+
+def valid_entity_id(entity_id):
+    """A real HA entity id is `domain.object_id`, lowercase a-z/0-9/_ only.
+    Reject anything else so it can't be smuggled into an HA API URL (e.g.
+    `light.x/../../config` traversing out of /api/states/)."""
+    return isinstance(entity_id, str) and bool(_ENTITY_ID_RE.match(entity_id))
+
+
+def _safe_ts(s):
+    """Accept only timestamp-ish characters (ISO 8601 / epoch); never a path."""
+    return isinstance(s, str) and bool(_SAFE_TS_RE.match(s)) and ".." not in s
+
+
 def assert_owned(user, entity_id):
     """Reject any entity the logged-in user is not allowed to see/control."""
+    if not valid_entity_id(entity_id):
+        raise ApiError("Invalid entity id", 400)
     if not user_can_access(user, entity_id):
         raise ApiError("You do not have access to that device", 403)
 
@@ -594,31 +624,46 @@ def _issue_token(user):
     )
 
 
-# Simple in-memory brute-force throttle. One gunicorn worker, so a module-level
-# dict shared across threads is enough; nothing persists across a restart.
+# Simple in-memory brute-force throttle, keyed by USERNAME only. One gunicorn
+# worker, so a module-level dict shared across threads is enough; nothing
+# persists across a restart. We deliberately do NOT key on the client IP: the
+# X-Forwarded-For header is spoofable (a rotating value would bypass the limit),
+# and the real peer IP behind a shared proxy/tunnel is identical for everyone
+# (so per-IP would lock all users out at once). Username keying needs no IP and
+# can't be defeated by a header.
 _LOGIN_FAILS = {}
 _LOGIN_LOCK = threading.Lock()
 _LOGIN_MAX_FAILS = 8
 _LOGIN_WINDOW = 300  # seconds; failures older than this are forgotten
+_LOGIN_MAX_KEYS = 5000  # cap the dict so spamming random usernames can't exhaust memory
+# A throwaway hash so a missing user still costs one PBKDF2 verify (constant-time
+# login: the response doesn't reveal whether the username exists).
+_DUMMY_PW_HASH = hash_password("\x00 no-such-user \x00")
 
 
 def _login_key(username):
-    fwd = request.headers.get("X-Forwarded-For", "")
-    ip = fwd.split(",")[0].strip() if fwd else (request.remote_addr or "?")
-    return f"{(username or '').lower()}|{ip}"
+    return (username or "").strip().lower() or "?"
 
 
 def _login_blocked(key):
     now = time.time()
     with _LOGIN_LOCK:
         fails = [t for t in _LOGIN_FAILS.get(key, []) if now - t < _LOGIN_WINDOW]
-        _LOGIN_FAILS[key] = fails
+        if fails:
+            _LOGIN_FAILS[key] = fails
+        else:
+            _LOGIN_FAILS.pop(key, None)
         return len(fails) >= _LOGIN_MAX_FAILS
 
 
 def _login_note_fail(key):
+    now = time.time()
     with _LOGIN_LOCK:
-        _LOGIN_FAILS.setdefault(key, []).append(time.time())
+        _LOGIN_FAILS.setdefault(key, []).append(now)
+        if len(_LOGIN_FAILS) > _LOGIN_MAX_KEYS:  # sweep keys whose fails all expired
+            for k in [k for k, v in list(_LOGIN_FAILS.items())
+                      if not any(now - t < _LOGIN_WINDOW for t in v)]:
+                _LOGIN_FAILS.pop(k, None)
 
 
 def _login_clear(key):
@@ -637,7 +682,10 @@ def login():
     if _login_blocked(key):
         raise ApiError("Too many attempts. Please wait a few minutes and try again.", 429)
     user = next((u for u in load_users() if u["username"] == username), None)
-    if not user or not verify_password(user.get("password"), password):
+    # Always run a hash check (a dummy when the user is missing) so the response
+    # time doesn't reveal whether the username exists.
+    stored = user.get("password") if user else _DUMMY_PW_HASH
+    if not verify_password(stored, password) or not user:
         _login_note_fail(key)
         raise ApiError("Invalid username or password", 401)
     _login_clear(key)
@@ -1621,6 +1669,10 @@ def admin_ha_logbook():
     entity = request.args.get("entity")
     if not start:
         raise ApiError("start is required", 400)
+    if not _safe_ts(start) or (end and not _safe_ts(end)):
+        raise ApiError("Invalid time range", 400)
+    if entity and not valid_entity_id(entity):
+        raise ApiError("Invalid entity id", 400)
     path = f"/api/logbook/{quote(start)}"
     qs = []
     if end:
@@ -1713,6 +1765,10 @@ def admin_ha_history():
     start, end = request.args.get("start"), request.args.get("end")
     if not entity or not start:
         raise ApiError("entity and start are required", 400)
+    if not valid_entity_id(entity):
+        raise ApiError("Invalid entity id", 400)
+    if not _safe_ts(start) or (end and not _safe_ts(end)):
+        raise ApiError("Invalid time range", 400)
     domain = entity.split(".")[0]
     # NOTE: no minimal_response - we need each snapshot's attributes over time.
     path = f"/api/history/period/{quote(start)}?filter_entity_id={quote(entity)}"
@@ -2022,6 +2078,18 @@ def static_files(filename):
 ensure_realtime()
 
 
+@app.after_request
+def _security_headers(resp):
+    """Defense-in-depth headers. nosniff everywhere; deny framing only on the
+    published user dashboard (NOT the Ingress/management port, which must stay
+    framable inside Home Assistant). Framing-deny is opt-in so it can't break a
+    panel_iframe embed."""
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if BLOCK_IFRAME and not is_management():
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+    return resp
+
+
 if __name__ == "__main__":
     # Dev: serve both ports so each mode is reachable. In the add-on, gunicorn
     # binds both (see Dockerfile). threaded=True so SSE streams don't block.
@@ -2030,6 +2098,6 @@ if __name__ == "__main__":
     user_srv = make_server("0.0.0.0", USER_PORT, app, threaded=True)
     threading.Thread(target=user_srv.serve_forever, daemon=True).start()
     print(f"Control Center -> HA at {HA_URL}")
-    print(f"  management (Ingress): http://0.0.0.0:{INGRESS_PORT}")
+    print(f"  management (admin):   http://{INGRESS_BIND}:{INGRESS_PORT}")
     print(f"  user dashboard:       http://0.0.0.0:{USER_PORT}")
-    make_server("0.0.0.0", INGRESS_PORT, app, threaded=True).serve_forever()
+    make_server(INGRESS_BIND, INGRESS_PORT, app, threaded=True).serve_forever()

@@ -212,6 +212,11 @@ This serves both ports from one process:
 - **http://localhost:8099**: the user dashboard; log in with a user from
   `users.json`.
 
+The management port (4000) binds to **`127.0.0.1`** by default, so the no-login
+admin screen isn't exposed on your LAN. To reach it from another machine, set
+`INGRESS_BIND=0.0.0.0`, but firewall it, since anything that reaches port 4000 is
+trusted as admin.
+
 ## 3. Install locally without the repository (alternative)
 
 Instead of adding the repository URL (see **Install it** above), you can drop
@@ -289,8 +294,16 @@ the app shell is cached so it loads instantly (and offline).
   upgraded to a hash automatically (on upgrade and on first login). Keep
   `users.json` private regardless, and put the dashboard behind HTTPS for any
   internet exposure.
-- **Login is rate-limited** per username + IP to slow brute-force attempts.
+- **Login is rate-limited** per username to slow brute-force attempts (it ignores
+  the client `X-Forwarded-For`, which can be spoofed), with constant-time password
+  checks that don't reveal whether a username exists.
 - The session-signing secret (`jwt_secret`) is **auto-generated and persisted on
   first run** when you don't set one, so sessions are never signed with a
   guessable default. Rotate it anytime from **Settings → Session security**
   (which signs everyone out).
+- **Device IDs and time ranges are validated** before any call to Home Assistant,
+  so a logged-in user can't smuggle a path into the HA API.
+- Responses send **`X-Content-Type-Options: nosniff`**. Set
+  `block_iframe_embedding: true` to also send `X-Frame-Options: DENY` on the user
+  dashboard (anti-clickjacking); it's off by default so it never breaks a
+  `panel_iframe` embed, and the management UI is always exempt.
