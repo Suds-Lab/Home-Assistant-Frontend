@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1
+- Integration badges now use Home Assistant's **real integration name** (from its manifest), so acronyms and special casing stay correct instead of being naively derived from the domain.
+- Badges now also show logos for **some custom / HACS integrations** (those that publish brand art): the badge tries the core brand path, then the custom-integration path, and falls back to text if neither has an image.
+
 ## 2.2.0
 - The manager's **device organizer** now shows each device's **integration** as a small brand badge (logo + name, e.g. Shelly, MQTT, TP-Link), pulled from Home Assistant's brand icons and falling back to just the name when a logo isn't available.
 - In the organizer, **tapping anywhere on a device card** now opens its edit dialog (the separate pencil is gone) for a bigger, easier target, especially on mobile. A hint at the top makes it clear.

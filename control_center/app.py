@@ -952,6 +952,7 @@ def manager_devices():
     reg = ha_registries()
     floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
     area_by_id = {a["area_id"]: a for a in reg.get("areas", [])}
+    integrations = reg.get("integrations", {})  # platform domain -> friendly name
     # Friendly names for a device's entities (from current states).
     names = {}
     try:
@@ -981,6 +982,12 @@ def manager_devices():
         aid = d.get("area_id")
         area = area_by_id.get(aid)
         ents = sorted(ents_by_dev.get(d["id"], []))
+        # The integration (HA platform) that provides this device, e.g.
+        # "shelly"/"mqtt"/"hue" - used for the brand badge. Pick the most common
+        # platform across the device's entities; pair it with the friendly
+        # manifest name so acronyms and special casing aren't mangled.
+        counts = plat_by_dev.get(d["id"])
+        integ = max(counts, key=counts.get) if counts else None
         devices.append({
             "id": d["id"],
             "name": d.get("name_by_user") or d.get("name") or "Unnamed device",
@@ -989,11 +996,8 @@ def manager_devices():
             "area_id": aid,
             "area": area.get("name") if area else None,
             "floor": floors.get(area.get("floor_id")) if area else None,
-            # The integration (HA platform) that provides this device, e.g.
-            # "shelly"/"mqtt"/"tplink" - used for the brand badge. Pick the most
-            # common platform across the device's entities.
-            "integration": (max(plat_by_dev[d["id"]], key=plat_by_dev[d["id"]].get)
-                            if plat_by_dev.get(d["id"]) else None),
+            "integration": integ,
+            "integration_name": integrations.get(integ) if integ else None,
             "entities": ents,
         })
     devices.sort(key=lambda x: (x["area"] or "￿", x["name"].lower()))
@@ -1421,6 +1425,7 @@ def ha_registries():
             2: "config/area_registry/list",
             3: "config/entity_registry/list",
             4: "config/device_registry/list",
+            5: "manifest/list",  # integration domain -> friendly name (incl. custom)
         }
         for i, t in cmds.items():
             ws.send(json.dumps({"id": i, "type": t}))
@@ -1429,7 +1434,11 @@ def ha_registries():
             msg = json.loads(ws.recv())
             if msg.get("type") == "result" and msg.get("id") in cmds:
                 got[msg["id"]] = msg.get("result") or []
-        return {"floors": got[1], "areas": got[2], "entities": got[3], "devices": got[4]}
+        return {
+            "floors": got[1], "areas": got[2], "entities": got[3], "devices": got[4],
+            "integrations": {m.get("domain"): m.get("name")
+                             for m in (got.get(5) or []) if m.get("domain") and m.get("name")},
+        }
     except Exception:  # noqa: BLE001
         return {}
     finally:

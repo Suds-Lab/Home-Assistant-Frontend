@@ -1077,22 +1077,29 @@ function prettyIntegration(dom) {
 
 // Brand badge: the integration's logo (from HA's brands CDN) + name. Falls back
 // to just the name if the brand has no logo. Shown on manager device rows.
-function IntegrationBadge({ domain }) {
-  const [logoOk, setLogoOk] = useState(true);
+function IntegrationBadge({ domain, name }) {
+  // Try the core brands path, then the custom-integration path (/_/<domain>/),
+  // then fall back to text. Many HACS/custom integrations ship their logo under
+  // the custom path, not the core one.
+  const [stage, setStage] = useState(0);
   if (!domain) return null;
-  const name = prettyIntegration(domain);
+  const label = name || prettyIntegration(domain);
+  const url =
+    stage === 0
+      ? `https://brands.home-assistant.io/${domain}/icon.png`
+      : `https://brands.home-assistant.io/_/${domain}/icon.png`;
   return (
-    <span className="int-badge" title={name}>
-      {logoOk && (
+    <span className="int-badge" title={label}>
+      {stage < 2 && (
         <img
           className="int-logo"
-          src={`https://brands.home-assistant.io/${domain}/icon.png`}
+          src={url}
           alt=""
           loading="lazy"
-          onError={() => setLogoOk(false)}
+          onError={() => setStage((s) => s + 1)}
         />
       )}
-      <span>{name}</span>
+      <span>{label}</span>
     </span>
   );
 }
@@ -1196,7 +1203,7 @@ function Organizer() {
                       : ''}
                   </span>
                 </div>
-                <IntegrationBadge domain={dev.integration} />
+                <IntegrationBadge domain={dev.integration} name={dev.integration_name} />
               </button>
             ))}
           </section>
