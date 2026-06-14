@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.1
+More security hardening from a follow-up audit. All server-side, no UI changes, automatic on update.
+
+- **Login throttle now keys on the username**, not the client IP. The old per-IP key trusted the `X-Forwarded-For` header, which is spoofable (a rotating value bypassed the limit) and is shared behind a proxy/tunnel (which could lock everyone out at once). The counter is also memory-bounded.
+- **Login is constant-time**: an unknown username now runs the same hash check as a real one, so response timing no longer reveals which usernames exist.
+- **Device IDs and time ranges are validated** before any Home Assistant API call, closing an authenticated path-traversal into HA's API available to `all`/`manager` users.
+- **Generic upstream errors**: Home Assistant's raw error text is no longer reflected to clients (it's logged server-side instead).
+- **Security headers**: `X-Content-Type-Options: nosniff` on every response; set `block_iframe_embedding: true` to also send `X-Frame-Options: DENY` on the user dashboard (anti-clickjacking). It's off by default so it never breaks a `panel_iframe` embed, and it's never applied to the Ingress/management UI.
+- **Standalone hardening**: the no-login management port now binds to `127.0.0.1` by default (`INGRESS_BIND=0.0.0.0` to override). The add-on is unaffected (it stays behind Ingress).
+
 ## 2.1.0
 Security hardening (recommended before exposing the dashboard to the internet). Everything below is automatic on update - no data loss, and no one is locked out.
 
