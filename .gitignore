@@ -18,6 +18,7 @@ control_center/settings.json
 control_center/activity.json
 control_center/app-icon.*
 control_center/mdi-icons.json
+control_center/.jwt_secret
 
 # Misc
 *.log

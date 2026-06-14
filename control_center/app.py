@@ -12,6 +12,8 @@ Runs two ways:
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import mimetypes
 import os
@@ -80,11 +82,9 @@ HA_URL = (
     or ("http://supervisor/core" if SUPERVISOR_TOKEN else "")
 ).rstrip("/")
 HA_TOKEN = os.environ.get("HA_TOKEN") or SUPERVISOR_TOKEN
-JWT_SECRET = (
-    addon_options.get("jwt_secret")
-    or os.environ.get("JWT_SECRET")
-    or "dev-secret-change-me"
-)
+# JWT_SECRET is resolved below (after the /data paths are known): an explicitly
+# configured secret wins, otherwise a random one is generated and persisted to
+# /data so we never sign sessions with a guessable default.
 # Display name + icon shown in the UI / browser tab. Configurable.
 APP_NAME = addon_options.get("app_name") or os.environ.get("APP_NAME") or "Control Center"
 APP_ICON = addon_options.get("app_icon") or os.environ.get("APP_ICON") or ""
@@ -130,6 +130,18 @@ OAUTH_ALLOWED_DOMAINS = [d.lower().lstrip("@") for d in _opt_list("oauth_allowed
 # Always-allowed individual emails, even outside the allowed domains. A simple,
 # revocable way to let a specific guest in without widening the domain rule.
 OAUTH_ALLOWED_EMAILS = [e.lower() for e in _opt_list("oauth_allowed_emails")]
+
+
+def _opt_bool(key):
+    v = addon_options.get(key)
+    if v is None:
+        v = os.environ.get(key.upper())
+    return str(v).strip().lower() in ("true", "1", "yes", "on")
+
+
+# Fail closed: with no domain/email allow-list set, OAuth sign-in is refused
+# unless the admin explicitly opts into "anyone with a verified email" here.
+OAUTH_ALLOW_ANY = _opt_bool("oauth_allow_any")
 
 
 def oauth_configured():
@@ -180,6 +192,54 @@ ICON_DIR = STORE_FILE.parent
 SETTINGS_FILE = ICON_DIR / "settings.json"
 ACTIVITY_FILE = ICON_DIR / "activity.json"
 ACTIVITY_MAX = 1000  # keep the most recent N actions
+
+# --- Session-signing secret ---------------------------------------------
+# An explicitly configured secret (add-on option or JWT_SECRET env) always
+# wins. Otherwise we generate a random secret once and persist it to /data, so
+# an install that never set one is NOT signing sessions with the guessable
+# default shipped in config.yaml (which would let anyone forge a session).
+JWT_SECRET_FILE = ICON_DIR / ".jwt_secret"
+_KNOWN_DEFAULT_SECRETS = {
+    "change-me-to-a-long-random-string",
+    "dev-secret-change-me",
+    "change-me",
+}
+
+
+def _resolve_jwt_secret():
+    explicit = addon_options.get("jwt_secret") or os.environ.get("JWT_SECRET")
+    if explicit and explicit not in _KNOWN_DEFAULT_SECRETS:
+        return explicit, "config"
+    try:
+        existing = JWT_SECRET_FILE.read_text().strip()
+        if existing:
+            return existing, "managed"
+    except OSError:
+        pass
+    generated = secrets.token_urlsafe(48)
+    try:
+        JWT_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        JWT_SECRET_FILE.write_text(generated)
+    except OSError:
+        pass  # in-memory fallback: still safe, just won't survive a restart
+    return generated, "managed"
+
+
+JWT_SECRET, JWT_SECRET_SOURCE = _resolve_jwt_secret()
+
+
+def regenerate_jwt_secret():
+    """Rotate the managed secret (invalidates all sessions). No-op when the
+    secret is pinned via config/env."""
+    global JWT_SECRET, JWT_SECRET_SOURCE
+    if JWT_SECRET_SOURCE == "config":
+        return False
+    new_secret = secrets.token_urlsafe(48)
+    JWT_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    JWT_SECRET_FILE.write_text(new_secret)
+    JWT_SECRET = new_secret
+    JWT_SECRET_SOURCE = "managed"
+    return True
 
 
 # Settings are read on hot paths (including the live-broadcast access check, once
@@ -360,6 +420,62 @@ def load_users():
     return json.loads(STORE_FILE.read_text())["users"]
 
 
+# --- Passwords -----------------------------------------------------------
+# Stored hashed with PBKDF2-HMAC-SHA256 (stdlib - no extra dependency). Legacy
+# plaintext passwords (pre-2.1, or restored from an old backup) are still
+# accepted and transparently upgraded to a hash, so an upgrade never locks
+# anyone out. Format: pbkdf2_sha256$<rounds>$<salt_hex>$<hash_hex>.
+_PBKDF2_ROUNDS = 200_000
+
+
+def hash_password(pw):
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    return f"pbkdf2_sha256${_PBKDF2_ROUNDS}${salt.hex()}${dk.hex()}"
+
+
+def _is_hashed(stored):
+    return isinstance(stored, str) and stored.startswith("pbkdf2_sha256$")
+
+
+def verify_password(stored, pw):
+    if not stored or pw is None:
+        return False
+    if _is_hashed(stored):
+        try:
+            _, rounds, salt_hex, hash_hex = stored.split("$", 3)
+            dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), bytes.fromhex(salt_hex), int(rounds))
+        except (ValueError, TypeError):
+            return False
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    return hmac.compare_digest(str(stored), str(pw))  # legacy plaintext
+
+
+def _migrate_passwords(users):
+    """Hash any legacy plaintext passwords in place. Returns True if changed."""
+    changed = False
+    for u in users:
+        pw = u.get("password")
+        if isinstance(pw, str) and pw and not _is_hashed(pw):
+            u["password"] = hash_password(pw)
+            changed = True
+    return changed
+
+
+def _migrate_store_passwords():
+    """One-time on boot: hash any plaintext passwords already on disk (after an
+    upgrade or a restored old backup) so plaintext never lingers in the store."""
+    try:
+        users = load_users()
+    except (OSError, ValueError):
+        return
+    if _migrate_passwords(users):
+        save_users(users)
+
+
+_migrate_store_passwords()
+
+
 # --- Home Assistant helpers ----------------------------------------------
 
 
@@ -478,6 +594,38 @@ def _issue_token(user):
     )
 
 
+# Simple in-memory brute-force throttle. One gunicorn worker, so a module-level
+# dict shared across threads is enough; nothing persists across a restart.
+_LOGIN_FAILS = {}
+_LOGIN_LOCK = threading.Lock()
+_LOGIN_MAX_FAILS = 8
+_LOGIN_WINDOW = 300  # seconds; failures older than this are forgotten
+
+
+def _login_key(username):
+    fwd = request.headers.get("X-Forwarded-For", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.remote_addr or "?")
+    return f"{(username or '').lower()}|{ip}"
+
+
+def _login_blocked(key):
+    now = time.time()
+    with _LOGIN_LOCK:
+        fails = [t for t in _LOGIN_FAILS.get(key, []) if now - t < _LOGIN_WINDOW]
+        _LOGIN_FAILS[key] = fails
+        return len(fails) >= _LOGIN_MAX_FAILS
+
+
+def _login_note_fail(key):
+    with _LOGIN_LOCK:
+        _LOGIN_FAILS.setdefault(key, []).append(time.time())
+
+
+def _login_clear(key):
+    with _LOGIN_LOCK:
+        _LOGIN_FAILS.pop(key, None)
+
+
 @app.post("/api/login")
 def login():
     if not cfg_providers()["local"]:
@@ -485,9 +633,21 @@ def login():
     body = request.get_json(silent=True) or {}
     username = body.get("username")
     password = body.get("password")
+    key = _login_key(username)
+    if _login_blocked(key):
+        raise ApiError("Too many attempts. Please wait a few minutes and try again.", 429)
     user = next((u for u in load_users() if u["username"] == username), None)
-    if not user or not user.get("password") or user.get("password") != password:
+    if not user or not verify_password(user.get("password"), password):
+        _login_note_fail(key)
         raise ApiError("Invalid username or password", 401)
+    _login_clear(key)
+    # Lazy upgrade: if this account still had a plaintext password, hash it now.
+    if not _is_hashed(user.get("password")):
+        users = load_users()
+        for u in users:
+            if u["username"] == user["username"]:
+                u["password"] = hash_password(password)
+        save_users(users)
     return jsonify(
         token=_issue_token(user),
         displayName=user.get("displayName") or user["username"],
@@ -533,9 +693,9 @@ def _oauth_redirect_uri():
 
 
 def _email_allowed(email):
-    # No restriction configured -> any verified email is allowed.
+    # No allow-list configured -> refuse unless the admin opted into allow-any.
     if not OAUTH_ALLOWED_DOMAINS and not OAUTH_ALLOWED_EMAILS:
-        return True
+        return OAUTH_ALLOW_ANY
     email = email.lower()
     domain = email.rsplit("@", 1)[-1] if "@" in email else ""
     return domain in OAUTH_ALLOWED_DOMAINS or email in OAUTH_ALLOWED_EMAILS
@@ -585,9 +745,12 @@ def _oauth_error_page(message):
 def oauth_login():
     if not oauth_configured():
         return _oauth_error_page("OAuth is not configured on this server.")
-    # Stateless CSRF token: a short-lived signed value echoed back as `state`.
+    # CSRF: a short-lived signed `state` bound to a matching HttpOnly cookie, so
+    # only the browser that started the flow can complete it (stops an attacker
+    # pre-minting a state and logging a victim into the attacker's account).
+    nonce = secrets.token_urlsafe(16)
     state = jwt.encode(
-        {"n": secrets.token_urlsafe(8), "exp": int(time.time()) + 600},
+        {"n": nonce, "exp": int(time.time()) + 600},
         JWT_SECRET,
         algorithm="HS256",
     )
@@ -602,7 +765,12 @@ def oauth_login():
     }
     if len(OAUTH_ALLOWED_DOMAINS) == 1:
         params["hd"] = OAUTH_ALLOWED_DOMAINS[0]  # Google domain hint
-    return redirect(f"{OAUTH_AUTHORIZE_URL}?{urlencode(params)}")
+    resp = redirect(f"{OAUTH_AUTHORIZE_URL}?{urlencode(params)}")
+    resp.set_cookie(
+        "cc_oauth_state", nonce, max_age=600, httponly=True,
+        secure=True, samesite="Lax", path="/api/oauth/",
+    )
+    return resp
 
 
 @app.get("/api/oauth/callback")
@@ -614,9 +782,12 @@ def oauth_callback():
     code = request.args.get("code")
     state = request.args.get("state")
     try:
-        jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
+        claims = jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         return _oauth_error_page("This sign-in link expired. Please try again.")
+    cookie_nonce = request.cookies.get("cc_oauth_state") or ""
+    if not cookie_nonce or not hmac.compare_digest(cookie_nonce, claims.get("n") or ""):
+        return _oauth_error_page("This sign-in couldn't be verified. Please start again.")
     if not code:
         return _oauth_error_page("No authorization code was returned.")
 
@@ -648,16 +819,26 @@ def oauth_callback():
     email = (profile.get("email") or "").strip()
     if not email:
         return _oauth_error_page("The provider did not return an email address.")
-    if profile.get("email_verified") is False:
-        return _oauth_error_page("Your email address is not verified.")
+    if not profile.get("email_verified"):
+        return _oauth_error_page("Your email address is not verified by the provider.")
     if not _email_allowed(email):
+        if not OAUTH_ALLOWED_DOMAINS and not OAUTH_ALLOWED_EMAILS and not OAUTH_ALLOW_ANY:
+            print("OAuth sign-in refused: enabled but no allowed emails/domains are "
+                  "configured (set oauth_allowed_emails / oauth_allowed_domains, or "
+                  "oauth_allow_any: true).")
+            return _oauth_error_page(
+                "Sign-in isn't configured: no allowed emails or domains are set. "
+                "Ask your administrator."
+            )
         return _oauth_error_page("Your account isn't allowed to use this app.")
 
     user = _user_for_email(email, profile.get("name"))
     # Hand the session token + display name to the SPA via the URL fragment
     # (never sent to a server or written to logs); it stores and strips them.
     frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
-    return redirect(f"{OAUTH_REDIRECT_BASE}/#{frag}")
+    resp = redirect(f"{OAUTH_REDIRECT_BASE}/#{frag}")
+    resp.delete_cookie("cc_oauth_state", path="/api/oauth/")
+    return resp
 
 
 # --- Device routes -------------------------------------------------------
@@ -1318,6 +1499,13 @@ def admin_get_settings():
         authProviders=(_load_settings().get("auth_providers") or "local"),
         oauthConfigured=oauth_configured(),
         oauthName=OAUTH_PROVIDER_NAME,
+        oauthOpenWarning=bool(
+            oauth_configured()
+            and not OAUTH_ALLOWED_DOMAINS
+            and not OAUTH_ALLOWED_EMAILS
+            and not OAUTH_ALLOW_ANY
+        ),
+        secretSource=JWT_SECRET_SOURCE,
         includedEntities=sorted(included_entities()),
     )
 
@@ -1335,6 +1523,16 @@ def admin_set_settings():
     if isinstance(body.get("includedEntities"), list):
         s["included_entities"] = [e for e in body["includedEntities"] if isinstance(e, str)]
     _save_settings(s)
+    return jsonify(ok=True)
+
+
+@app.post("/api/admin/regenerate-secret")
+def admin_regenerate_secret():
+    """Rotate the session-signing secret (logs everyone out). No-op when the
+    secret is pinned via add-on config / env."""
+    require_admin()
+    if not regenerate_jwt_secret():
+        raise ApiError("The session secret is set via add-on configuration; change it there.", 400)
     return jsonify(ok=True)
 
 
@@ -1602,7 +1800,7 @@ def admin_export():
         except OSError:
             pass
     resp = Response(json.dumps(data, indent=2), mimetype="application/json")
-    resp.headers["Content-Disposition"] = 'attachment; filename="my-home-backup.json"'
+    resp.headers["Content-Disposition"] = 'attachment; filename="control-center-backup.json"'
     return resp
 
 
@@ -1626,6 +1824,7 @@ def admin_import():
         raise ApiError("The backup contains no valid users.", 400)
     if not any(u.get("admin") for u in clean):
         clean[0]["admin"] = True  # never import a set with no admin
+    _migrate_passwords(clean)  # hash any plaintext from an old backup
     save_users(clean)
 
     settings = body.get("settings")
@@ -1715,7 +1914,7 @@ def admin_save_user():
     record["all"] = bool(body.get("all"))
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     if password:
-        record["password"] = password
+        record["password"] = hash_password(password)
     if existing is None:
         users.append(record)
 

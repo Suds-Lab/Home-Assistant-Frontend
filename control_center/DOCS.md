@@ -26,12 +26,12 @@ There are two interfaces:
 ## Configuration
 
 ```yaml
-jwt_secret: a-long-random-string   # signs login sessions
+jwt_secret: ""   # optional - blank auto-generates and persists a random one
 ```
 
 | Option | Description |
 |--------|-------------|
-| `jwt_secret` | Secret used to sign login sessions. Set a long random string. |
+| `jwt_secret` | Signs login sessions. **Optional** - leave blank to auto-generate and persist a random secret (recommended); set a value only to pin your own. |
 | `oauth_*` | Optional OAuth / OpenID Connect sign-in (see below). |
 
 Everything else is configured live in the sidebar's **Settings** tab (stored
@@ -47,6 +47,8 @@ in `/data`):
   upload, the built-in logo is used everywhere.
 - **Device types**: which entity domains can be assigned in **Manage users**.
 - **Sign-in methods**: Local password, OAuth, or both (see below).
+- **Session security**: the login-session secret is auto-managed; you can
+  **regenerate** it here to sign everyone out (e.g. if a token leaked).
 
 Each screen also has a **theme toggle** in the top corner to switch between
 **System** (default), **Light** and **Dark**. The choice is per-device and
@@ -117,16 +119,20 @@ In the add-on **Configuration** tab:
 oauth_client_id: "1234…apps.googleusercontent.com"
 oauth_client_secret: "GOCSPX-…"
 oauth_redirect_url: "https://home.example.com"   # public base URL (no trailing slash needed)
-oauth_allowed_domains: ["my.domain"]             # optional; empty = any verified email
+oauth_allowed_domains: ["my.domain"]             # restrict to these domains (optional)
 ```
 
 `oauth_allowed_domains` restricts sign-in to those email domains (so only
-`*@my.domain` can get in). Leave it empty (`[]`) to allow any verified email.
-To let in a specific guest who is *outside* your domain, add their address to
-`oauth_allowed_emails: ["guest@gmail.com"]`. That's simpler and safer than a
-one-off exception, and you revoke it by removing the line. Restart the add-on
-after saving. (For a non-Google provider, `oauth_logo_url` sets the button's
-logo.)
+`*@my.domain` can get in). For personal **Gmail** (or anyone without a domain of
+their own), list the individual addresses instead with `oauth_allowed_emails:
+["alice@gmail.com", "bob@gmail.com"]` - revoke one by removing its line.
+
+**Sign-in fails closed:** if you set neither a domain nor an email allow-list,
+OAuth sign-in is **refused** (and the Settings tab shows a warning). Set
+`oauth_allow_any: true` only if you deliberately want anyone with a verified
+email to sign in - they still land on the onboarding screen with no devices
+until an admin assigns some. Restart the add-on after saving. (For a non-Google
+provider, `oauth_logo_url` sets the button's logo.)
 
 ### 4. Turn it on
 
@@ -141,6 +147,10 @@ When someone signs in for the first time, an app user is created automatically
 an admin assigns them devices in **Manage users** (onboarding). Only users with
 at least one assigned device see the dashboard.
 
+You can also **pre-create** a user whose username is their email and assign
+devices before they ever sign in; an OAuth login for that email then adopts that
+account. The same account can be used with a local password *and* OAuth.
+
 ### Other (non-Google) providers
 
 Any OpenID Connect provider works; set the endpoints to match it:
@@ -153,9 +163,9 @@ oauth_userinfo_url: "https://id.example.com/application/o/userinfo/"
 oauth_scopes: "openid email profile"
 ```
 
-The provider must return an `email` (and ideally `email_verified`) from its
-userinfo endpoint, and you must register the same `/api/oauth/callback`
-redirect URI with it.
+The provider must return an `email` **and a truthy `email_verified`** from its
+userinfo endpoint (sign-in is refused otherwise), and you must register the same
+`/api/oauth/callback` redirect URI with it.
 
 **Users are not configured here**; manage them in the app (see below). No Home
 Assistant token is required either; the add-on talks to HA through the
@@ -292,5 +302,9 @@ state and attributes.
 
 - Access is enforced server-side: users can only control entities assigned to
   them, and only through a fixed allow-list of services.
-- Passwords are stored in plain text in the user store; keep it private. This
-  is intended for a trusted home network.
+- Passwords are stored **hashed** (PBKDF2-HMAC-SHA256 with a per-password salt);
+  the store never holds plaintext, and any legacy plaintext is upgraded to a
+  hash automatically. Keep the store private regardless.
+- **Login is rate-limited** (per username + IP) to slow brute-force attempts.
+- The session-signing secret is auto-generated and persisted on first run unless
+  you set `jwt_secret`; rotate it from **Settings - Session security**.

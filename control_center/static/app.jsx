@@ -2413,7 +2413,7 @@ function AuthProviderSettings() {
     adminGetSettings()
       .then((d) => {
         setVal(d.authProviders || 'local');
-        setCfg({ configured: !!d.oauthConfigured, name: d.oauthName || 'OAuth' });
+        setCfg({ configured: !!d.oauthConfigured, name: d.oauthName || 'OAuth', openWarning: !!d.oauthOpenWarning });
       })
       .catch((e) => setStatus(e.message));
   }, []);
@@ -2455,6 +2455,62 @@ function AuthProviderSettings() {
         <span className="meta">
           Add OAuth credentials in the add-on configuration to enable {cfg.name} sign-in.
         </span>
+      )}
+      {cfg.openWarning && (val === 'oauth' || val === 'both') && (
+        <span className="meta" style={{ color: '#e0a23b' }}>
+          ⚠ {cfg.name} is enabled but no allowed emails or domains are set, so sign-in is
+          refused. Set <code>oauth_allowed_emails</code> / <code>oauth_allowed_domains</code>
+          {' '}(or <code>oauth_allow_any</code>) in the add-on configuration.
+        </span>
+      )}
+      {status && <span className="muted">{status}</span>}
+    </div>
+  );
+}
+
+// Session-signing secret: show whether it's pinned by config or auto-managed,
+// and let an admin rotate the managed one (signs everyone out).
+function SecretSettings() {
+  const [source, setSource] = useState(null);
+  const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    adminGetSettings().then((d) => setSource(d.secretSource || 'managed')).catch(() => {});
+  }, []);
+  async function regenerate() {
+    if (!window.confirm('Regenerate the session secret? Everyone will be signed out and must log in again.')) return;
+    setBusy(true);
+    setStatus('');
+    try {
+      await request('/admin/regenerate-secret', { method: 'POST' });
+      setStatus('Done. All sessions have been invalidated.');
+    } catch (e) {
+      setStatus(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (source === null) return null;
+  return (
+    <div className="card settings-card">
+      <span className="device-name">Session security</span>
+      {source === 'config' ? (
+        <span className="meta">
+          The session secret is set via the add-on configuration (<code>jwt_secret</code>);
+          change it there.
+        </span>
+      ) : (
+        <>
+          <span className="meta">
+            A random session secret is managed automatically for this install. Regenerate it to
+            sign everyone out (e.g. if you suspect a session token leaked).
+          </span>
+          <div className="tab-actions">
+            <button className="ghost" disabled={busy} onClick={regenerate}>
+              {busy ? 'Working…' : 'Regenerate session secret'}
+            </button>
+          </div>
+        </>
       )}
       {status && <span className="muted">{status}</span>}
     </div>
@@ -2521,8 +2577,8 @@ function BackupSettings() {
         reinstalling to bring everything back.
       </span>
       <div className="warn-box">
-        ⚠ The backup contains user <strong>passwords in plain text</strong>. Anyone with this file
-        can sign in as those users - store it securely and don’t share it.
+        ⚠ The backup contains user accounts and <strong>password hashes</strong>. Treat it as
+        sensitive - store it securely and don’t share it.
       </div>
       <label className="checkbox-row">
         <input
@@ -3225,6 +3281,7 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
           <DeviceTypesSettings onChange={reload} />
           <IncludedEntitiesSettings />
           <AuthProviderSettings />
+          <SecretSettings />
           <BackupSettings />
         </>
       ) : tab === 'activity' ? (

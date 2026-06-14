@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+Security hardening (recommended before exposing the dashboard to the internet). Everything below is automatic on update - no data loss, and no one is locked out.
+
+- **Passwords are now hashed** (PBKDF2-HMAC-SHA256 with a per-password salt) instead of stored in plain text. Existing passwords are upgraded to a hash automatically on update and on first login, and old plaintext backups are hashed on import. Exports now contain hashes, not plaintext.
+- **The session secret is auto-generated.** When `jwt_secret` is left blank (now the default), a random secret is generated and persisted to `/data` on first run, so sessions are never signed with the guessable default that used to ship. You can still pin your own via the add-on config or `JWT_SECRET`, and rotate the managed one from **Settings → Session security** (this signs everyone out).
+- **OAuth fails closed.** If OAuth is enabled but no `oauth_allowed_domains` / `oauth_allowed_emails` are set, sign-in is now **refused** (with a warning in Settings) instead of allowing any Google account. Set the new `oauth_allow_any: true` to deliberately allow anyone with a verified email. For personal Gmail, list the addresses in `oauth_allowed_emails`.
+- **OAuth requires a verified email**: providers that don't return `email_verified: true` are rejected (previously only an explicit `false` was blocked).
+- **OAuth sign-in is bound to the browser that started it** (the `state` is tied to a short-lived cookie), preventing login-CSRF.
+- **Login is rate-limited** per username + IP to slow brute-force attempts, with constant-time password checks.
+
 ## 2.0.2
 - The theme button now **toggles** instead of cycling through three states. From **System**, the first tap flips to the opposite of whatever's currently shown (System-light → Dark, System-dark → Light); after that it just switches **Light ↔ Dark**. (It no longer cycles back to System from the button.)
 

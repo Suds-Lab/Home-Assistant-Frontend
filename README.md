@@ -29,8 +29,9 @@ On Home Assistant OS / Supervised:
 1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories**.
 2. Paste `https://github.com/Suds-Lab/Home-Assistant-Frontend` and **Add**.
 3. The **Control Center** add-on appears in the store. Open it → **Install**.
-4. **Configuration** tab: set `jwt_secret` (a long random string). **Start** the
-   add-on. (Users are *not* configured here; see step 5.)
+4. **Configuration** tab: optionally set `jwt_secret` (leave it blank to
+   auto-generate one). **Start** the add-on. (Users are *not* configured here;
+   see step 5.)
 5. Open **Control Center** in the sidebar. A default admin **`alice` / `changeme`** is
    created on first run; log in, change its password, and add everyone else
    from the **Manage users** screen. Point household members at
@@ -51,7 +52,7 @@ Copy `.env.example` to `.env` and fill in:
 - `HA_URL`: your Home Assistant address, e.g. `http://homeassistant.local:8123`
   or `http://192.168.1.50:8123` (no trailing slash).
 - `HA_TOKEN`: the token you just created.
-- `JWT_SECRET`: any long random string.
+- `JWT_SECRET`: optional; leave blank to auto-generate and persist a random one.
 
 ### c) Set up users and their devices
 
@@ -159,15 +160,18 @@ sign-in methods in **Settings → Sign-in methods** (Local / Google / Both).
 oauth_client_id: "1234….apps.googleusercontent.com"
 oauth_client_secret: "GOCSPX-…"
 oauth_redirect_url: "https://home.example.com"   # public base URL (no trailing slash needed)
-oauth_allowed_domains: ["my.domain"]             # optional; empty = any verified email
+oauth_allowed_domains: ["my.domain"]             # restrict to these domains (optional)
 ```
 
 `oauth_allowed_domains` restricts sign-in to those email domains (only
-`*@my.domain`); leave it `[]` to allow any verified email. To let in a specific
-guest outside your domain, add them to `oauth_allowed_emails:
-["guest@gmail.com"]`. Restart the add-on, then enable **Google** or **Both** in
-**Settings → Sign-in methods**. (For non-Google providers, `oauth_logo_url`
-sets the button's logo.)
+`*@my.domain`). For personal **Gmail** (or anyone without a domain of their own),
+list the individual addresses instead: `oauth_allowed_emails: ["alice@gmail.com",
+"bob@gmail.com"]`. **If you set neither, sign-in is refused** (fail-closed). Set
+`oauth_allow_any: true` only if you deliberately want anyone with a verified
+email to sign in (they still land on the onboarding screen with no devices until
+an admin assigns some). Restart the add-on, then enable **Google** or **Both** in
+**Settings → Sign-in methods**. (For non-Google providers, `oauth_logo_url` sets
+the button's logo.)
 
 **Behind Cloudflare Tunnel / a reverse proxy:** point the tunnel's public
 hostname at the add-on's user-dashboard port `8099`; the `/api/oauth/*` routes
@@ -180,11 +184,14 @@ or its login page will intercept the callback.
 **First sign-in & onboarding:** a Google user who signs in for the first time
 is auto-created **with no devices** and sees a "reach out to your administrator"
 screen until an admin assigns them devices in **Manage users**. Only users with
-at least one device see the dashboard.
+at least one device see the dashboard. (You can also pre-create a user whose
+username is their email and assign devices first; an OAuth login for that email
+then adopts that account, so the same person can use a password *or* OAuth.)
 
 **Other providers:** override `oauth_authorize_url`, `oauth_token_url`,
 `oauth_userinfo_url`, `oauth_scopes` and `oauth_provider_name` for any OIDC
-provider. (The full walkthrough is also in the add-on's **Documentation** tab /
+provider. The provider must return a verified email (`email_verified: true`).
+(The full walkthrough is also in the add-on's **Documentation** tab /
 [`control_center/DOCS.md`](control_center/DOCS.md).)
 
 ## 2. Run it (standalone / dev)
@@ -217,7 +224,8 @@ the add-on onto the machine directly:
    **⋮** menu (top-right) → **Check for updates**. "Control Center" appears under
    **Local add-ons**.
 3. Click it → **Install** (this builds the image; takes a few minutes).
-4. Open the **Configuration** tab and set `jwt_secret`. **Start** the add-on.
+4. Open the **Configuration** tab (optionally set `jwt_secret`; blank
+   auto-generates one). **Start** the add-on.
 5. Thanks to Ingress, **Control Center** appears as its own admin tab in the Home
    Assistant sidebar (like the Terminal / Mosquitto add-ons); click it to open
    the **management** screen right inside HA. No separate password: HA already
@@ -276,6 +284,13 @@ the app shell is cached so it loads instantly (and offline).
   only in `.env` (standalone) or never exists at all (add-on, via Supervisor).
 - Login issues a 7-day session token (JWT). Each request is checked against the
   user's allowed entity list, so users can't control devices that aren't theirs.
-- Passwords are stored in plain text for simplicity; keep `users.json` (or the
-  add-on config) private. This is intended for a trusted home network. For
-  internet exposure, put it behind HTTPS and consider hashed passwords.
+- Passwords are stored **hashed** (PBKDF2-HMAC-SHA256 with a per-password salt);
+  the store never holds plaintext. Any legacy plaintext from an older version is
+  upgraded to a hash automatically (on upgrade and on first login). Keep
+  `users.json` private regardless, and put the dashboard behind HTTPS for any
+  internet exposure.
+- **Login is rate-limited** per username + IP to slow brute-force attempts.
+- The session-signing secret (`jwt_secret`) is **auto-generated and persisted on
+  first run** when you don't set one, so sessions are never signed with a
+  guessable default. Rotate it anytime from **Settings → Session security**
+  (which signs everyone out).
