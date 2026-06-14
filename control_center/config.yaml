@@ -3,7 +3,7 @@
 # NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
 # install's /data is keyed to it, so changing it would orphan existing data.
 name: Control Center
-version: "2.0.2"
+version: "2.1.0"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -44,25 +44,30 @@ homeassistant_api: true
 #   - oauth_redirect_url: the PUBLIC base URL of the dashboard. Add
 #     <that>/api/oauth/callback to the provider's authorised redirect URIs.
 #   - oauth_allowed_domains: restrict sign-in to these email domains
-#     (e.g. ["my.domain"]); leave empty to allow any verified email.
-#   - oauth_allowed_emails: individual addresses always allowed, even outside
-#     the domains above (e.g. ["guest@gmail.com"]).
+#     (e.g. ["my.domain"]).
+#   - oauth_allowed_emails: individual addresses allowed, even outside the
+#     domains above (e.g. ["alice@gmail.com"]). Use this for personal Gmail.
+#   - oauth_allow_any: with NO domains/emails listed, sign-in is refused by
+#     default; set this true to allow anyone with a verified email instead.
 #   - oauth_logo_url: logo for the sign-in button on non-Google providers.
+# jwt_secret signs login sessions. Leave it blank to auto-generate and persist a
+# random secret (recommended); set a value only to pin your own.
 options:
-  jwt_secret: change-me-to-a-long-random-string
+  jwt_secret: ""
   oauth_client_id: ""
   oauth_client_secret: ""
   oauth_redirect_url: ""
   oauth_provider_name: Google
   oauth_allowed_domains: []
   oauth_allowed_emails: []
+  oauth_allow_any: false
   oauth_authorize_url: "https://accounts.google.com/o/oauth2/v2/auth"
   oauth_token_url: "https://oauth2.googleapis.com/token"
   oauth_userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo"
   oauth_scopes: "openid email profile"
   oauth_logo_url: ""
 schema:
-  jwt_secret: str
+  jwt_secret: str?
   oauth_client_id: str?
   oauth_client_secret: str?
   oauth_redirect_url: str?
@@ -71,6 +76,7 @@ schema:
     - str
   oauth_allowed_emails:
     - str
+  oauth_allow_any: bool?
   oauth_authorize_url: str?
   oauth_token_url: str?
   oauth_userinfo_url: str?
