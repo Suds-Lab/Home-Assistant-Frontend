@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.2
+- Integration badges now show real logos via Home Assistant's brands proxy (2026.3+), so a custom integration that ships its own logo, not just core integrations, displays correctly; older Home Assistant falls back to the brands CDN. When an integration genuinely has no logo, the badge shows a neutral puzzle-piece glyph instead of Home Assistant's "icon not available" placeholder.
+
 ## 2.2.1
 - Integration badges now use Home Assistant's **real integration name** (from its manifest), so acronyms and special casing stay correct instead of being naively derived from the domain.
 - Badges now also show logos for **some custom / HACS integrations** (those that publish brand art): the badge tries the core brand path, then the custom-integration path, and falls back to text if neither has an image.
