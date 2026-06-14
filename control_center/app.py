@@ -1154,6 +1154,43 @@ def mdi_icon(name):
     return jsonify(data)
 
 
+_BRAND_DOMAIN_RE = re.compile(r"^[a-z0-9_]+$")
+_BRAND_ICON_CACHE = {}   # domain -> (content_type, bytes); only successes cached
+_BRAND_ICON_LOCK = threading.Lock()
+
+
+@app.get("/api/icon/brand/<domain>")
+def brand_icon(domain):
+    """Proxy an integration's brand icon. Home Assistant's brands API (2026.3+)
+    serves a custom integration's OWN logo and falls back to the CDN for core
+    ones; for older HA we hit the brands CDN core path directly. A 404 tells the
+    UI to show a generic puzzle glyph. Public + harmless: with the domain locked
+    to [a-z0-9_], it only ever returns a brand image (no SSRF)."""
+    if not _BRAND_DOMAIN_RE.match(domain or ""):
+        raise ApiError("Invalid integration", 400)
+    with _BRAND_ICON_LOCK:
+        hit = _BRAND_ICON_CACHE.get(domain)
+    if hit:
+        return Response(hit[1], mimetype=hit[0], headers={"Cache-Control": "public, max-age=86400"})
+    found = None
+    for url, headers in (
+        (f"{HA_URL}/api/brands/integration/{domain}/icon.png", {"Authorization": f"Bearer {HA_TOKEN}"}),
+        (f"https://brands.home-assistant.io/{domain}/icon.png", {}),
+    ):
+        try:
+            r = requests.get(url, headers=headers, timeout=8)
+        except requests.RequestException:
+            continue
+        if r.ok and r.headers.get("content-type", "").startswith("image/"):
+            found = (r.headers["content-type"], r.content)
+            break
+    if not found:
+        raise ApiError("No brand icon", 404)  # transient/missing: not cached, retries later
+    with _BRAND_ICON_LOCK:
+        _BRAND_ICON_CACHE[domain] = found
+    return Response(found[1], mimetype=found[0], headers={"Cache-Control": "public, max-age=86400"})
+
+
 # Services the app may call, per domain. Calls are always scoped to an entity
 # the user owns and to that entity's own domain - never an arbitrary HA service.
 ALLOWED_SERVICES = {

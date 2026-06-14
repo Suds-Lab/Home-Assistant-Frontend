@@ -407,6 +407,11 @@ section h2 {
   object-fit: contain;
   border-radius: 4px;
 }
+/* Generic fallback glyph (puzzle piece) when an integration has no brand logo. */
+.int-generic {
+  fill: var(--muted);
+  opacity: 0.8;
+}
 
 /* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control
    (.lb-scope), left-aligned with room below before the content. */
