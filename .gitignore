@@ -12,6 +12,7 @@ _*.py
 _*.json
 _*.sh
 _*.txt
+_*.png
 
 # Runtime data (lives in /data on the add-on; dev writes it into control_center/)
 control_center/settings.json

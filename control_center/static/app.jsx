@@ -1062,6 +1062,41 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
 }
 
 // Manager-only: move Home Assistant devices between areas / rename (writes to HA).
+// Friendly display name for a Home Assistant integration (platform) domain.
+const INTEGRATION_NAMES = {
+  mqtt: 'MQTT', tplink: 'TP-Link', kasa: 'Kasa', esphome: 'ESPHome',
+  hue: 'Philips Hue', zha: 'Zigbee', zwave_js: 'Z-Wave', deconz: 'deCONZ',
+  tasmota: 'Tasmota', shelly: 'Shelly', wiz: 'WiZ', lifx: 'LIFX',
+  homekit_controller: 'HomeKit', smartthings: 'SmartThings', sonos: 'Sonos',
+  homeassistant: 'Home Assistant',
+};
+function prettyIntegration(dom) {
+  if (INTEGRATION_NAMES[dom]) return INTEGRATION_NAMES[dom];
+  return dom.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// Brand badge: the integration's logo (from HA's brands CDN) + name. Falls back
+// to just the name if the brand has no logo. Shown on manager device rows.
+function IntegrationBadge({ domain }) {
+  const [logoOk, setLogoOk] = useState(true);
+  if (!domain) return null;
+  const name = prettyIntegration(domain);
+  return (
+    <span className="int-badge" title={name}>
+      {logoOk && (
+        <img
+          className="int-logo"
+          src={`https://brands.home-assistant.io/${domain}/icon.png`}
+          alt=""
+          loading="lazy"
+          onError={() => setLogoOk(false)}
+        />
+      )}
+      <span>{name}</span>
+    </span>
+  );
+}
+
 function Organizer() {
   const [data, setData] = useState(null); // { devices, areas }
   const [error, setError] = useState('');
@@ -1127,7 +1162,7 @@ function Organizer() {
     <div className="organizer">
       <p className="muted org-intro">
         Assign each device to a Home Assistant area, or rename it. Changes are saved to Home
-        Assistant.
+        Assistant. <span className="tap-hint">Tap any device below to edit it.</span>
       </p>
       <SearchBox
         className="dashboard-search"
@@ -1145,7 +1180,13 @@ function Organizer() {
           <section key={areaName}>
             <h2>{areaName}</h2>
             {groups[areaName].map((dev) => (
-              <div key={dev.id} className="card org-row">
+              <button
+                key={dev.id}
+                type="button"
+                className="card org-row"
+                title="Edit this device"
+                onClick={() => setEditing(dev)}
+              >
                 <div className="org-info">
                   <span className="device-name">{dev.name}</span>
                   <span className="meta">
@@ -1155,14 +1196,8 @@ function Organizer() {
                       : ''}
                   </span>
                 </div>
-                <button
-                  className="ghost icon-only org-edit"
-                  title="Edit device"
-                  onClick={() => setEditing(dev)}
-                >
-                  ✎
-                </button>
-              </div>
+                <IntegrationBadge domain={dev.integration} />
+              </button>
             ))}
           </section>
         ))

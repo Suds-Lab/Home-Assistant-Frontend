@@ -330,11 +330,37 @@ section h2 {
   margin: 0 0 16px;
 }
 
+/* The whole row is the edit button (no separate pencil): reset button chrome,
+   make it full-width/left-aligned, and give it a clear tappable affordance. */
 .org-row {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+.org-row:hover {
+  background: var(--card-active);
+  border-color: var(--accent);
+}
+.org-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.org-row:active {
+  transform: translateY(1px);
+}
+
+.tap-hint {
+  color: #e0a23b;
+  font-weight: 600;
 }
 
 .org-info {
@@ -356,6 +382,30 @@ section h2 {
 .org-edit {
   flex-shrink: 0;
   font-size: 1.05rem;
+}
+
+/* Integration brand badge (logo + name) on manager device rows. */
+.int-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40%;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.int-badge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.int-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 4px;
 }
 
 /* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control

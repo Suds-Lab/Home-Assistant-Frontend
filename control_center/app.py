@@ -961,11 +961,16 @@ def manager_devices():
         pass
     ents_by_dev = {}   # device_id -> [friendly name]
     ids_by_dev = {}    # device_id -> [entity_id]
+    plat_by_dev = {}   # device_id -> {platform: count} (which integration provides it)
     for e in reg.get("entities", []):
         did = e.get("device_id")
         if did:
             ents_by_dev.setdefault(did, []).append(names.get(e["entity_id"], e["entity_id"]))
             ids_by_dev.setdefault(did, []).append(e["entity_id"])
+            plat = e.get("platform")
+            if plat:
+                counts = plat_by_dev.setdefault(did, {})
+                counts[plat] = counts.get(plat, 0) + 1
 
     devices = []
     for d in reg.get("devices", []):
@@ -984,6 +989,11 @@ def manager_devices():
             "area_id": aid,
             "area": area.get("name") if area else None,
             "floor": floors.get(area.get("floor_id")) if area else None,
+            # The integration (HA platform) that provides this device, e.g.
+            # "shelly"/"mqtt"/"tplink" - used for the brand badge. Pick the most
+            # common platform across the device's entities.
+            "integration": (max(plat_by_dev[d["id"]], key=plat_by_dev[d["id"]].get)
+                            if plat_by_dev.get(d["id"]) else None),
             "entities": ents,
         })
     devices.sort(key=lambda x: (x["area"] or "￿", x["name"].lower()))
