@@ -195,8 +195,9 @@ Tick **Manager** when editing a user to make them a manager. A manager gets an
 
 - **Devices**: a searchable list of the Home Assistant devices the app exposes
   (those with at least one entity of an enabled type, or in the Included list),
-  grouped by area. Each device has a **pencil** that opens a quick dialog to
-  **rename** it and set its **area**.
+  grouped by area, and each tagged with the **integration** it comes from (a
+  small brand badge, e.g. Shelly / MQTT / TP-Link). **Tap a device** to open a
+  quick dialog to **rename** it and set its **area**.
 - **Areas & floors**: a Home Assistant overview-style view that lists each
   **floor** with the areas inside it. The manager can **create a new area**
   (optionally placing it on a floor), **move an area to another floor** (or to

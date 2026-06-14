@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.0
+- The manager's **device organizer** now shows each device's **integration** as a small brand badge (logo + name, e.g. Shelly, MQTT, TP-Link), pulled from Home Assistant's brand icons and falling back to just the name when a logo isn't available.
+- In the organizer, **tapping anywhere on a device card** now opens its edit dialog (the separate pencil is gone) for a bigger, easier target, especially on mobile. A hint at the top makes it clear.
+
 ## 2.1.1
 More security hardening from a follow-up audit. All server-side, no UI changes, automatic on update.
 
