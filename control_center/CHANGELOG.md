@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.6
+- A climate device in **heat/cool** mode now shows a heat+cool blended (purple) glow when Home Assistant doesn't report what it's actively doing, which is common for this mode. When the live HVAC action is reported it still goes red while heating and blue while cooling.
+
 ## 2.4.5
 - Every active device card now **pulses** its colored glow, not just heating climates and playing media, so an "on" or active state reads consistently across lights, switches, fans, covers, locks, climate, and the rest.
 
