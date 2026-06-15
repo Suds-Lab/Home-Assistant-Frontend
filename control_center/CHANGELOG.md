@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.8
+- Fix: an **uploaded logo now actually shows in the browser tab**. The page ships an SVG favicon plus a PNG fallback, but only the SVG link was being updated, so browsers that prefer the PNG kept showing the default icon. All favicon links now point at the uploaded logo.
+
 ## 2.4.7
 - An **uploaded logo** now also shows as the glyph beside the title (header, login, and install prompt), matching the browser tab and PWA icon, instead of only the emoji or default mark. Precedence is: uploaded logo first, then a Settings emoji, then the built-in logo.
 

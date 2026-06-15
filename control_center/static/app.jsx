@@ -3987,10 +3987,21 @@ function App() {
   useEffect(() => {
     if (!session) return;
     document.title = appName;
-    // Favicon / install icon: a custom uploaded image when configured, else the
-    // bundled Control Center logo. (The header emoji is a separate flourish; the
-    // installable icon defaults to the brand logo.)
-    setLinkHref('icon', appImage ? new URL(appImage, document.baseURI).href : './icons/icon.svg');
+    // Favicon: a custom uploaded image when configured, else the bundled logo.
+    // index.html ships TWO <link rel="icon"> (an SVG plus a PNG fallback), so
+    // update them ALL - touching only the first left the PNG on the default,
+    // which browsers often prefer, so the uploaded logo never showed. Drop the
+    // stale `type` hint so the browser sniffs the uploaded image's real type.
+    const iconHref = appImage ? new URL(appImage, document.baseURI).href : './icons/icon.svg';
+    const iconLinks = document.querySelectorAll("link[rel~='icon']");
+    if (iconLinks.length) {
+      iconLinks.forEach((l) => {
+        l.removeAttribute('type');
+        l.href = iconHref;
+      });
+    } else {
+      setLinkHref('icon', iconHref);
+    }
 
     // iOS ignores the web manifest for "Add to Home Screen" - it reads these
     // tags from the live DOM instead. Keep them in sync with the configured
