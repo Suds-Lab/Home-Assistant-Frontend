@@ -3,7 +3,7 @@
 # NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
 # install's /data is keyed to it, so changing it would orphan existing data.
 name: Control Center
-version: "2.4.3"
+version: "2.4.4"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
