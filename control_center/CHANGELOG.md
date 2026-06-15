@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.0
+- New: **account and device expiry** (both optional). In Manage users, an admin can set an **account expiration date**; the user works through that whole day and is blocked the next, shown a clear "your account has expired, contact the system administrator" prompt at sign-in. An already-signed-in session is cut off immediately. Each of a user's assigned devices can also be given its own expiry date, after which that device quietly disappears from their dashboard. Leave a date blank for no expiry.
+- The Settings "Session security" card now only appears when there's something to do, i.e. when the session secret is auto-managed and can be regenerated. When the secret is pinned via the add-on's `jwt_secret`, the card is hidden instead of showing a dead-end note pointing you to the configuration.
+
 ## 2.4.8
 - Fix: an **uploaded logo now actually shows in the browser tab**. The page ships an SVG favicon plus a PNG fallback, but only the SVG link was being updated, so browsers that prefer the PNG kept showing the default icon. All favicon links now point at the uploaded logo.
 

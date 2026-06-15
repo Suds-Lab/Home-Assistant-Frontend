@@ -21,7 +21,7 @@ import re
 import secrets
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from queue import Empty, Queue
 from urllib.parse import quote, urlencode
@@ -524,15 +524,49 @@ sock = Sock(app)
 
 
 class ApiError(Exception):
-    def __init__(self, message, status=500):
+    def __init__(self, message, status=500, extra=None):
         super().__init__(message)
         self.message = message
         self.status = status
+        self.extra = extra or {}  # extra JSON fields (e.g. {"expired": True})
 
 
 @app.errorhandler(ApiError)
 def handle_api_error(err):
-    return jsonify(error=err.message), err.status
+    payload = {"error": err.message}
+    payload.update(err.extra)
+    return jsonify(payload), err.status
+
+
+# Optional account/entity expiry. An admin can set a "valid through" date; the
+# account (or a user's access to a specific entity) works for the whole of that
+# day and is cut off from the day after. Blank/absent = never expires.
+_EXPIRED_MSG = "Your account has expired. Please contact your administrator for help."
+
+
+def _parse_date(s):
+    """Parse a 'YYYY-MM-DD' date string; None if blank/invalid."""
+    if not isinstance(s, str) or not s.strip():
+        return None
+    try:
+        return datetime.strptime(s.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _date_expired(s):
+    """True once the 'valid through' date has fully passed (the day after it)."""
+    d = _parse_date(s)
+    return d is not None and date.today() > d
+
+
+def _user_expired(user):
+    return _date_expired(user.get("expires"))
+
+
+def _entity_expired_for(user, entity_id):
+    """True if this user's access to entity_id has a passed expiry date."""
+    return _date_expired((user.get("entity_expires") or {}).get(entity_id))
 
 
 def user_from_token(token):
@@ -548,6 +582,9 @@ def user_from_token(token):
     )
     if not user:
         raise ApiError("Unknown user", 401)
+    # Cut off an already-signed-in session the moment the account expires.
+    if _user_expired(user):
+        raise ApiError(_EXPIRED_MSG, 403, {"expired": True})
     return user
 
 
@@ -585,6 +622,10 @@ def user_can_access(user, entity_id):
     """Explicitly-assigned entities are always owned (any type - that's the
     per-user 'add a specific device' override). Beyond that, an 'all' user (and
     managers, who get all devices) owns every assignable entity."""
+    # An admin-set per-user expiry on this entity makes it disappear for this
+    # user once the date passes, even if they'd otherwise own it.
+    if _entity_expired_for(user, entity_id):
+        return False
     if entity_id in user.get("entities", []):
         return True
     if user.get("all") or user.get("manager"):
@@ -689,6 +730,8 @@ def login():
         _login_note_fail(key)
         raise ApiError("Invalid username or password", 401)
     _login_clear(key)
+    if _user_expired(user):
+        raise ApiError(_EXPIRED_MSG, 403, {"expired": True})
     # Lazy upgrade: if this account still had a plaintext password, hash it now.
     if not _is_hashed(user.get("password")):
         users = load_users()
@@ -959,6 +1002,8 @@ def oauth_callback():
         return _oauth_error_page("Your account isn't allowed to use this app.")
 
     user = _user_for_email(email, profile.get("name"), profile.get("picture") or "")
+    if _user_expired(user):
+        return _oauth_error_page(_EXPIRED_MSG)
     # Hand the session token + display name to the SPA via the URL fragment
     # (never sent to a server or written to logs); it stores and strips them.
     frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
@@ -2071,6 +2116,8 @@ def admin_list_users():
             "entities": u.get("entities", []),
             "all": bool(u.get("all")),
             "manager": bool(u.get("manager")),
+            "expires": u.get("expires", ""),
+            "entityExpires": u.get("entity_expires", {}),
         }
         for u in load_users()
     ]
@@ -2119,6 +2166,19 @@ def admin_save_user():
     # left "All devices" stuck on after un-managing someone.
     record["all"] = bool(body.get("all"))
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
+    # Optional account expiry (stored normalised as YYYY-MM-DD, or "" for never).
+    exp = _parse_date(body.get("expires"))
+    record["expires"] = exp.isoformat() if exp else ""
+    # Optional per-entity expiry: { entity_id: "YYYY-MM-DD" }. Keep only valid
+    # entity ids with valid dates; an entity dropping off the list clears it.
+    raw_ee = body.get("entityExpires") or {}
+    entity_expires = {}
+    if isinstance(raw_ee, dict):
+        for eid, ds in raw_ee.items():
+            d = _parse_date(ds)
+            if valid_entity_id(eid) and d:
+                entity_expires[eid] = d.isoformat()
+    record["entity_expires"] = entity_expires
     if password:
         record["password"] = hash_password(password)
     if existing is None:

@@ -536,6 +536,115 @@ section h2 {
   line-height: 1.45;
 }
 
+/* "Account expired" prompt on the login screen. */
+.expired-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 45%, var(--border));
+  background: color-mix(in srgb, #ef4444 12%, var(--card-active));
+  color: var(--text);
+  text-align: left;
+}
+.expired-notice span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Small explanatory note under a form field. */
+.field-note {
+  margin: -4px 0 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* Selected-device rows in the user editor: remove (✕), name, optional expiry.
+   The expiry control lives right on the device you allow/disallow. */
+.sel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sel-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sel-remove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+.sel-remove:hover {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--border));
+  color: #ef4444;
+}
+.sel-expiry {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.sel-expiry input[type='date'] {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+[data-theme='dark'] .sel-expiry input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* "Expiring devices" recap: a glanceable list of what's due to disappear. */
+.entity-expiry {
+  margin-top: 14px;
+  padding: 12px 13px;
+  background: var(--card-active);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.expiring-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.expiring-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expiring-date {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 /* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control
    (.lb-scope), left-aligned with room below before the content. */
 .organize-tabs {
@@ -1673,13 +1782,18 @@ img.install-icon {
 }
 
 .editor input[type='text'],
-.editor input[type='password'] {
+.editor input[type='password'],
+.editor input[type='date'] {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input-bg);
   color: var(--text);
   font-size: 1rem;
+}
+/* Make the native date picker's calendar icon visible in dark mode. */
+[data-theme='dark'] .editor input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 .editor input:disabled {
