@@ -724,6 +724,7 @@ section .grid {
 .accent-sky { --g: #38bdf8; } /* cover open */
 .accent-amber { --g: #f59e0b; } /* unlocked  */
 .accent-media { --g: #a855f7; } /* playing   */
+.accent-mix { --g: color-mix(in srgb, #ef4444, #3b82f6); } /* heat+cool blend */
 
 .device.glow {
   border-color: color-mix(in srgb, var(--g) 55%, transparent);

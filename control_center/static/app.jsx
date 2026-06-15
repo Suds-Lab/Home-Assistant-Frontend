@@ -971,12 +971,13 @@ function DeviceCard({ device, onChange, onEdit }) {
     const d = device.domain;
     if (d === 'light' && on) return 'accent-warm glow pulse';
     if (d === 'climate') {
-      // heat_cool can heat OR cool, so color by what it's actually doing now
-      // (hvac_action), not the mode: red heating, blue cooling, green when idle.
+      // heat_cool can heat OR cool. Color by what it's actually doing now if HA
+      // reports it (hvac_action): red heating, blue cooling. Many setups don't
+      // report the action, so fall back to a heat+cool blend rather than guessing.
       if (state === 'heat_cool') {
         if (a.hvac_action === 'heating') return 'accent-heat glow pulse';
         if (a.hvac_action === 'cooling') return 'accent-cool glow pulse';
-        return 'accent-on glow pulse';
+        return 'accent-mix glow pulse';
       }
       if (state === 'heat') return 'accent-heat glow pulse';
       if (state === 'cool' || state === 'auto') return 'accent-cool glow pulse';
