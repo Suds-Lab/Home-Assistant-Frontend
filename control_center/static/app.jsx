@@ -993,7 +993,7 @@ function DeviceCard({ device, onChange, onEdit }) {
             title="Edit device (name &amp; area)"
             onClick={onEdit}
           >
-            ✎
+            <MdiIcon icon="pencil-outline" size={18} />
           </button>
         )}
       </div>
@@ -1443,7 +1443,7 @@ function AreaOrganizer() {
                       title="Rename area"
                       onClick={() => setEditing(a)}
                     >
-                      ✎
+                      <MdiIcon icon="pencil-outline" size={18} />
                     </button>
                   </div>
                 ))
