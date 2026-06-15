@@ -1164,8 +1164,13 @@ def brand_icon(domain):
     """Proxy an integration's brand icon. Home Assistant's brands API (2026.3+)
     serves a custom integration's OWN logo and falls back to the CDN for core
     ones; for older HA we hit the brands CDN core path directly. A 404 tells the
-    UI to show a generic puzzle glyph. Public + harmless: with the domain locked
-    to [a-z0-9_], it only ever returns a brand image (no SSRF)."""
+    UI to show a generic puzzle glyph. With the domain locked to [a-z0-9_] it
+    only ever returns a brand image (no SSRF)."""
+    # On the published dashboard port, require a valid session (passed as ?token=
+    # since an <img> can't send the Authorization header) so the set of installed
+    # integrations isn't enumerable by anyone. The Ingress port is trusted by port.
+    if not is_management():
+        user_from_token(request.args.get("token"))
     if not _BRAND_DOMAIN_RE.match(domain or ""):
         raise ApiError("Invalid integration", 400)
     with _BRAND_ICON_LOCK:

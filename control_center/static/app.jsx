@@ -1085,12 +1085,14 @@ function IntegrationBadge({ domain, name }) {
   const [logoOk, setLogoOk] = useState(true);
   if (!domain && !name) return null;
   const label = name || prettyIntegration(domain || '');
+  const tok = getToken();
+  const src = `api/icon/brand/${domain}${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
   return (
     <span className="int-badge" title={label}>
       {domain && logoOk ? (
         <img
           className="int-logo"
-          src={`api/icon/brand/${domain}`}
+          src={src}
           alt=""
           loading="lazy"
           onError={() => setLogoOk(false)}
