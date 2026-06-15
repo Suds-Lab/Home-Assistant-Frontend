@@ -3634,34 +3634,39 @@ if (typeof document !== 'undefined') {
 
 function ThemeToggle() {
   const [pref, setPref] = useState(themePref());
+  const [, setTick] = useState(0); // re-render the icon when the OS theme flips
   useEffect(() => {
     localStorage.setItem(THEME_KEY, pref);
     applyTheme(pref);
-    // When following the system, re-apply live as the OS theme changes.
+    // When following the system, re-apply (and re-render the icon) live as the
+    // OS theme changes.
     if (pref === 'system' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: light)');
-      const onChange = () => applyTheme('system');
+      const onChange = () => {
+        applyTheme('system');
+        setTick((n) => n + 1);
+      };
       mq.addEventListener('change', onChange);
       return () => mq.removeEventListener('change', onChange);
     }
   }, [pref]);
 
-  // From System, flip to the opposite of whatever is currently shown; after that
-  // just toggle Light <-> Dark (the button no longer cycles back to System).
-  const nextPref = (p) =>
-    p === 'light' ? 'dark'
-    : p === 'dark' ? 'light'
-    : resolveTheme('system') === 'light' ? 'dark' : 'light';
-  const ICON = { system: '🌗', light: '☀️', dark: '🌙' };
-  const TITLE = { system: 'Theme: System', light: 'Theme: Light', dark: 'Theme: Dark' };
+  // Two states only: Auto (follow the device) or its inverse. From Auto, flip to
+  // the OPPOSITE of the device's theme; from the manual override, back to Auto.
+  const next = pref === 'system' ? (systemPrefersLight() ? 'dark' : 'light') : 'system';
+  const shown = resolveTheme(pref); // 'light' or 'dark' - what's actually on screen
+  // Auto shows the half/half glyph; the manual override shows sun/moon for what's on.
+  const icon = pref === 'system' ? '🌗' : shown === 'light' ? '☀️' : '🌙';
+  const title =
+    pref === 'system' ? `Theme: Auto (${shown})` : `Theme: ${shown === 'light' ? 'Light' : 'Dark'}`;
   return (
     <button
       className="ghost icon-only"
-      onClick={() => setPref(nextPref(pref))}
-      title={TITLE[pref]}
-      aria-label={TITLE[pref]}
+      onClick={() => setPref(next)}
+      title={title}
+      aria-label={title}
     >
-      {ICON[pref]}
+      {icon}
     </button>
   );
 }

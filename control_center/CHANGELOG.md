@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.2
+- The theme toggle is now two-state: it switches between **Auto** (follow your device) and the **opposite** of your device's current appearance, then back to Auto. The icon reflects this - a half-moon for Auto, and a sun or moon for the manual light/dark override.
+
 ## 2.4.1
 - The password requirements in the Change password dialog now read as natural English (e.g. "an uppercase letter, a number, and a special character") and appear in a styled hint box that matches the app.
 
