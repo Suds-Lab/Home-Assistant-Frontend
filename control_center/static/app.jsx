@@ -44,7 +44,17 @@ async function request(path, options = {}) {
     throw new Error(body.error || 'Wrong username or password');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) {
+    // Account/entity expiry: clear an active session so the user is cut off
+    // immediately, and tag the error so the UI can show the expiry prompt.
+    if (data.expired) {
+      if (token) setToken(null);
+      const e = new Error(data.error || 'Your account has expired.');
+      e.expired = true;
+      throw e;
+    }
+    throw new Error(data.error || 'Request failed');
+  }
   return data;
 }
 
@@ -251,21 +261,27 @@ function Login({
   appImage = null,
   providers = { local: true, oauth: false },
   oauth = { name: 'OAuth', isGoogle: false, logo: '' },
+  notice = '',
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // An expired-account message: either carried over from a cut-off session
+  // (the `notice` prop) or raised by a fresh login attempt below.
+  const [expired, setExpired] = useState(notice || '');
   const [busy, setBusy] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setError('');
+    setExpired('');
     setBusy(true);
     try {
       const { token, displayName } = await login(username, password);
       onLogin(token, displayName);
     } catch (err) {
-      setError(err.message);
+      if (err.expired) setExpired(err.message);
+      else setError(err.message);
     } finally {
       setBusy(false);
     }
@@ -281,6 +297,13 @@ function Login({
       <div className="card login">
         <h1><BrandIcon icon={appIcon} image={appImage} /> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
+
+        {expired && (
+          <div className="expired-notice" role="alert">
+            <strong>Your account has expired.</strong>
+            <span>Please contact the system administrator for help.</span>
+          </div>
+        )}
 
         {providers.local && (
           <form onSubmit={submit}>
@@ -2173,6 +2196,9 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   // real (non-manager) "All devices" choice instead of staying stuck on.
   const [all, setAll] = useState(!!user?.all && !user?.manager);
   const [manager, setManager] = useState(!!user?.manager);
+  // Optional account expiry, and optional per-entity expiry { entity_id: date }.
+  const [expires, setExpires] = useState(user?.expires || '');
+  const [entityExpires, setEntityExpires] = useState(() => ({ ...(user?.entityExpires || {}) }));
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState(null); // null = auto
   const [expanded, setExpanded] = useState(() => new Set());
@@ -2214,6 +2240,11 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         all, // manager already grants full access on the backend; don't force it
         manager,
         entities: [...picked],
+        expires,
+        // Only keep per-entity expiry for entities still assigned to this user.
+        entityExpires: Object.fromEntries(
+          Object.entries(entityExpires).filter(([id]) => picked.has(id))
+        ),
       });
     } catch (err) {
       setError(err.message);
@@ -2258,6 +2289,52 @@ function UserEditor({ user, entities, onSave, onCancel }) {
     ['type', 'Type'],
   ].filter(Boolean);
   const searching = q.length > 0;
+
+  const setEntityExpiry = (id, val) =>
+    setEntityExpires((prev) => {
+      const next = { ...prev };
+      if (val) next[id] = val;
+      else delete next[id];
+      return next;
+    });
+
+  // The selected devices, rendered as rows so each carries its own controls:
+  // remove (✕), the name, and an optional "expires" date right on the device.
+  const renderSelected = (word) =>
+    selected.length > 0 && (
+      <div className="selected-box">
+        <div className="selected-head">
+          {selected.length} {word} - set an optional date to hide a device after
+        </div>
+        <div className="sel-rows">
+          {selected.map((e) => (
+            <div key={e.entity_id} className="sel-row">
+              <button
+                type="button"
+                className="sel-remove"
+                title="Remove this device"
+                aria-label={`Remove ${e.name}`}
+                onClick={() => toggleEntity(e.entity_id)}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+              <span className="sel-name">{e.name}</span>
+              <label className="sel-expiry" title="Optional: hide this device for this user after this date">
+                <span>expires</span>
+                <input
+                  type="date"
+                  value={entityExpires[e.entity_id] || ''}
+                  onChange={(ev) => setEntityExpiry(e.entity_id, ev.target.value)}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+  // Devices that actually have an expiry set (the "Expiring devices" recap).
+  const expiringList = selected.filter((e) => entityExpires[e.entity_id]);
 
   const checkRow = (e) => (
     <label key={e.entity_id} className={`pick-row ${picked.has(e.entity_id) ? 'picked' : ''}`}>
@@ -2330,6 +2407,14 @@ function UserEditor({ user, entities, onSave, onCancel }) {
           onChange={(e) => setPassword(e.target.value)}
         />
       </label>
+      <label>
+        Account expires (optional)
+        <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+      </label>
+      <p className="muted field-note">
+        After this date the user can't sign in (and any open session is signed out), and they're
+        shown a message to contact the administrator. Leave blank for no expiry.
+      </p>
 
       <label className="checkbox-row all-toggle">
         <input type="checkbox" checked={manager} onChange={(e) => setManager(e.target.checked)} />
@@ -2360,23 +2445,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
             You can still add specific extras below (e.g. a device whose type is turned off)
             {manager ? '.' : ', or turn this off to pick devices individually.'}
           </p>
-          {selected.length > 0 && (
-            <div className="selected-box">
-              <div className="selected-head">{selected.length} added - tap to remove</div>
-              <div className="chips">
-                {selected.map((e) => (
-                  <button
-                    type="button"
-                    key={e.entity_id}
-                    className="chip"
-                    onClick={() => toggleEntity(e.entity_id)}
-                  >
-                    {e.name} <span aria-hidden="true">✕</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {renderSelected('added')}
           <div className="add-specific">
             <span className="muted add-specific-label">
               Add a specific device (any type, this user only)
@@ -2392,23 +2461,7 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         </>
       ) : (
         <>
-          {selected.length > 0 && (
-            <div className="selected-box">
-              <div className="selected-head">{selected.length} selected - tap to remove</div>
-              <div className="chips">
-                {selected.map((e) => (
-                  <button
-                    type="button"
-                    key={e.entity_id}
-                    className="chip"
-                    onClick={() => toggleEntity(e.entity_id)}
-                  >
-                    {e.name} <span aria-hidden="true">✕</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {renderSelected('selected')}
 
           <div className="add-specific">
             <span className="muted add-specific-label">
@@ -2480,6 +2533,33 @@ function UserEditor({ user, entities, onSave, onCancel }) {
             </div>
           )}
         </>
+      )}
+
+      {expiringList.length > 0 && (
+        <div className="entity-expiry">
+          <h4 className="devices-heading">Expiring devices</h4>
+          <p className="muted field-note">
+            These devices disappear from this user after the date shown (they work through that
+            whole day). Change the date on the device above, or clear it here to keep the device.
+          </p>
+          <ul className="expiring-list">
+            {expiringList.map((e) => (
+              <li key={e.entity_id}>
+                <span className="sel-name">{e.name}</span>
+                <span className="expiring-date">expires {entityExpires[e.entity_id]}</span>
+                <button
+                  type="button"
+                  className="sel-remove"
+                  title="Clear this expiry"
+                  aria-label={`Clear expiry for ${e.name}`}
+                  onClick={() => setEntityExpiry(e.entity_id, '')}
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {error && <div className="error">{error}</div>}
@@ -2779,28 +2859,22 @@ function SecretSettings() {
       setBusy(false);
     }
   }
-  if (source === null) return null;
+  // Only show this card when there's an action to take. When the secret is
+  // pinned via config (the add-on's jwt_secret), there's nothing to do here -
+  // you'd change it in the add-on configuration - so the card is hidden.
+  if (source !== 'managed') return null;
   return (
     <div className="card settings-card">
       <span className="device-name">Session security</span>
-      {source === 'config' ? (
-        <span className="meta">
-          The session secret is set via the add-on configuration (<code>jwt_secret</code>);
-          change it there.
-        </span>
-      ) : (
-        <>
-          <span className="meta">
-            A random session secret is managed automatically for this install. Regenerate it to
-            sign everyone out (e.g. if you suspect a session token leaked).
-          </span>
-          <div className="tab-actions">
-            <button className="ghost" disabled={busy} onClick={regenerate}>
-              {busy ? 'Working…' : 'Regenerate session secret'}
-            </button>
-          </div>
-        </>
-      )}
+      <span className="meta">
+        A random session secret is managed automatically for this install. Regenerate it to
+        sign everyone out (e.g. if you suspect a session token leaked).
+      </span>
+      <div className="tab-actions">
+        <button className="ghost" disabled={busy} onClick={regenerate}>
+          {busy ? 'Working…' : 'Regenerate session secret'}
+        </button>
+      </div>
       {status && <span className="muted">{status}</span>}
     </div>
   );
@@ -3800,6 +3874,7 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
   const [picture, setPicture] = useState('');
   const [canChangePassword, setCanChangePassword] = useState(false);
   const [passwordRules, setPasswordRules] = useState(null);
+  const [expiredNotice, setExpiredNotice] = useState('');
 
   // Resolve the signed-in user's role (so managers get the area organizer).
   useEffect(() => {
@@ -3815,7 +3890,14 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
         setCanChangePassword(!!m.canChangePassword);
         setPasswordRules(m.passwordRules || null);
       })
-      .catch(() => {});
+      .catch((e) => {
+        // The account expired mid-session: request() already cleared the token,
+        // so drop to the login screen and show why.
+        if (e && e.expired) {
+          setTok(null);
+          setExpiredNotice(e.message);
+        }
+      });
   }, [token]);
 
   function handleLogin(tok, name) {
@@ -3823,6 +3905,7 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
     localStorage.setItem(NAME_KEY, name || '');
     setTok(tok);
     setDisplayName(name || '');
+    setExpiredNotice('');
   }
 
   function handleLogout() {
@@ -3846,6 +3929,7 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
           appImage={appImage}
           providers={providers}
           oauth={oauth}
+          notice={expiredNotice}
         />
       ) : (
         <Dashboard
