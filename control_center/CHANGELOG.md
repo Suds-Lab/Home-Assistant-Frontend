@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.4
+- A climate device in **heat/cool** mode now colors its card by what it's actually doing right now (the live HVAC action) instead of always showing red: red while heating, blue while cooling, and green when it's on but idle. Single-mode heat, cool, dry, and fan-only are unchanged.
+
 ## 2.4.3
 - The admin **password rules** editor (Settings → Sign-in methods) is now themed to match the app: a boxed panel with properly styled number inputs and accent-colored checkboxes, instead of bare browser controls that looked out of place (especially on dark mode).
 
