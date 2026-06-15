@@ -232,9 +232,11 @@ function OAuthLogo({ oauth }) {
   );
 }
 
-// Brand glyph shown beside the title (and on the install prompt): a custom
-// emoji if one is set in Settings, otherwise the default Control Center logo.
-function BrandIcon({ icon, className = 'app-icon' }) {
+// Brand glyph shown beside the title (and on the install prompt). Precedence:
+// an uploaded logo image wins (same image used for the tab/PWA icon), then a
+// custom emoji set in Settings, then the default Control Center logo.
+function BrandIcon({ icon, image, className = 'app-icon' }) {
+  if (image) return <img className={className} src={image} alt="" />;
   return icon ? (
     <span className={className}>{icon}</span>
   ) : (
@@ -246,6 +248,7 @@ function Login({
   onLogin,
   title = 'Control Center',
   appIcon = '',
+  appImage = null,
   providers = { local: true, oauth: false },
   oauth = { name: 'OAuth', isGoogle: false, logo: '' },
 }) {
@@ -276,7 +279,7 @@ function Login({
   return (
     <div className="centered">
       <div className="card login">
-        <h1><BrandIcon icon={appIcon} /> {title}</h1>
+        <h1><BrandIcon icon={appIcon} image={appImage} /> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
 
         {providers.local && (
@@ -1690,6 +1693,7 @@ function Dashboard({
   live = true,
   title = 'Control Center',
   appIcon = '',
+  appImage = null,
   isManager = false,
   picture = '',
   canChangePassword = false,
@@ -1957,7 +1961,7 @@ function Dashboard({
     <div className={`dashboard${compact ? ' compact' : ''}`}>
       <header className="topbar">
         <div>
-          <h1><BrandIcon icon={appIcon} /> {title}</h1>
+          <h1><BrandIcon icon={appIcon} image={appImage} /> {title}</h1>
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
@@ -3725,7 +3729,7 @@ function InstallButton() {
 
 // Floating install banner. On the lockscreen (`persistent`) it stays put until
 // the app is installed; on the dashboard it's dismissible.
-function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon = '' }) {
+function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon = '', appImage = null }) {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const [deferred, setDeferred] = useState(deferredInstall);
@@ -3766,7 +3770,7 @@ function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon
 
   return (
     <div className="install-banner">
-      <BrandIcon icon={appIcon} className="install-icon" />
+      <BrandIcon icon={appIcon} image={appImage} className="install-icon" />
       <div className="install-text">
         <strong>Install {appName}</strong>
         <span className="muted">
@@ -3789,7 +3793,7 @@ function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon
   );
 }
 
-function UserApp({ live, title, appName, appIcon, providers, oauth }) {
+function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
   const [isManager, setIsManager] = useState(false);
@@ -3839,6 +3843,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
           onLogin={handleLogin}
           title={title}
           appIcon={appIcon}
+          appImage={appImage}
           providers={providers}
           oauth={oauth}
         />
@@ -3849,13 +3854,14 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
           live={live}
           title={title}
           appIcon={appIcon}
+          appImage={appImage}
           isManager={isManager}
           picture={picture}
           canChangePassword={canChangePassword}
           passwordRules={passwordRules}
         />
       )}
-      <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} />
+      <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} appImage={appImage} />
     </>
   );
 }
@@ -4012,6 +4018,7 @@ function App() {
         title={title}
         appName={appName}
         appIcon={appIcon}
+        appImage={appImage}
         providers={providers}
         oauth={oauth}
       />

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.7
+- An **uploaded logo** now also shows as the glyph beside the title (header, login, and install prompt), matching the browser tab and PWA icon, instead of only the emoji or default mark. Precedence is: uploaded logo first, then a Settings emoji, then the built-in logo.
+
 ## 2.4.6
 - A climate device in **heat/cool** mode now shows a heat+cool blended (purple) glow when Home Assistant doesn't report what it's actively doing, which is common for this mode. When the live HVAC action is reported it still goes red while heating and blue while cooling.
 
