@@ -508,6 +508,17 @@ section h2 {
   width: 90px;
 }
 
+/* Password requirements hint inside the Change password dialog. */
+.pw-reqs {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  background: var(--card-active);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 /* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control
    (.lb-scope), left-aligned with room below before the content. */
 .organize-tabs {
