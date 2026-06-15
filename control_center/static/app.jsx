@@ -1465,29 +1465,113 @@ function AreaOrganizer() {
 
 // Manager-only Organize view: tabs to organize devices into areas, or areas
 // into floors.
-function Organize() {
+function Organize({ onDone }) {
   const [tab, setTab] = useState('devices');
   return (
     <div className="organize">
-      <div className="lb-scope organize-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === 'devices'}
-          className={tab === 'devices' ? 'active' : ''}
-          onClick={() => setTab('devices')}
-        >
-          Devices
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'areas'}
-          className={tab === 'areas' ? 'active' : ''}
-          onClick={() => setTab('areas')}
-        >
-          Areas &amp; floors
-        </button>
+      <div className="organize-bar">
+        <div className="lb-scope organize-tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={tab === 'devices'}
+            className={tab === 'devices' ? 'active' : ''}
+            onClick={() => setTab('devices')}
+          >
+            Devices
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === 'areas'}
+            className={tab === 'areas' ? 'active' : ''}
+            onClick={() => setTab('areas')}
+          >
+            Areas &amp; floors
+          </button>
+        </div>
+        <button className="ghost" onClick={onDone}>Done</button>
       </div>
       {tab === 'devices' ? <Organizer /> : <AreaOrganizer />}
+    </div>
+  );
+}
+
+// Initials (up to 2 letters) from a display name.
+function initialsOf(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+// Stable, distinct color per user (hash the name -> hue).
+function avatarColor(key) {
+  let h = 0;
+  const s = String(key || '');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360}deg 52% 45%)`;
+}
+// User avatar: the OAuth picture if available, else initials on a per-user
+// color, else a generic account glyph.
+function Avatar({ name, picture, size = 32 }) {
+  const [imgOk, setImgOk] = useState(true);
+  const initials = initialsOf(name);
+  const dim = { width: size, height: size };
+  if (picture && imgOk) {
+    return (
+      <img className="avatar" style={dim} src={picture} alt="" referrerPolicy="no-referrer"
+           onError={() => setImgOk(false)} />
+    );
+  }
+  if (initials) {
+    return (
+      <span className="avatar avatar-initials" style={{ ...dim, background: avatarColor(name) }}>
+        {initials}
+      </span>
+    );
+  }
+  return (
+    <span className="avatar avatar-initials" style={{ ...dim, background: 'var(--muted)' }}>
+      <MdiIcon icon="account" size={Math.round(size * 0.62)} />
+    </span>
+  );
+}
+
+// Account dropdown in the dashboard header: the avatar opens a menu with the
+// manager organizer and log out. (Change password is added in a later step.)
+function AccountMenu({ name, picture, isManager, organizing, onOrganize, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div className="account" ref={ref}>
+      <button
+        className="account-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={name || 'Account'}
+      >
+        <Avatar name={name} picture={picture} />
+      </button>
+      {open && (
+        <div className="account-menu" role="menu">
+          {name && <div className="account-head">{name}</div>}
+          {isManager && !organizing && (
+            <button role="menuitem" onClick={() => { setOpen(false); onOrganize(); }}>
+              Organize
+            </button>
+          )}
+          <button role="menuitem" className="danger" onClick={() => { setOpen(false); onLogout(); }}>
+            Log out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1499,6 +1583,7 @@ function Dashboard({
   title = 'Control Center',
   appIcon = '',
   isManager = false,
+  picture = '',
 }) {
   const [organizing, setOrganizing] = useState(false);
   const [devices, setDevices] = useState([]);
@@ -1765,15 +1850,6 @@ function Dashboard({
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
-          {isManager && (
-            <button
-              className={`ghost ${organizing ? 'on' : ''}`}
-              onClick={() => setOrganizing((o) => !o)}
-              aria-pressed={organizing}
-            >
-              {organizing ? 'Done' : 'Organize'}
-            </button>
-          )}
           {!organizing && devices.length > 4 && (
             <button
               className="ghost icon-only"
@@ -1786,14 +1862,19 @@ function Dashboard({
           )}
           <ThemeToggle />
           <InstallButton />
-          <button className="btn-danger" onClick={onLogout}>
-            Log out
-          </button>
+          <AccountMenu
+            name={displayName}
+            picture={picture}
+            isManager={isManager}
+            organizing={organizing}
+            onOrganize={() => setOrganizing(true)}
+            onLogout={onLogout}
+          />
         </div>
       </header>
 
       {organizing ? (
-        <Organize />
+        <Organize onDone={() => setOrganizing(false)} />
       ) : (
       <>{/* normal dashboard */}
 
@@ -3548,6 +3629,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
   const [isManager, setIsManager] = useState(false);
+  const [picture, setPicture] = useState('');
 
   // Resolve the signed-in user's role (so managers get the area organizer).
   useEffect(() => {
@@ -3559,6 +3641,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
       .then((m) => {
         setIsManager(!!m.manager);
         if (m.displayName) setDisplayName(m.displayName);
+        setPicture(m.picture || '');
       })
       .catch(() => {});
   }, [token]);
@@ -3576,6 +3659,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
     setTok(null);
     setDisplayName('');
     setIsManager(false);
+    setPicture('');
   }
 
   return (
@@ -3596,6 +3680,7 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
           title={title}
           appIcon={appIcon}
           isManager={isManager}
+          picture={picture}
         />
       )}
       <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} />

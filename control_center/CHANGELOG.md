@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.0
+- The dashboard header now has an **account menu**. Your avatar (your OAuth profile picture, or your initials on a per-user color) opens a dropdown with **Organize** (managers only) and **Log out**, tidying up the header. The organizer keeps its own **Done** button.
+
 ## 2.2.5
 - The manager edit pencil on dashboard device cards is now shown in a bordered button (a box), matching the area organizer and the other icon buttons, instead of a borderless glyph.
 
