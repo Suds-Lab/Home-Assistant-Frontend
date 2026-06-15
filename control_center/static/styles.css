@@ -488,10 +488,12 @@ section h2 {
 .pw-rules {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 13px;
+  background: var(--card-active);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 .pw-rules-len {
   display: flex;
@@ -506,6 +508,21 @@ section h2 {
 }
 .pw-rules-len input {
   width: 90px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.pw-rules .checkbox-row {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.pw-rules input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
 }
 
 /* Password requirements hint inside the Change password dialog. */

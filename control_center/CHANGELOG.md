@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.3
+- The admin **password rules** editor (Settings → Sign-in methods) is now themed to match the app: a boxed panel with properly styled number inputs and accent-colored checkboxes, instead of bare browser controls that looked out of place (especially on dark mode).
+
 ## 2.4.2
 - The theme toggle is now two-state: it switches between **Auto** (follow your device) and the **opposite** of your device's current appearance, then back to Auto. The icon reflects this - a half-moon for Auto, and a sun or moon for the manual light/dark override.
 
