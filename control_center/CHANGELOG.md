@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.5
+- The manager edit pencil on dashboard device cards is now shown in a bordered button (a box), matching the area organizer and the other icon buttons, instead of a borderless glyph.
+
 ## 2.2.4
 - The manager edit pencil (on dashboard device cards and in the area organizer) now uses a crisp **outline pencil icon** instead of the plain text glyph, so it renders consistently across devices.
 
