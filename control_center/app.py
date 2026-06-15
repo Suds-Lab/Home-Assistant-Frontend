@@ -715,6 +715,14 @@ def _password_rules():
     }
 
 
+def _join_natural(items):
+    if len(items) <= 1:
+        return "".join(items)
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
 def _password_problems(pw, rules=None):
     """List of unmet password requirements (empty list = OK)."""
     r = rules or _password_rules()
@@ -755,7 +763,7 @@ def change_my_password():
     _login_clear(key)
     problems = _password_problems(new)
     if problems:
-        raise ApiError("Password must have " + ", ".join(problems) + ".", 400)
+        raise ApiError("Password must have " + _join_natural(problems) + ".", 400)
     users = load_users()
     for u in users:
         if u["username"] == user["username"]:

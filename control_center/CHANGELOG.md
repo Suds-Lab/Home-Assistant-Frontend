@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.1
+- The password requirements in the Change password dialog now read as natural English (e.g. "an uppercase letter, a number, and a special character") and appear in a styled hint box that matches the app.
+
 ## 2.4.0
 - Local users can now **change their own password** from the account menu (it verifies the current password first, and is rate-limited). Admins set the **password rules** under **Settings → Sign-in methods**: minimum/maximum length and whether an uppercase letter, lowercase letter, number, or special character is required.
 

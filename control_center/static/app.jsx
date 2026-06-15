@@ -1076,6 +1076,13 @@ function passwordRuleList(r) {
   return out;
 }
 
+// Join a list as natural English: "a", "a and b", "a, b, and c".
+function joinNatural(items) {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
 // Self-service "Change password" dialog (local accounts only).
 function ChangePasswordDialog({ rules, onClose }) {
   const [cur, setCur] = useState('');
@@ -1134,7 +1141,7 @@ function ChangePasswordDialog({ rules, onClose }) {
               <input type="password" value={confirm} autoComplete="new-password"
                      onChange={(e) => setConfirm(e.target.value)} />
             </label>
-            {reqs.length > 0 && <p className="meta">Must include: {reqs.join(', ')}.</p>}
+            {reqs.length > 0 && <p className="pw-reqs">Must include {joinNatural(reqs)}.</p>}
             {err && <div className="error">{err}</div>}
             <div className="editor-actions">
               <button type="submit" className="btn-primary" disabled={busy}>
