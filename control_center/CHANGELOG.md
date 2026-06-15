@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.3
+- Hardening: the integration brand-icon proxy (`/api/icon/brand/...`) now requires a valid session on the published dashboard port, so the set of installed integrations can't be enumerated by an unauthenticated visitor. The token rides as a query parameter (an `<img>` can't send a header), matching how the live WebSocket is authenticated; the Ingress/management port stays trusted by port.
+
 ## 2.2.2
 - Integration badges now show real logos via Home Assistant's brands proxy (2026.3+), so a custom integration that ships its own logo, not just core integrations, displays correctly; older Home Assistant falls back to the brands CDN. When an integration genuinely has no logo, the badge shows a neutral puzzle-piece glyph instead of Home Assistant's "icon not available" placeholder.
 
