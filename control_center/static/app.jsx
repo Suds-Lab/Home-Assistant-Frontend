@@ -966,29 +966,30 @@ function DeviceCard({ device, onChange, onEdit }) {
   }
 
   // Pick a state-reactive accent: warm light, blue cool, red heat, etc.
+  // Every active accent pulses for a consistent "live" feel.
   function accent() {
     const d = device.domain;
-    if (d === 'light' && on) return 'accent-warm glow';
+    if (d === 'light' && on) return 'accent-warm glow pulse';
     if (d === 'climate') {
       // heat_cool can heat OR cool, so color by what it's actually doing now
       // (hvac_action), not the mode: red heating, blue cooling, green when idle.
       if (state === 'heat_cool') {
         if (a.hvac_action === 'heating') return 'accent-heat glow pulse';
-        if (a.hvac_action === 'cooling') return 'accent-cool glow';
-        return 'accent-on glow';
+        if (a.hvac_action === 'cooling') return 'accent-cool glow pulse';
+        return 'accent-on glow pulse';
       }
       if (state === 'heat') return 'accent-heat glow pulse';
-      if (state === 'cool' || state === 'auto') return 'accent-cool glow';
-      if (state === 'dry') return 'accent-dry glow';
-      if (state === 'fan_only') return 'accent-on glow';
+      if (state === 'cool' || state === 'auto') return 'accent-cool glow pulse';
+      if (state === 'dry') return 'accent-dry glow pulse';
+      if (state === 'fan_only') return 'accent-on glow pulse';
       return '';
     }
-    if (d === 'cover' && state === 'open') return 'accent-sky glow';
-    if (d === 'lock') return state === 'locked' ? 'accent-on glow' : 'accent-amber glow';
+    if (d === 'cover' && state === 'open') return 'accent-sky glow pulse';
+    if (d === 'lock') return state === 'locked' ? 'accent-on glow pulse' : 'accent-amber glow pulse';
     if (d === 'media_player' && state === 'playing') return 'accent-media glow pulse';
     if (['switch', 'input_boolean', 'fan', 'automation'].includes(d) && on)
-      return 'accent-on glow';
-    return isActive ? 'accent-on glow' : '';
+      return 'accent-on glow pulse';
+    return isActive ? 'accent-on glow pulse' : '';
   }
 
   return (

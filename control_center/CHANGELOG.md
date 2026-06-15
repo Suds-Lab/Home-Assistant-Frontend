@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.5
+- Every active device card now **pulses** its colored glow, not just heating climates and playing media, so an "on" or active state reads consistently across lights, switches, fans, covers, locks, climate, and the rest.
+
 ## 2.4.4
 - A climate device in **heat/cool** mode now colors its card by what it's actually doing right now (the live HVAC action) instead of always showing red: red while heating, blue while cooling, and green when it's on but idle. Single-mode heat, cool, dry, and fan-only are unchanged.
 
