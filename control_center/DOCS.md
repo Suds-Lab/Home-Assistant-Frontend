@@ -46,13 +46,21 @@ in `/data`):
   installed PWA / home-screen icon, overriding the default logo. Without an
   upload, the built-in logo is used everywhere.
 - **Device types**: which entity domains can be assigned in **Manage users**.
-- **Sign-in methods**: Local password, OAuth, or both (see below).
+- **Sign-in methods**: Local password, OAuth, or both (see below). When local
+  sign-in is enabled you can also set **password rules** here (minimum/maximum
+  length and whether an uppercase letter, lowercase letter, number, or special
+  character is required); they apply when a user changes their own password.
 - **Session security**: the login-session secret is auto-managed; you can
   **regenerate** it here to sign everyone out (e.g. if a token leaked).
 
 Each screen also has a **theme toggle** in the top corner to switch between
 **System** (default), **Light** and **Dark**. The choice is per-device and
 remembered in the browser.
+
+On the user dashboard, an **account menu** (your avatar, top right) holds **Log
+out**, the manager **Organize** tools, and **Change password** (for local
+accounts). The avatar is your OAuth picture if you have one, otherwise your
+initials on a per-user color.
 
 ## Sign-in with Google / OAuth
 

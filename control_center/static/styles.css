@@ -484,14 +484,28 @@ section h2 {
   color: #e0524d;
 }
 
-/* Organize page header bar (tabs + Done). */
-.organize-bar {
+/* Admin password-rules controls (under Sign-in methods). */
+.pw-rules {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.pw-rules-len {
+  display: flex;
+  gap: 14px;
+}
+.pw-rules-len label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.pw-rules-len input {
+  width: 90px;
 }
 
 /* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control

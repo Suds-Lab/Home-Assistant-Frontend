@@ -136,6 +136,8 @@ const login = (username, password) =>
   request('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
 const getDevices = () => request('/devices');
 const getMe = () => request('/me');
+const changeMyPassword = (body) =>
+  request('/me/password', { method: 'POST', body: JSON.stringify(body) });
 const getServerVersion = () => request('/version'); // for auto-reload on new deploys
 const getSession = () => request('/session');
 // Manager: organize HA devices into areas.
@@ -1061,6 +1063,94 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
   );
 }
 
+// Human-readable list of the admin's password requirements.
+function passwordRuleList(r) {
+  if (!r) return [];
+  const out = [];
+  if (r.min) out.push(`at least ${r.min} characters`);
+  if (r.max) out.push(`at most ${r.max} characters`);
+  if (r.upper) out.push('an uppercase letter');
+  if (r.lower) out.push('a lowercase letter');
+  if (r.number) out.push('a number');
+  if (r.special) out.push('a special character');
+  return out;
+}
+
+// Self-service "Change password" dialog (local accounts only).
+function ChangePasswordDialog({ rules, onClose }) {
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState(false);
+  const reqs = passwordRuleList(rules);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr('');
+    if (next !== confirm) {
+      setErr('The new passwords do not match.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await changeMyPassword({ current: cur, new: next });
+      setDone(true);
+    } catch (e2) {
+      setErr(e2.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Change password</h3>
+          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        {done ? (
+          <>
+            <p className="meta">Your password has been changed.</p>
+            <div className="editor-actions">
+              <button className="btn-primary" onClick={onClose}>Done</button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <label>
+              Current password
+              <input type="password" value={cur} autoFocus autoComplete="current-password"
+                     onChange={(e) => setCur(e.target.value)} />
+            </label>
+            <label>
+              New password
+              <input type="password" value={next} autoComplete="new-password"
+                     onChange={(e) => setNext(e.target.value)} />
+            </label>
+            <label>
+              Confirm new password
+              <input type="password" value={confirm} autoComplete="new-password"
+                     onChange={(e) => setConfirm(e.target.value)} />
+            </label>
+            {reqs.length > 0 && <p className="meta">Must include: {reqs.join(', ')}.</p>}
+            {err && <div className="error">{err}</div>}
+            <div className="editor-actions">
+              <button type="submit" className="btn-primary" disabled={busy}>
+                {busy ? 'Saving…' : 'Change password'}
+              </button>
+              <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Manager-only: move Home Assistant devices between areas / rename (writes to HA).
 // Friendly display name for a Home Assistant integration (platform) domain.
 const INTEGRATION_NAMES = {
@@ -1465,30 +1555,27 @@ function AreaOrganizer() {
 
 // Manager-only Organize view: tabs to organize devices into areas, or areas
 // into floors.
-function Organize({ onDone }) {
+function Organize() {
   const [tab, setTab] = useState('devices');
   return (
     <div className="organize">
-      <div className="organize-bar">
-        <div className="lb-scope organize-tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={tab === 'devices'}
-            className={tab === 'devices' ? 'active' : ''}
-            onClick={() => setTab('devices')}
-          >
-            Devices
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'areas'}
-            className={tab === 'areas' ? 'active' : ''}
-            onClick={() => setTab('areas')}
-          >
-            Areas &amp; floors
-          </button>
-        </div>
-        <button className="ghost" onClick={onDone}>Done</button>
+      <div className="lb-scope organize-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'devices'}
+          className={tab === 'devices' ? 'active' : ''}
+          onClick={() => setTab('devices')}
+        >
+          Devices
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'areas'}
+          className={tab === 'areas' ? 'active' : ''}
+          onClick={() => setTab('areas')}
+        >
+          Areas &amp; floors
+        </button>
       </div>
       {tab === 'devices' ? <Organizer /> : <AreaOrganizer />}
     </div>
@@ -1537,7 +1624,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, organizing, onOrganize, onLogout }) {
+function AccountMenu({ name, picture, isManager, organizing, canChangePassword, onChangePassword, onOrganize, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -1562,6 +1649,11 @@ function AccountMenu({ name, picture, isManager, organizing, onOrganize, onLogou
       {open && (
         <div className="account-menu" role="menu">
           {name && <div className="account-head">{name}</div>}
+          {canChangePassword && (
+            <button role="menuitem" onClick={() => { setOpen(false); onChangePassword(); }}>
+              Change password
+            </button>
+          )}
           {isManager && !organizing && (
             <button role="menuitem" onClick={() => { setOpen(false); onOrganize(); }}>
               Organize
@@ -1584,8 +1676,11 @@ function Dashboard({
   appIcon = '',
   isManager = false,
   picture = '',
+  canChangePassword = false,
+  passwordRules = null,
 }) {
   const [organizing, setOrganizing] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1850,6 +1945,11 @@ function Dashboard({
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
+          {organizing && (
+            <button className="ghost" onClick={() => setOrganizing(false)}>
+              Done
+            </button>
+          )}
           {!organizing && devices.length > 4 && (
             <button
               className="ghost icon-only"
@@ -1867,14 +1967,20 @@ function Dashboard({
             picture={picture}
             isManager={isManager}
             organizing={organizing}
+            canChangePassword={canChangePassword}
+            onChangePassword={() => setShowPw(true)}
             onOrganize={() => setOrganizing(true)}
             onLogout={onLogout}
           />
         </div>
       </header>
 
+      {showPw && (
+        <ChangePasswordDialog rules={passwordRules} onClose={() => setShowPw(false)} />
+      )}
+
       {organizing ? (
-        <Organize onDone={() => setOrganizing(false)} />
+        <Organize />
       ) : (
       <>{/* normal dashboard */}
 
@@ -2533,6 +2639,7 @@ function IncludedEntitiesSettings() {
 function AuthProviderSettings() {
   const [val, setVal] = useState(null);
   const [cfg, setCfg] = useState({ configured: false, name: 'OAuth' });
+  const [rules, setRules] = useState(null);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
@@ -2540,6 +2647,7 @@ function AuthProviderSettings() {
       .then((d) => {
         setVal(d.authProviders || 'local');
         setCfg({ configured: !!d.oauthConfigured, name: d.oauthName || 'OAuth', openWarning: !!d.oauthOpenWarning });
+        setRules(d.passwordRules || { min: 0, max: 0, upper: false, lower: false, number: false, special: false });
       })
       .catch((e) => setStatus(e.message));
   }, []);
@@ -2549,6 +2657,17 @@ function AuthProviderSettings() {
     setStatus('Saving…');
     try {
       await adminSetSettings({ authProviders: v });
+      setStatus('Saved.');
+    } catch (e) {
+      setStatus(e.message);
+    }
+  }
+
+  async function saveRules(next) {
+    setRules(next);
+    setStatus('Saving…');
+    try {
+      await adminSetSettings({ passwordRules: next });
       setStatus('Saved.');
     } catch (e) {
       setStatus(e.message);
@@ -2588,6 +2707,30 @@ function AuthProviderSettings() {
           refused. Set <code>oauth_allowed_emails</code> / <code>oauth_allowed_domains</code>
           {' '}(or <code>oauth_allow_any</code>) in the add-on configuration.
         </span>
+      )}
+      {rules && val !== 'oauth' && (
+        <div className="pw-rules">
+          <span className="meta">Password rules (for users changing their own password):</span>
+          <div className="pw-rules-len">
+            <label>
+              Min length
+              <input type="number" min="0" max="128" value={rules.min}
+                     onChange={(e) => saveRules({ ...rules, min: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
+            </label>
+            <label>
+              Max length
+              <input type="number" min="0" max="256" value={rules.max}
+                     onChange={(e) => saveRules({ ...rules, max: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
+            </label>
+          </div>
+          {[['upper', 'an uppercase letter'], ['lower', 'a lowercase letter'], ['number', 'a number'], ['special', 'a special character']].map(([k, label]) => (
+            <label key={k} className="checkbox-row">
+              <input type="checkbox" checked={!!rules[k]}
+                     onChange={(e) => saveRules({ ...rules, [k]: e.target.checked })} />
+              Require {label}
+            </label>
+          ))}
+        </div>
       )}
       {status && <span className="muted">{status}</span>}
     </div>
@@ -3630,6 +3773,8 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
   const [isManager, setIsManager] = useState(false);
   const [picture, setPicture] = useState('');
+  const [canChangePassword, setCanChangePassword] = useState(false);
+  const [passwordRules, setPasswordRules] = useState(null);
 
   // Resolve the signed-in user's role (so managers get the area organizer).
   useEffect(() => {
@@ -3642,6 +3787,8 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
         setIsManager(!!m.manager);
         if (m.displayName) setDisplayName(m.displayName);
         setPicture(m.picture || '');
+        setCanChangePassword(!!m.canChangePassword);
+        setPasswordRules(m.passwordRules || null);
       })
       .catch(() => {});
   }, [token]);
@@ -3660,6 +3807,8 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
     setDisplayName('');
     setIsManager(false);
     setPicture('');
+    setCanChangePassword(false);
+    setPasswordRules(null);
   }
 
   return (
@@ -3681,6 +3830,8 @@ function UserApp({ live, title, appName, appIcon, providers, oauth }) {
           appIcon={appIcon}
           isManager={isManager}
           picture={picture}
+          canChangePassword={canChangePassword}
+          passwordRules={passwordRules}
         />
       )}
       <InstallPrompt persistent={!token} appName={appName} appIcon={appIcon} />

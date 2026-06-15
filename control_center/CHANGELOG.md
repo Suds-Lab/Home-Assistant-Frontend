@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.4.0
+- Local users can now **change their own password** from the account menu (it verifies the current password first, and is rate-limited). Admins set the **password rules** under **Settings → Sign-in methods**: minimum/maximum length and whether an uppercase letter, lowercase letter, number, or special character is required.
+
 ## 2.3.0
 - The dashboard header now has an **account menu**. Your avatar (your OAuth profile picture, or your initials on a per-user color) opens a dropdown with **Organize** (managers only) and **Log out**, tidying up the header. The organizer keeps its own **Done** button.
 

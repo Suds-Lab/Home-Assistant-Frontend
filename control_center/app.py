@@ -702,16 +702,80 @@ def login():
     )
 
 
+def _password_rules():
+    """Admin-configured complexity rules for self-service password changes."""
+    r = _load_settings().get("password_rules") or {}
+    return {
+        "min": int(r.get("min") or 0),
+        "max": int(r.get("max") or 0),
+        "upper": bool(r.get("upper")),
+        "lower": bool(r.get("lower")),
+        "number": bool(r.get("number")),
+        "special": bool(r.get("special")),
+    }
+
+
+def _password_problems(pw, rules=None):
+    """List of unmet password requirements (empty list = OK)."""
+    r = rules or _password_rules()
+    out = []
+    if r["min"] and len(pw) < r["min"]:
+        out.append(f"at least {r['min']} characters")
+    if r["max"] and len(pw) > r["max"]:
+        out.append(f"at most {r['max']} characters")
+    if r["upper"] and not any(c.isupper() for c in pw):
+        out.append("an uppercase letter")
+    if r["lower"] and not any(c.islower() for c in pw):
+        out.append("a lowercase letter")
+    if r["number"] and not any(c.isdigit() for c in pw):
+        out.append("a number")
+    if r["special"] and not any((not c.isalnum()) and (not c.isspace()) for c in pw):
+        out.append("a special character")
+    return out
+
+
+@app.post("/api/me/password")
+def change_my_password():
+    """Let a signed-in local user change their own password: verifies the current
+    one first (throttled), then enforces the admin's complexity rules."""
+    user = current_user()
+    if not cfg_providers()["local"]:
+        raise ApiError("Password sign-in is disabled.", 403)
+    if not user.get("password"):
+        raise ApiError("This account signs in with OAuth and has no password.", 400)
+    body = request.get_json(silent=True) or {}
+    current = body.get("current") or ""
+    new = body.get("new") or ""
+    key = _login_key(user["username"])
+    if _login_blocked(key):
+        raise ApiError("Too many attempts. Please wait a few minutes and try again.", 429)
+    if not verify_password(user.get("password"), current):
+        _login_note_fail(key)
+        raise ApiError("Current password is incorrect.", 401)
+    _login_clear(key)
+    problems = _password_problems(new)
+    if problems:
+        raise ApiError("Password must have " + ", ".join(problems) + ".", 400)
+    users = load_users()
+    for u in users:
+        if u["username"] == user["username"]:
+            u["password"] = hash_password(new)
+    save_users(users)
+    return jsonify(ok=True)
+
+
 @app.get("/api/me")
 def me():
     """The signed-in user's display name + role (so the dashboard can show the
-    manager-only area organizer)."""
+    manager-only area organizer) plus avatar and password-change availability."""
     user = current_user()
     return jsonify(
         username=user["username"],
         displayName=user.get("displayName") or user["username"],
         manager=bool(user.get("manager")),
         picture=user.get("picture") or None,
+        canChangePassword=bool(cfg_providers()["local"] and user.get("password")),
+        passwordRules=_password_rules(),
     )
 
 
@@ -1621,6 +1685,7 @@ def admin_get_settings():
             and not OAUTH_ALLOW_ANY
         ),
         secretSource=JWT_SECRET_SOURCE,
+        passwordRules=_password_rules(),
         includedEntities=sorted(included_entities()),
     )
 
@@ -1637,6 +1702,16 @@ def admin_set_settings():
         s["auth_providers"] = body["authProviders"]
     if isinstance(body.get("includedEntities"), list):
         s["included_entities"] = [e for e in body["includedEntities"] if isinstance(e, str)]
+    if isinstance(body.get("passwordRules"), dict):
+        pr = body["passwordRules"]
+        s["password_rules"] = {
+            "min": max(0, min(128, int(pr.get("min") or 0))),
+            "max": max(0, min(256, int(pr.get("max") or 0))),
+            "upper": bool(pr.get("upper")),
+            "lower": bool(pr.get("lower")),
+            "number": bool(pr.get("number")),
+            "special": bool(pr.get("special")),
+        }
     _save_settings(s)
     return jsonify(ok=True)
 
