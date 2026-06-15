@@ -711,6 +711,7 @@ def me():
         username=user["username"],
         displayName=user.get("displayName") or user["username"],
         manager=bool(user.get("manager")),
+        picture=user.get("picture") or None,
     )
 
 
@@ -749,11 +750,12 @@ def _email_allowed(email):
     return domain in OAUTH_ALLOWED_DOMAINS or email in OAUTH_ALLOWED_EMAILS
 
 
-def _user_for_email(email, name=""):
+def _user_for_email(email, name="", picture=""):
     """Find the app user for an OAuth email, creating an un-onboarded one (no
     devices) on first sign-in so the admin can assign devices later. The display
     name is taken from the provider (e.g. the Google account name) on creation,
-    falling back to the email's local part."""
+    falling back to the email's local part. The provider avatar URL, if any, is
+    stored and refreshed on each sign-in for the account menu."""
     email = email.strip().lower()
     users = load_users()
     found = next(
@@ -762,12 +764,16 @@ def _user_for_email(email, name=""):
         None,
     )
     if found:
+        if picture and found.get("picture") != picture:
+            found["picture"] = picture
+            save_users(users)
         return found
     record = {
         "username": email,
         "email": email,
         "displayName": (name or "").strip() or email.split("@")[0],
         "provider": "oauth",
+        "picture": picture or "",
         "entities": [],
     }
     users.append(record)
@@ -880,7 +886,7 @@ def oauth_callback():
             )
         return _oauth_error_page("Your account isn't allowed to use this app.")
 
-    user = _user_for_email(email, profile.get("name"))
+    user = _user_for_email(email, profile.get("name"), profile.get("picture") or "")
     # Hand the session token + display name to the SPA via the URL fragment
     # (never sent to a server or written to logs); it stores and strips them.
     frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
