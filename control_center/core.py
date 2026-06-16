@@ -33,7 +33,7 @@ mimetypes.add_type("text/javascript", ".js")
 import jwt
 import requests
 import websocket  # websocket-client
-from flask import Flask, Response, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, g, jsonify, redirect, request, send_from_directory
 from flask_sock import Sock
 
 # Configuration (add-on options + env) lives in config.py. Re-exported here via
@@ -445,10 +445,16 @@ def user_from_token(token):
 
 
 def current_user():
-    """Validate the Bearer session token and return the matching user."""
+    """The authenticated user for this request. Reuses the one the auth gate
+    already resolved (stashed on flask.g) so we don't validate the token twice;
+    falls back to validating the Bearer header when called outside that path."""
+    cached = getattr(g, "current_user", None)
+    if cached is not None:
+        return cached
     header = request.headers.get("Authorization", "")
     token = header[7:] if header.startswith("Bearer ") else None
-    return user_from_token(token)
+    g.current_user = user_from_token(token)
+    return g.current_user
 
 
 def is_management():
