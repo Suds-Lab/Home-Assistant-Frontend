@@ -1768,6 +1768,16 @@ img.install-icon {
   color: var(--accent-2);
 }
 
+/* Account expiry: amber when a future expiry is set, red once it has passed. */
+.badge-expires {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #f59e0b;
+}
+.badge-expired {
+  background: color-mix(in srgb, #ef4444 20%, transparent);
+  color: #ef4444;
+}
+
 .editor h3 {
   margin: 0 0 16px;
 }
