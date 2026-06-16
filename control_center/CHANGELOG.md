@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.5.3
+- Hardening: the API is now **default-deny**. Every `/api/*` endpoint requires a valid session (or the trusted management port) unless it is explicitly public: sign-in, the OAuth handshake, the branding/session probe, and the version check. This is enforced centrally, so a newly added endpoint can't accidentally ship unauthenticated. (Internally, the backend was also reorganized into smaller modules; no behavior change.)
+
 ## 2.5.2
 - The Manage users list now shows an **account-expiry badge** on each user: amber "Expires <date>" when a future expiry is set, and red "Expired <date>" once it has passed, so you can see at a glance who is time-limited without opening the editor.
 
