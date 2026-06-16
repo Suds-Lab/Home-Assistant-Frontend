@@ -34,6 +34,46 @@ from core import (  # noqa: F401
 )
 
 
+# Endpoints reachable WITHOUT authentication, by necessity (the login page and
+# the OAuth handshake run before a session exists). Everything else under /api/
+# is default-deny: it needs a valid session token or the trusted management
+# port. Non-/api paths are static/PWA assets and are served openly.
+_PUBLIC_API = {
+    "/api/login",
+    "/api/session",
+    "/api/oauth/login",
+    "/api/oauth/callback",
+    "/api/version",
+}
+
+
+def _request_token():
+    """Bearer token from the header, or the ?token= query param (an <img>, an
+    EventSource, or a WebSocket can't set an Authorization header)."""
+    h = request.headers.get("Authorization", "")
+    if h.startswith("Bearer "):
+        return h[7:]
+    return request.args.get("token")
+
+
+@app.before_request
+def _require_auth():
+    """Default-deny gate for the API: no /api/* endpoint is reachable
+    unauthenticated unless it's explicitly public. Per-route handlers still run
+    their own current_user / require_admin / require_manager checks on top."""
+    p = request.path
+    if not p.startswith("/api/") or request.method in ("OPTIONS", "HEAD"):
+        return  # static/PWA assets and preflight: not gated here
+    if p in _PUBLIC_API:
+        return
+    if is_management():
+        return  # trusted Ingress/management port (HA-authenticated admin)
+    token = _request_token()
+    if not token:
+        raise ApiError("Not authenticated", 401)
+    user_from_token(token)  # raises ApiError (401/403) on a bad/expired token
+
+
 @app.after_request
 def _security_headers(resp):
     """Defense-in-depth headers. nosniff everywhere; deny framing only on the
