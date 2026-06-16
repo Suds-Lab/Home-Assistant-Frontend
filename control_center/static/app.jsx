@@ -262,12 +262,15 @@ function Login({
   providers = { local: true, oauth: false },
   oauth = { name: 'OAuth', isGoogle: false, logo: '' },
   notice = '',
+  authError = '',
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  // An expired-account message: either carried over from a cut-off session
-  // (the `notice` prop) or raised by a fresh login attempt below.
+  // `error` is a generic sign-in error shown above the form (works for OAuth-
+  // only setups too); a password attempt below also surfaces here.
+  const [error, setError] = useState(authError || '');
+  // An expired-account message: carried over from a cut-off session or an OAuth
+  // redirect (the `notice` prop), or raised by a fresh login attempt below.
   const [expired, setExpired] = useState(notice || '');
   const [busy, setBusy] = useState(false);
 
@@ -305,6 +308,8 @@ function Login({
           </div>
         )}
 
+        {error && !expired && <div className="error" role="alert">{error}</div>}
+
         {providers.local && (
           <form onSubmit={submit}>
             <label>
@@ -325,7 +330,6 @@ function Login({
                 autoComplete="current-password"
               />
             </label>
-            {error && <div className="error">{error}</div>}
             <button type="submit" disabled={busy}>
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
@@ -3867,14 +3871,18 @@ function InstallPrompt({ persistent = false, appName = 'Control Center', appIcon
   );
 }
 
-function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) {
+function UserApp({ live, title, appName, appIcon, appImage, providers, oauth, authNotice }) {
   const [token, setTok] = useState(getToken());
   const [displayName, setDisplayName] = useState(localStorage.getItem(NAME_KEY) || '');
   const [isManager, setIsManager] = useState(false);
   const [picture, setPicture] = useState('');
   const [canChangePassword, setCanChangePassword] = useState(false);
   const [passwordRules, setPasswordRules] = useState(null);
-  const [expiredNotice, setExpiredNotice] = useState('');
+  // Seed the login prompts from an OAuth sign-in failure handed back by the
+  // server (expired account, or a generic message), so it shows on the login
+  // page exactly like a password sign-in failure.
+  const [expiredNotice, setExpiredNotice] = useState(authNotice?.expired ? 'expired' : '');
+  const [authError, setAuthError] = useState(authNotice?.message || '');
 
   // Resolve the signed-in user's role (so managers get the area organizer).
   useEffect(() => {
@@ -3906,6 +3914,7 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
     setTok(tok);
     setDisplayName(name || '');
     setExpiredNotice('');
+    setAuthError('');
   }
 
   function handleLogout() {
@@ -3930,6 +3939,7 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth }) 
           providers={providers}
           oauth={oauth}
           notice={expiredNotice}
+          authError={authError}
         />
       ) : (
         <Dashboard
@@ -4009,6 +4019,18 @@ function VersionTag() {
 
 function App() {
   const [session, setSession] = useState(null); // null = loading
+  // An OAuth sign-in failure is handed back in the URL fragment so it renders
+  // on the login page (themed), the same as a password sign-in failure. Read it
+  // once at startup (before the fragment is stripped below).
+  const [authNotice] = useState(() => {
+    if (typeof location === 'undefined' || !location.hash) return null;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const err = p.get('auth_error');
+    if (!err) return null;
+    return err === 'expired'
+      ? { expired: true }
+      : { message: p.get('auth_msg') || 'Sign-in failed. Please try again.' };
+  });
   // App name -> browser tab + installed-app name. Title -> visible heading.
   const appName = session?.appName || 'Control Center';
   const title = session?.title || appName;
@@ -4021,8 +4043,8 @@ function App() {
     logo: session?.oauthLogo || '',
   };
 
-  // OAuth callback hands the session token back in the URL fragment. Capture
-  // and store it (then strip it) before anything reads the token.
+  // OAuth callback hands the session token (or a sign-in error) back in the URL
+  // fragment. Capture it, then strip the fragment before anything reads it.
   useEffect(() => {
     if (location.hash.includes('oauth_token=')) {
       const params = new URLSearchParams(location.hash.slice(1));
@@ -4031,8 +4053,10 @@ function App() {
         setToken(t);
         const name = params.get('oauth_name');
         if (name) localStorage.setItem(NAME_KEY, name); // greet OAuth users by name
-        history.replaceState(null, '', location.pathname + location.search);
       }
+      history.replaceState(null, '', location.pathname + location.search);
+    } else if (location.hash.includes('auth_error=')) {
+      history.replaceState(null, '', location.pathname + location.search);
     }
   }, []);
 
@@ -4116,6 +4140,7 @@ function App() {
         appImage={appImage}
         providers={providers}
         oauth={oauth}
+        authNotice={authNotice}
       />
     );
   }
