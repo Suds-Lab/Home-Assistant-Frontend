@@ -896,18 +896,15 @@ def _user_for_email(email, name="", picture=""):
     return record
 
 
-def _oauth_error_page(message):
-    html = (
-        "<!doctype html><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<title>Sign-in failed</title>"
-        "<body style='font-family:system-ui;background:#0f1419;color:#e7edf3;"
-        "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0'>"
-        f"<div style='max-width:420px;padding:24px;text-align:center'><h2>Sign-in failed</h2>"
-        f"<p style='color:#9aa7b4'>{message}</p>"
-        "<p><a href='./' style='color:#3b82f6'>Back to sign in</a></p></div></body>"
-    )
-    return Response(html, status=400, mimetype="text/html")
+def _oauth_error_page(message, code="error"):
+    """Send an OAuth sign-in failure back to the dashboard login page so it
+    renders inside the app (themed, consistent with password sign-in) rather
+    than a separate page. `code='expired'` triggers the dedicated "account
+    expired" prompt; any other failure shows `message` inline on the login
+    screen. The values ride in the URL fragment (never sent to a server)."""
+    base = OAUTH_REDIRECT_BASE or ""
+    frag = urlencode({"auth_error": code, "auth_msg": message})
+    return redirect(f"{base}/#{frag}")
 
 
 @app.get("/api/oauth/login")
@@ -1003,7 +1000,7 @@ def oauth_callback():
 
     user = _user_for_email(email, profile.get("name"), profile.get("picture") or "")
     if _user_expired(user):
-        return _oauth_error_page(_EXPIRED_MSG)
+        return _oauth_error_page(_EXPIRED_MSG, "expired")
     # Hand the session token + display name to the SPA via the URL fragment
     # (never sent to a server or written to logs); it stores and strips them.
     frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
