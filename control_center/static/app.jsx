@@ -254,6 +254,27 @@ function BrandIcon({ icon, image, className = 'app-icon' }) {
   );
 }
 
+// Account-expiry badge for the user list: amber "Expires <date>" when a future
+// expiry is set, red "Expired <date>" once it has passed, nothing otherwise.
+// The date is 'YYYY-MM-DD', valid through that day (expired the day after).
+function ExpiryBadge({ expires }) {
+  if (!expires) return null;
+  const t = new Date();
+  const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(
+    t.getDate()
+  ).padStart(2, '0')}`;
+  const expired = expires < todayStr;
+  const d = new Date(`${expires}T00:00:00`);
+  const label = isNaN(d)
+    ? expires
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return expired ? (
+    <span className="badge badge-expired">Expired {label}</span>
+  ) : (
+    <span className="badge badge-expires">Expires {label}</span>
+  );
+}
+
 function Login({
   onLogin,
   title = 'Control Center',
@@ -3669,6 +3690,7 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
                   <span className="device-name">
                     {u.displayName || u.username}
                     {u.manager && <span className="badge badge-manager">Manager</span>}
+                    <ExpiryBadge expires={u.expires} />
                   </span>
                   <div className="meta">
                     {u.username} ·{' '}

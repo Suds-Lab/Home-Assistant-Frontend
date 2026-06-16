@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.5.2
+- The Manage users list now shows an **account-expiry badge** on each user: amber "Expires <date>" when a future expiry is set, and red "Expired <date>" once it has passed, so you can see at a glance who is time-limited without opening the editor.
+
 ## 2.5.1
 - OAuth sign-in failures (including an expired account) now render on the **login page**, themed and consistent with password sign-in, instead of a separate plain "Sign-in failed" page. This also removes the old "Back to sign in" link that pointed at the wrong place (`/api/oauth/`).
 
