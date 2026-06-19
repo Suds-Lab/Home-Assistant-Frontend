@@ -5,21 +5,50 @@ views, backup export/import, and the custom app icon. All gated by
 require_admin() (which trusts the management port). Registered as a blueprint on
 the app in core.py.
 """
-from flask import Blueprint
+import base64
+import json
+from datetime import datetime
+from urllib.parse import quote
 
-from core import *  # noqa: F403 - helpers, flask names, and stdlib re-exports
-from core import (  # underscore-prefixed helpers that `import *` does not carry
+from flask import Blueprint, Response, jsonify, request
+
+from access import valid_entity_id, _safe_ts
+from config import (
+    OAUTH_ALLOW_ANY,
+    OAUTH_ALLOWED_DOMAINS,
+    OAUTH_ALLOWED_EMAILS,
+    OAUTH_PROVIDER_NAME,
+    oauth_configured,
+)
+from errors import ApiError
+from ha import _location_lookup, ha_registries_cached, ha_request
+from security import (
+    JWT_SECRET_SOURCE,
+    _migrate_passwords,
+    _parse_date,
+    _password_rules,
+    hash_password,
+    regenerate_jwt_secret,
+    require_admin,
+)
+from store import (
+    ACTIVITY_FILE,
+    ACTIVITY_MAX,
+    ICON_DIR,
+    ICON_EXT,
     _ACTIVITY_LOCK,
     _find_icon,
     _load_activity,
     _load_settings,
-    _location_lookup,
-    _migrate_passwords,
-    _parse_date,
-    _password_rules,
     _remove_icons,
-    _safe_ts,
     _save_settings,
+    cfg_emoji,
+    cfg_name,
+    cfg_title,
+    enabled_domains,
+    included_entities,
+    load_users,
+    save_users,
 )
 
 bp = Blueprint("admin", __name__)

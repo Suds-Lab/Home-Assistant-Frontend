@@ -15,7 +15,9 @@ from flask import g, request
 
 import config  # live config module (single source of truth for runtime toggles)
 from config import HA_URL, INGRESS_BIND, INGRESS_PORT, USER_PORT
-from core import ApiError, app, is_management, user_from_token
+from core import app
+from errors import ApiError
+from security import is_management, user_from_token
 
 # Endpoints reachable WITHOUT authentication, by necessity (the login page and
 # the OAuth handshake run before a session exists). Everything else under /api/

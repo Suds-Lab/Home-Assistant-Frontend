@@ -4,10 +4,13 @@ Serves the web-app manifest (with the configured name + optional custom icon),
 the app icon, the version probe (for new-build detection), and index.html with
 the SPA fallback. Registered as a blueprint on the app in core.py.
 """
-from flask import Blueprint
+import json
+import mimetypes
 
-from core import *  # noqa: F403 - helpers, flask names, and stdlib re-exports
-from core import _app_image_url, _find_icon  # underscore helpers import * skips
+from flask import Blueprint, Response, jsonify, send_from_directory
+
+from config import APP_VERSION, STATIC_DIR
+from store import _app_image_url, _find_icon, cfg_name
 
 bp = Blueprint("pwa", __name__)
 

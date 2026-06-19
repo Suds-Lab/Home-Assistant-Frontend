@@ -3,13 +3,37 @@
 All routes that establish or describe a session. Registered as a blueprint on
 the app in core.py.
 """
-from flask import Blueprint
+import hmac
+import secrets
+import time
 
-from core import *  # noqa: F403 - helpers, flask names, and stdlib re-exports
-from core import (  # underscore-prefixed helpers that `import *` does not carry
+import jwt
+import requests
+from flask import Blueprint, jsonify, redirect, request
+from urllib.parse import urlencode
+
+from config import (
+    OAUTH_ALLOW_ANY,
+    OAUTH_ALLOWED_DOMAINS,
+    OAUTH_ALLOWED_EMAILS,
+    OAUTH_AUTHORIZE_URL,
+    OAUTH_CLIENT_ID,
+    OAUTH_CLIENT_SECRET,
+    OAUTH_LOGO_URL,
+    OAUTH_PROVIDER_NAME,
+    OAUTH_REDIRECT_BASE,
+    OAUTH_SCOPES,
+    OAUTH_TOKEN_URL,
+    OAUTH_USERINFO_URL,
+    STREAM_ENABLED,
+    oauth_configured,
+    oauth_is_google,
+)
+from errors import ApiError
+from security import (
+    JWT_SECRET,
     _DUMMY_PW_HASH,
     _EXPIRED_MSG,
-    _app_image_url,
     _email_allowed,
     _is_hashed,
     _issue_token,
@@ -24,6 +48,19 @@ from core import (  # underscore-prefixed helpers that `import *` does not carry
     _password_rules,
     _user_expired,
     _user_for_email,
+    current_user,
+    hash_password,
+    is_management,
+    verify_password,
+)
+from store import (
+    _app_image_url,
+    cfg_emoji,
+    cfg_name,
+    cfg_providers,
+    cfg_title,
+    load_users,
+    save_users,
 )
 
 bp = Blueprint("auth", __name__)
