@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # config.yaml is copied too so the app can read its own version at runtime
 # (shown as the build label / asset ?v=); without it the version reads "dev".
-COPY app.py core.py config.py errors.py access.py users.json config.yaml ./
+COPY app.py core.py config.py errors.py access.py ha.py users.json config.yaml ./
 COPY routes/ ./routes/
 COPY static/ ./static/
 
