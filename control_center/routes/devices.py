@@ -2,14 +2,21 @@
 
 Registered as a blueprint on the app in core.py.
 """
-from flask import Blueprint
+import json
+import re
+import threading
+import time
 
-from core import *  # noqa: F403 - helpers, flask names, and stdlib re-exports
-from core import (  # underscore-prefixed helpers that `import *` does not carry
-    _append_activity,
-    _device_view,
-    _location_lookup,
-)
+import requests
+from flask import Blueprint, Response, jsonify, request
+
+from access import assert_owned, user_can_access
+from config import HA_TOKEN, HA_URL
+from core import STATE_CACHE, _device_view
+from errors import ApiError
+from ha import _location_lookup, call_service, ha_registries_cached, ha_request
+from security import current_user, is_management, user_from_token
+from store import ICON_DIR, _append_activity
 
 bp = Blueprint("devices", __name__)
 

@@ -11,96 +11,33 @@ Runs two ways:
     so no long-lived token is needed.
 """
 
-import base64
-import hmac
 import json
 import mimetypes
-import re
-import secrets
 import threading
 import time
 from queue import Empty, Queue
-from urllib.parse import quote, urlencode
 
 # Ensure PWA assets are served with the right Content-Type.
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 mimetypes.add_type("text/javascript", ".js")
 
-import jwt
-import requests
 import websocket  # websocket-client
-from flask import Flask, Response, g, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, jsonify, request
 from flask_sock import Sock
 
-# Configuration (add-on options + env) lives in config.py. Re-exported here via
-# `import *` so existing bare references (and `app.<name>` access in tests) keep
-# working unchanged.
-import config  # the live module, for values that may be toggled at runtime/tests
-from config import *  # noqa: F401,F403
-
-
-# User store, settings, activity log, icons, and cfg_* accessors live in
-# store.py. Imported here (before the JWT block) so ICON_DIR is available for
-# the JWT_SECRET_FILE path below, and so blueprints that do `from core import *`
-# keep resolving these names.
-from store import *  # noqa: F401,F403
-from store import (  # noqa: F401
-    _ACTIVITY_LOCK,
-    _append_activity,
-    _app_image_url,
-    _find_icon,
-    _load_activity,
-    _load_settings,
-    _remove_icons,
-    _save_settings,
-    _seed_users,
-)
-
-# JWT, passwords, expiry, session tokens, login throttle, password rules, and
-# OAuth helpers live in security.py. Imported here so blueprints that do
-# `from core import *` keep resolving these names.
-from security import *  # noqa: F401,F403
-from security import (  # noqa: F401
-    _DUMMY_PW_HASH,
-    _EXPIRED_MSG,
-    _KNOWN_DEFAULT_SECRETS,
-    _email_allowed,
-    _entity_expired_for,
-    _is_hashed,
-    _issue_token,
-    _join_natural,
-    _login_blocked,
-    _login_clear,
-    _login_key,
-    _login_note_fail,
-    _migrate_passwords,
-    _oauth_error_page,
-    _oauth_redirect_uri,
-    _parse_date,
-    _password_problems,
-    _password_rules,
-    _user_expired,
-    _user_for_email,
-)
-
-# --- Home Assistant helpers ----------------------------------------------
-
-
-# HA client (REST + WebSocket registries) lives in ha.py. Re-exported here so
-# core's realtime loop and the route blueprints keep resolving these names.
-from ha import *  # noqa: F401,F403,E402
-from ha import _invalidate_registries, _location_lookup, _ws_url  # noqa: F401,E402
+from config import HA_TOKEN
+from errors import ApiError
+from ha import _invalidate_registries, _ws_url, ha_request
+from access import user_can_access
+from security import user_from_token
 
 
 
-# --- App + auth ----------------------------------------------------------
+# --- App -----------------------------------------------------------------
 
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB cap on uploads
 sock = Sock(app)
-
-
-from errors import ApiError  # noqa: E402 (shared type; see errors.py)
 
 
 @app.errorhandler(ApiError)
@@ -108,12 +45,6 @@ def handle_api_error(err):
     payload = {"error": err.message}
     payload.update(err.extra)
     return jsonify(payload), err.status
-
-
-# Access control + validation, extracted to access.py. Imported here so the
-# rest of core and the route blueprints keep resolving these names.
-from access import *  # noqa: F401,F403,E402
-from access import _domain_assignable, _safe_ts  # noqa: F401,E402 (import * skips these)
 
 
 # --- Device view helper (also used by _broadcast below) ------------------

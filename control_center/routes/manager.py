@@ -4,10 +4,12 @@ Organize Home Assistant devices into areas and group areas into floors, writing
 through to HA's device/area registries. Gated by require_manager (the signed-in
 user must have the manager flag). Registered as a blueprint on the app in core.py.
 """
-from flask import Blueprint
+from flask import Blueprint, jsonify, request
 
-from core import *  # noqa: F403 - helpers, flask names, and stdlib re-exports
-from core import _domain_assignable, _invalidate_registries  # import * skips these
+from access import _domain_assignable
+from errors import ApiError
+from ha import _invalidate_registries, ha_registries, ha_request, ha_ws_command
+from security import current_user
 
 bp = Blueprint("manager", __name__)
 

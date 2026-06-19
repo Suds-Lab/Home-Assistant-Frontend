@@ -2,12 +2,13 @@
 
 Decides which entities a user owns (per-user assignment, the 'all'/manager
 grant, and per-user expiry) and validates entity ids / timestamps before they
-reach an HA URL. Settings-derived helpers and the expiry check are imported from
-core for now; they'll move to store.py / security.py later.
+reach an HA URL.
 """
 import re
 
-from core import ApiError, _entity_expired_for, enabled_domains, included_entities
+from errors import ApiError
+from security import _entity_expired_for
+from store import enabled_domains, included_entities
 
 def _domain_assignable(entity_id):
     """Whether this entity is offered/granted: within the allowed device types,
