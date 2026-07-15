@@ -47,7 +47,7 @@ from security import (
     _password_problems,
     _password_rules,
     _user_expired,
-    _user_for_email,
+
     current_user,
     hash_password,
     is_management,
@@ -62,6 +62,8 @@ from store import (
     load_users,
     save_users,
 )
+
+from user import User
 
 bp = Blueprint("auth", __name__)
 
@@ -257,12 +259,12 @@ def oauth_callback():
             )
         return _oauth_error_page("Your account isn't allowed to use this app.")
 
-    user = _user_for_email(email, profile.get("name"), profile.get("picture") or "")
-    if _user_expired(user):
+    user = User.for_oauth_email(email, profile.get("name"), profile.get("picture") or "")
+    if user.is_expired():
         return _oauth_error_page(_EXPIRED_MSG, "expired")
     # Hand the session token + display name to the SPA via the URL fragment
     # (never sent to a server or written to logs); it stores and strips them.
-    frag = urlencode({"oauth_token": _issue_token(user), "oauth_name": user.get("displayName") or ""})
+    frag = urlencode({"oauth_token": _issue_token(user.to_dict()), "oauth_name": user.display_name or ""})
     resp = redirect(f"{OAUTH_REDIRECT_BASE}/#{frag}")
     resp.delete_cookie("cc_oauth_state", path="/api/oauth/")
     return resp
