@@ -25,7 +25,7 @@ from ha import _location_lookup, ha_registries_cached, ha_request
 from security import (
     JWT_SECRET_SOURCE,
     _migrate_passwords,
-    _parse_date,
+
     _password_rules,
     hash_password,
     regenerate_jwt_secret,
@@ -50,6 +50,8 @@ from store import (
     load_users,
     save_users,
 )
+
+from user import User, parse_date
 
 bp = Blueprint("admin", __name__)
 
@@ -472,19 +474,21 @@ def admin_import():
 @bp.get("/api/admin/users")
 def admin_list_users():
     require_admin()
-    safe = [
-        {
-            "username": u["username"],
-            "displayName": u.get("displayName", ""),
-            "entities": u.get("entities", []),
-            "all": bool(u.get("all")),
-            "manager": bool(u.get("manager")),
-            "expires": u.get("expires", ""),
-            "entityExpires": u.get("entity_expires", {}),
-        }
-        for u in load_users()
-    ]
+    safe = [User.from_dict(u).to_api() for u in load_users()]
     return jsonify(users=safe)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @bp.post("/api/admin/users")
@@ -530,7 +534,7 @@ def admin_save_user():
     record["all"] = bool(body.get("all"))
     record["entities"] = [e for e in body.get("entities", []) if isinstance(e, str)]
     # Optional account expiry (stored normalised as YYYY-MM-DD, or "" for never).
-    exp = _parse_date(body.get("expires"))
+    exp = parse_date(body.get("expires"))
     record["expires"] = exp.isoformat() if exp else ""
     # Optional per-entity expiry: { entity_id: "YYYY-MM-DD" }. Keep only valid
     # entity ids with valid dates; an entity dropping off the list clears it.
@@ -538,7 +542,7 @@ def admin_save_user():
     entity_expires = {}
     if isinstance(raw_ee, dict):
         for eid, ds in raw_ee.items():
-            d = _parse_date(ds)
+            d = parse_date(ds)
             if valid_entity_id(eid) and d:
                 entity_expires[eid] = d.isoformat()
     record["entity_expires"] = entity_expires
