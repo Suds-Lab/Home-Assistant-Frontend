@@ -22,6 +22,7 @@ import config
 from config import addon_options, INGRESS_PORT, OAUTH_REDIRECT_BASE
 from errors import ApiError
 from store import ICON_DIR, _load_settings, load_users, save_users
+from user import date_expired, parse_date
 
 
 # --- JWT secret management ------------------------------------------------
@@ -135,30 +136,18 @@ _migrate_store_passwords()
 # day after. Blank/absent = never expires.
 _EXPIRED_MSG = "Your account has expired. Please contact your administrator for help."
 
-
-def _parse_date(s):
-    """Parse a 'YYYY-MM-DD' date string; None if blank/invalid."""
-    if not isinstance(s, str) or not s.strip():
-        return None
-    try:
-        return datetime.strptime(s.strip()[:10], "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _date_expired(s):
-    """True once the 'valid through' date has fully passed (the day after it)."""
-    d = _parse_date(s)
-    return d is not None and date.today() > d
+# Aliases kept for callers that already import these names from security.
+_parse_date = parse_date
+_date_expired = date_expired
 
 
 def _user_expired(user):
-    return _date_expired(user.get("expires"))
+    return date_expired(user.get("expires"))
 
 
 def _entity_expired_for(user, entity_id):
     """True if this user's access to entity_id has a passed expiry date."""
-    return _date_expired((user.get("entity_expires") or {}).get(entity_id))
+    return date_expired((user.get("entity_expires") or {}).get(entity_id))
 
 
 # --- Session tokens -------------------------------------------------------
@@ -325,37 +314,6 @@ def _email_allowed(email):
     email = email.lower()
     domain = email.rsplit("@", 1)[-1] if "@" in email else ""
     return domain in config.OAUTH_ALLOWED_DOMAINS or email in config.OAUTH_ALLOWED_EMAILS
-
-
-def _user_for_email(email, name="", picture=""):
-    """Find the app user for an OAuth email, creating an un-onboarded one (no
-    devices) on first sign-in so the admin can assign devices later. The display
-    name is taken from the provider (e.g. the Google account name) on creation,
-    falling back to the email's local part. The provider avatar URL, if any, is
-    stored and refreshed on each sign-in for the account menu."""
-    email = email.strip().lower()
-    users = load_users()
-    found = next(
-        (u for u in users
-         if (u.get("email") or "").lower() == email or u["username"].lower() == email),
-        None,
-    )
-    if found:
-        if picture and found.get("picture") != picture:
-            found["picture"] = picture
-            save_users(users)
-        return found
-    record = {
-        "username": email,
-        "email": email,
-        "displayName": (name or "").strip() or email.split("@")[0],
-        "provider": "oauth",
-        "picture": picture or "",
-        "entities": [],
-    }
-    users.append(record)
-    save_users(users)
-    return record
 
 
 def _oauth_error_page(message, code="error"):
