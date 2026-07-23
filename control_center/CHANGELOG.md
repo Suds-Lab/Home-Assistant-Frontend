@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.12
+- Fix: instance badge now appears on each area row in Organize - Areas & Floors
+  (not on Devices tab section headers). Main-instance areas show no badge;
+  remote-instance areas show a badge with the configured instance name.
+
 ## 2.6.11
 - Manager Organize view now shows a small instance badge on each area section
   header when that area contains devices from a remote HA instance. Areas with

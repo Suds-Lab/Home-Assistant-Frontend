@@ -151,7 +151,7 @@ If remote entities don't appear after restarting the add-on:
 
 ### How it works
 
-- In the manager's **Organize** view, each area section header shows a small badge for any remote instance whose devices appear in that area. Main-instance areas show no badge.
+- In the manager's **Organize - Areas & Floors** view, each area row shows a small badge with the remote instance name. Main-instance areas show no badge.
 - Each remote instance gets its own persistent WebSocket connection. The initial state snapshot is fetched immediately on connect; area/floor registry data (used for room grouping on the dashboard) is fetched over the same connection in the background and cached within seconds - no separate HTTP calls are made to the remote.
 - Remote entity IDs are namespaced internally as `{id}:{entity_id}` (e.g. `garage:light.bedroom`) so they never collide with local or other-remote entities. This namespacing is transparent to users.
 - Control commands are routed to the correct instance automatically.
