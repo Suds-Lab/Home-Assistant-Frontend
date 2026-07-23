@@ -27,7 +27,7 @@ from flask_sock import Sock
 
 from config import HA_TOKEN, REMOTE_INSTANCES
 from errors import ApiError
-from ha import _invalidate_registries, _ws_url, _ws_token, cache_registries_from_ws
+from ha import _inst_url, _invalidate_registries, _ws_url, _ws_token, cache_registries_from_ws
 from access import user_can_access
 from security import user_from_token
 
