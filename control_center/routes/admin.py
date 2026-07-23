@@ -18,6 +18,7 @@ from config import (
     OAUTH_ALLOWED_DOMAINS,
     OAUTH_ALLOWED_EMAILS,
     OAUTH_PROVIDER_NAME,
+    REMOTE_INSTANCES,
     oauth_configured,
 )
 from errors import ApiError
@@ -56,31 +57,55 @@ from user import User, parse_date
 bp = Blueprint("admin", __name__)
 
 
+@bp.get("/api/admin/instances")
+def admin_instances():
+    """List all configured HA instances (main + remotes). Used by the UI to
+    label entities in the picker and display the instance list in Settings."""
+    require_admin()
+    instances = [{"id": None, "name": "Main"}]
+    for r in REMOTE_INSTANCES:
+        instances.append({"id": r["id"], "name": r["name"]})
+    return jsonify(instances=instances)
+
+
 @bp.get("/api/admin/entities")
 def admin_entities():
-    """Entities for the device picker, annotated with their floor and room.
-    Shows entities whose domain is enabled OR that are in the global
-    included-entities list. Pass ?all=1 to return every entity unfiltered (for
-    the Settings include-picker)."""
+    """Entities for the device picker, annotated with their floor, room, and
+    source instance. Aggregates across all configured HA instances.
+    Pass ?all=1 to return every entity unfiltered (for the Settings include-picker)."""
     require_admin()
-    locate = _location_lookup(ha_registries_cached())
     show_all = request.args.get("all") in ("1", "true", "yes")
     allowed = enabled_domains()
     included = included_entities()
     items = []
-    for s in ha_request("/api/states"):
-        eid = s["entity_id"]
-        domain = eid.split(".")[0]
-        if not show_all and allowed is not None and domain not in allowed and eid not in included:
-            continue  # hidden by the device-types setting (and not curated in)
-        area, floor, _area_icon = locate(eid)
-        items.append({
-            "entity_id": eid,
-            "name": s.get("attributes", {}).get("friendly_name") or eid,
-            "domain": domain,
-            "area": area,
-            "floor": floor,
-        })
+
+    def _collect(instance_id, instance_name):
+        try:
+            reg = ha_registries_cached(instance_id=instance_id)
+            locate = _location_lookup(reg)
+            for s in ha_request("/api/states", instance_id=instance_id):
+                eid = s["entity_id"]
+                full_id = f"{instance_id}:{eid}" if instance_id else eid
+                domain = eid.split(".")[0]
+                if not show_all and allowed is not None and domain not in allowed and full_id not in included:
+                    continue
+                area, floor, _area_icon = locate(eid)
+                items.append({
+                    "entity_id": full_id,
+                    "name": s.get("attributes", {}).get("friendly_name") or eid,
+                    "domain": domain,
+                    "area": area,
+                    "floor": floor,
+                    "instance": instance_id,
+                    "instance_name": instance_name,
+                })
+        except ApiError:
+            pass  # remote unreachable - skip gracefully
+
+    _collect(None, "Main")
+    for r in REMOTE_INSTANCES:
+        _collect(r["id"], r["name"])
+
     items.sort(key=lambda i: (i["domain"], i["name"].lower()))
     return jsonify(entities=items)
 
@@ -146,10 +171,16 @@ def admin_regenerate_secret():
 
 @bp.get("/api/admin/device-types")
 def admin_get_device_types():
-    """All entity domains present in HA + which are currently enabled for the
-    picker (so the admin can see what's available and add types back)."""
+    """All entity domains present across all HA instances + which are currently
+    enabled for the picker (so the admin can see what's available and add types back)."""
     require_admin()
-    available = sorted({s["entity_id"].split(".")[0] for s in ha_request("/api/states")})
+    domains = {s["entity_id"].split(".")[0] for s in ha_request("/api/states")}
+    for r in REMOTE_INSTANCES:
+        try:
+            domains.update(s["entity_id"].split(".")[0] for s in ha_request("/api/states", instance_id=r["id"]))
+        except ApiError:
+            pass
+    available = sorted(domains)
     allowed = enabled_domains()
     return jsonify(
         available=available,

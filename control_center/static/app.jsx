@@ -1355,7 +1355,10 @@ function Organizer() {
                 onClick={() => setEditing(dev)}
               >
                 <div className="org-info">
-                  <span className="device-name">{dev.name}</span>
+                  <span className="device-name">
+                    {dev.name}
+                    {dev.instance_name && <span className="pick-instance-badge">{dev.instance_name}</span>}
+                  </span>
                   <span className="meta">
                     {dev.area || 'Unassigned'}
                     {dev.entities.length > 0
@@ -1372,7 +1375,7 @@ function Organizer() {
       {editing && (
         <DeviceEditDialog
           device={editing}
-          areas={data.areas}
+          areas={data.areas.filter((a) => a.instance === editing.instance)}
           onClose={() => setEditing(null)}
           onSave={applyUpdate}
         />
@@ -1443,8 +1446,25 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
   const isNew = !area.area_id;
   const [name, setName] = useState(area.name || '');
   const [floorId, setFloorId] = useState(area.floor_id || '');
+  // For new areas with no floor, we need to know which instance to create on.
+  const [instanceId, setInstanceId] = useState(area.instance !== undefined ? area.instance : null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // Unique instances present in the floors list (for new-area instance selector).
+  const instances = isNew
+    ? [...new Map(floors.map((f) => [f.instance, { id: f.instance, name: f.instance_name || 'Main' }])).values()]
+    : [];
+  const hasMultipleInstances = instances.length > 1;
+
+  // When a floor is selected, update the tracked instance to match.
+  function handleFloorChange(fid) {
+    setFloorId(fid);
+    if (fid) {
+      const f = floors.find((fl) => fl.floor_id === fid);
+      if (f) setInstanceId(f.instance);
+    }
+  }
 
   async function save() {
     if (!name.trim()) {
@@ -1455,7 +1475,7 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
     setErr('');
     try {
       const fields = isNew
-        ? { name: name.trim(), floor_id: floorId || null }
+        ? { name: name.trim(), floor_id: floorId || null, instance: floorId ? undefined : instanceId }
         : { area_id: area.area_id, name: name.trim() };
       await onSave(fields);
       onClose();
@@ -1464,6 +1484,12 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
       setBusy(false);
     }
   }
+
+  // Group floors by instance for the optgroup layout (new areas only).
+  const floorsByInstance = isNew ? instances.map((inst) => ({
+    inst,
+    floors: floors.filter((f) => f.instance === inst.id),
+  })) : [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1476,14 +1502,35 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
           Name
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </label>
+        {isNew && hasMultipleInstances && !floorId && (
+          <label>
+            Instance
+            <select value={instanceId || ''} onChange={(e) => setInstanceId(e.target.value || null)}>
+              {instances.map((inst) => (
+                <option key={inst.id || '__main'} value={inst.id || ''}>{inst.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {isNew && (
           <label>
             Floor
-            <select value={floorId} onChange={(e) => setFloorId(e.target.value)}>
+            <select value={floorId} onChange={(e) => handleFloorChange(e.target.value)}>
               <option value="">No floor</option>
-              {floors.map((f) => (
-                <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
-              ))}
+              {hasMultipleInstances
+                ? floorsByInstance.map(({ inst, floors: iFloors }) =>
+                    iFloors.length > 0 && (
+                      <optgroup key={inst.id || '__main'} label={inst.name}>
+                        {iFloors.map((f) => (
+                          <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
+                        ))}
+                      </optgroup>
+                    )
+                  )
+                : floors.map((f) => (
+                    <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
+                  ))
+              }
             </select>
           </label>
         )}
@@ -1582,7 +1629,7 @@ function AreaOrganizer() {
                     <div className="org-info">
                       <span className="device-name">{a.name}</span>
                     </div>
-                    {data.floors.length > 0 && (
+                    {data.floors.filter((f) => f.instance === a.instance).length > 0 && (
                       <select
                         className="user-filter area-floor-select"
                         value={a.floor_id || ''}
@@ -1590,7 +1637,7 @@ function AreaOrganizer() {
                         aria-label={`Floor for ${a.name}`}
                       >
                         <option value="">No floor</option>
-                        {data.floors.map((f) => (
+                        {data.floors.filter((f) => f.instance === a.instance).map((f) => (
                           <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
                         ))}
                       </select>
@@ -1611,7 +1658,9 @@ function AreaOrganizer() {
       {editing && (
         <AreaEditDialog
           area={editing}
-          floors={data.floors}
+          floors={editing.area_id
+            ? data.floors.filter((f) => f.instance === editing.instance)
+            : data.floors}
           onClose={() => setEditing(null)}
           onSave={saveArea}
         />
@@ -2370,7 +2419,10 @@ function UserEditor({ user, entities, onSave, onCancel }) {
       />
       <span className="pick-icon" title={domainLabel(e.domain)}><DomainIcon domain={e.domain} /></span>
       <span className="pick-text">
-        <span className="pick-name">{e.name}</span>
+        <span className="pick-name">
+          {e.name}
+          {e.instance_name && <span className="pick-instance-badge">{e.instance_name}</span>}
+        </span>
         <span className="pick-id">{e.entity_id}</span>
       </span>
     </label>
