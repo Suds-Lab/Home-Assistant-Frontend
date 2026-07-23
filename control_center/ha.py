@@ -34,18 +34,28 @@ def _inst_token(instance_id):
     return _INSTANCES.get(instance_id, _INSTANCES[None])[1]
 
 
+_BROWSER_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0.0.0 Safari/537.36"
+)
+
+
 def ha_request(path, method="GET", payload=None, *, instance_id=None):
     url = _inst_url(instance_id)
     token = _inst_token(instance_id)
     _label = f" (instance: {instance_id})" if instance_id else ""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    if instance_id:
+        headers["User-Agent"] = _BROWSER_UA
     try:
         res = requests.request(
             method,
             f"{url}{path}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json=payload,
             timeout=15,
         )
@@ -76,8 +86,12 @@ def ha_registries(instance_id=None):
     """One-shot WebSocket query for HA's floor/area/entity/device registries, so
     the picker can group devices by floor and room. Returns {} on any failure."""
     token = _ws_token(instance_id)
+    _headers = {
+        "User-Agent": _BROWSER_UA,
+        "Origin": _inst_url(instance_id),
+    } if instance_id else {}
     try:
-        ws = websocket.create_connection(_ws_url(instance_id), timeout=10)
+        ws = websocket.create_connection(_ws_url(instance_id), timeout=10, header=_headers)
     except Exception:  # noqa: BLE001
         return {}
     try:
@@ -117,8 +131,12 @@ def ha_ws_command(payload, instance_id=None):
     """Send one WebSocket command to HA and return its result, or raise ApiError.
     Used for registry writes (e.g. moving a device to an area)."""
     token = _ws_token(instance_id)
+    _headers = {
+        "User-Agent": _BROWSER_UA,
+        "Origin": _inst_url(instance_id),
+    } if instance_id else {}
     try:
-        ws = websocket.create_connection(_ws_url(instance_id), timeout=10)
+        ws = websocket.create_connection(_ws_url(instance_id), timeout=10, header=_headers)
     except Exception:  # noqa: BLE001
         raise ApiError("Could not reach Home Assistant", 502)
     try:

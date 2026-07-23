@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.6.5
+- Fix: remote instance connections to HA servers behind Cloudflare now send
+  browser-like headers (`User-Agent`, `Origin`) so Cloudflare's basic bot
+  protection does not block the WebSocket handshake. If Cloudflare is still
+  blocking after this (e.g. Under Attack mode), use the direct local IP/port
+  instead of the Cloudflare-proxied domain.
+- Improvement: a Cloudflare 403 is now detected and logged with a specific
+  actionable message rather than a raw error dump.
+
 ## 2.6.4
 - The **Settings** tab now shows a **Remote instances** card when remote
   instances are configured. It displays each instance with a green/red
