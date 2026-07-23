@@ -122,25 +122,14 @@ def _ws_loop(instance_id=None):
                 time.sleep(15)
                 continue
 
-            # Seed everything via the already-open WebSocket so no separate HTTP
-            # or WS connections are needed (those may be blocked by Cloudflare).
-            cmds = {
-                1: {"type": "get_states"},
-                2: {"type": "subscribe_events", "event_type": "state_changed"},
-                3: {"type": "config/floor_registry/list"},
-                4: {"type": "config/area_registry/list"},
-                5: {"type": "config/entity_registry/list"},
-                6: {"type": "config/device_registry/list"},
-                7: {"type": "manifest/list"},
-            }
-            for mid, payload in cmds.items():
-                ws.send(json.dumps({"id": mid, **payload}))
+            # Phase 1: seed state cache immediately - don't block on registries.
+            ws.send(json.dumps({"id": 1, "type": "get_states"}))
+            ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "state_changed"}))
             got = {}
-            while len(got) < len(cmds):
+            while len(got) < 2:
                 msg = json.loads(ws.recv())
-                if msg.get("type") == "result" and msg.get("id") in cmds:
+                if msg.get("type") == "result" and msg.get("id") in (1, 2):
                     got[msg["id"]] = msg
-            # Populate state cache.
             states_result = got.get(1, {})
             for s in (states_result.get("result") or []):
                 fid = f"{instance_id}:{s['entity_id']}" if instance_id else s["entity_id"]
@@ -151,21 +140,36 @@ def _ws_loop(instance_id=None):
                 STATE_CACHE[fid] = s
             if not states_result.get("success"):
                 print(f"State snapshot via WebSocket failed ({label}):", states_result.get("error"))
-            # Warm the registry cache so area/floor lookups don't need a fresh WS.
-            cache_registries_from_ws(
-                instance_id,
-                floors=got.get(3, {}).get("result") or [],
-                areas=got.get(4, {}).get("result") or [],
-                entities=got.get(5, {}).get("result") or [],
-                devices=got.get(6, {}).get("result") or [],
-                integrations=got.get(7, {}).get("result") or [],
-            )
+
+            # Phase 2: request registries over the same connection so area/floor
+            # lookups are served from cache without a separate Cloudflare handshake.
+            # Results arrive async and are collected in the event loop below.
+            _REG_IDS = {3: "config/floor_registry/list", 4: "config/area_registry/list",
+                        5: "config/entity_registry/list", 6: "config/device_registry/list",
+                        7: "manifest/list"}
+            for mid, t in _REG_IDS.items():
+                ws.send(json.dumps({"id": mid, "type": t}))
+            _reg_buf = {}
             if instance_id is None:
                 _CACHE_READY.set()
             print(f"HA WebSocket connected ({label}); streaming state changes")
 
             while True:
                 msg = json.loads(ws.recv())
+                # Collect pending registry results (arrive after phase-2 requests).
+                mid = msg.get("id")
+                if mid in _REG_IDS and msg.get("type") == "result" and mid not in _reg_buf:
+                    _reg_buf[mid] = msg.get("result") or []
+                    if len(_reg_buf) == len(_REG_IDS):
+                        cache_registries_from_ws(
+                            instance_id,
+                            floors=_reg_buf.get(3, []),
+                            areas=_reg_buf.get(4, []),
+                            entities=_reg_buf.get(5, []),
+                            devices=_reg_buf.get(6, []),
+                            integrations=_reg_buf.get(7, []),
+                        )
+                        print(f"Registry data cached for remote instance '{label}'")
                 if msg.get("type") != "event":
                     continue
                 data = msg["event"]["data"]

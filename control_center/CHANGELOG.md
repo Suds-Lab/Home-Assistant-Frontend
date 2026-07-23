@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6.8
+- Fix: remote instance state cache (entities on the dashboard) was still empty
+  after 2.6.7 because the loop waited for all 7 WebSocket responses before
+  writing anything to the cache. State is now seeded immediately on `get_states`
+  result; registry data (areas, floors, devices) is collected lazily in the
+  background event loop and written to cache as it arrives, without blocking
+  the state snapshot.
+
 ## 2.6.7
 - Fix: remote instance area and floor assignments now populate correctly on the
   dashboard. Floors, areas, entity and device registries are now fetched through
