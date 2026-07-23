@@ -2125,6 +2125,20 @@ img.install-icon {
   white-space: nowrap;
 }
 
+.pick-instance-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  vertical-align: middle;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
 /* Group-by segmented control */
 .group-by {
   display: flex;

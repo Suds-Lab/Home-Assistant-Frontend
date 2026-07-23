@@ -26,12 +26,14 @@ There are two interfaces:
 ## Configuration
 
 ```yaml
-jwt_secret: ""   # optional - blank auto-generates and persists a random one
+jwt_secret: ""
+remote_instances: []   # optional - see "Remote instances" below
 ```
 
 | Option | Description |
 |--------|-------------|
 | `jwt_secret` | Signs login sessions. **Optional** - leave blank to auto-generate and persist a random secret (recommended); set a value only to pin your own. |
+| `remote_instances` | List of additional HA instances whose devices you want to manage here (see below). |
 | `oauth_*` | Optional OAuth / OpenID Connect sign-in (see below). |
 
 Everything else is configured live in the sidebar's **Settings** tab (stored
@@ -61,6 +63,47 @@ On the user dashboard, an **account menu** (your avatar, top right) holds **Log
 out**, the manager **Organize** tools, and **Change password** (for local
 accounts). The avatar is your OAuth picture if you have one, otherwise your
 initials on a per-user color.
+
+## Remote instances
+
+Control Center can pool devices from **multiple Home Assistant instances** into a single management view. Users are managed in one place; devices from any connected instance can be assigned to them exactly like local ones.
+
+### Setup
+
+**1. On each remote HA - create a long-lived access token**
+
+Profile > Security > Long-lived access tokens > Create token. Copy it.
+
+**2. Add the remote to the add-on configuration**
+
+```yaml
+remote_instances:
+  - id: garage
+    name: Garage
+    url: http://192.168.1.50:8123
+    token: <long-lived-token>
+  - id: cabin
+    name: Cabin
+    url: http://cabin.local:8123
+    token: <long-lived-token>
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Short slug used to namespace entities (`garage:light.bedroom`). Lowercase letters, numbers, underscores only. Must be unique. |
+| `name` | Display name shown as a badge in the entity picker. |
+| `url` | Base URL of the remote HA (local IP or hostname). |
+| `token` | Long-lived access token from step 1. |
+
+Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a coloured instance badge next to their name. Assign them to users the same way as any local entity.
+
+### How it works
+
+- Each remote instance gets its own persistent WebSocket connection. State changes are streamed live and appear on the user dashboard in real time alongside local devices.
+- Remote entity IDs are namespaced internally as `{id}:{entity_id}` (e.g. `garage:light.bedroom`) so they never collide with local or other-remote entities. This namespacing is transparent to users.
+- Control commands are routed to the correct instance automatically.
+- If a remote is unreachable, its entities are excluded gracefully; the rest of the app continues normally.
+- The remote HA does not need to know about Control Center at all - only the token is required.
 
 ## Sign-in with Google / OAuth
 
@@ -205,12 +248,17 @@ Tick **Manager** when editing a user to make them a manager. A manager gets an
   (those with at least one entity of an enabled type, or in the Included list),
   grouped by area, and each tagged with the **integration** it comes from (a
   small brand badge, e.g. Shelly / MQTT / TP-Link). **Tap a device** to open a
-  quick dialog to **rename** it and set its **area**.
+  quick dialog to **rename** it and set its **area**. When remote instances are
+  configured, devices from all instances appear here with an instance badge; the
+  area dropdown shows only areas from that device's own instance, and changes
+  write through to the correct HA automatically.
 - **Areas & floors**: a Home Assistant overview-style view that lists each
   **floor** with the areas inside it. The manager can **create a new area**
   (optionally placing it on a floor), **move an area to another floor** (or to
   *No floor*), and **rename** an area. Floors themselves are created/removed in
-  Home Assistant; here they're only assigned.
+  Home Assistant; here they're only assigned. With multiple instances configured,
+  areas and floors from all of them are shown; the new-area dialog lets the
+  manager choose which instance to create it on.
 
 The manager role grants only these organize tools. A manager's **own device
 access** is set independently in the editor (turn on **All devices**, or pick a
