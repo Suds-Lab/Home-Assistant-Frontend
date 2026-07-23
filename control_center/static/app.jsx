@@ -35,11 +35,13 @@ async function request(path, options = {}) {
   });
   if (res.status === 401) {
     const body = await res.json().catch(() => ({}));
-    // A 401 with an active token = the session expired. A 401 with no token
-    // (i.e. logging in) = bad credentials - surface the real message.
+    // A 401 with an active token = the session expired. Signal the app to
+    // log out silently (no error banner) and return a promise that never
+    // resolves so the caller's await hangs until the component unmounts.
     if (token) {
       setToken(null);
-      throw new Error('Your session expired. Please log in again.');
+      window.dispatchEvent(new Event('auth:logout'));
+      return new Promise(() => {});
     }
     throw new Error(body.error || 'Wrong username or password');
   }
@@ -4020,6 +4022,22 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth, au
   const [expiredNotice, setExpiredNotice] = useState(authNotice?.expired ? 'expired' : '');
   const [authError, setAuthError] = useState(authNotice?.message || '');
 
+  // Auth expiry from any API call: silently drop back to login.
+  useEffect(() => {
+    function onAuthLogout() {
+      localStorage.removeItem(NAME_KEY);
+      setTok(null);
+      setDisplayName('');
+      setIsManager(false);
+      setPicture('');
+      setCanChangePassword(false);
+      setPasswordRules(null);
+      setExpiredNotice('expired');
+    }
+    window.addEventListener('auth:logout', onAuthLogout);
+    return () => window.removeEventListener('auth:logout', onAuthLogout);
+  }, []);
+
   // Resolve the signed-in user's role (so managers get the area organizer).
   useEffect(() => {
     if (!token) {
@@ -4035,8 +4053,6 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth, au
         setPasswordRules(m.passwordRules || null);
       })
       .catch((e) => {
-        // The account expired mid-session: request() already cleared the token,
-        // so drop to the login screen and show why.
         if (e && e.expired) {
           setTok(null);
           setExpiredNotice(e.message);
