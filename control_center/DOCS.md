@@ -90,12 +90,12 @@ remote_instances:
 
 | Field | Description |
 |-------|-------------|
-| `id` | Short slug used to namespace entities (`garage:light.bedroom`). Lowercase letters, numbers, underscores only. Must be unique. |
-| `name` | Display name shown as a badge in the entity picker. |
-| `url` | Base URL of the remote HA (local IP or hostname). |
-| `token` | Long-lived access token from step 1. |
+| `id` | Short slug used to namespace entities (`garage:light.bedroom`). Lowercase letters, numbers, underscores only. Must be unique. Required. |
+| `name` | Display name shown as a badge in the entity picker. Required. |
+| `url` | Base URL of the remote HA (local IP or hostname). Required. |
+| `token` | Long-lived access token from step 1. Required. |
 
-Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a colorred instance badge next to their name. Assign them to users the same way as any local entity.
+Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a colored instance badge next to their name. Assign them to users the same way as any local entity.
 
 ### How it works
 

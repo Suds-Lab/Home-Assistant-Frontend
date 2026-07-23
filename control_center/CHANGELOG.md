@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.6.2
+- Docs: all four `remote_instances` fields (`id`, `name`, `url`, `token`) are
+  now clearly marked as required in the documentation. Fixed a typo in the docs.
+
 ## 2.6.1
 - Fix: `remote_instances` add-on schema now uses `name: str` instead of
   `name: str?` to avoid rejection by the HA add-on schema validator. The
