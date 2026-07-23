@@ -151,7 +151,7 @@ If remote entities don't appear after restarting the add-on:
 
 ### How it works
 
-- Each remote instance gets its own persistent WebSocket connection. State changes are streamed live and appear on the user dashboard in real time alongside local devices.
+- Each remote instance gets its own persistent WebSocket connection. The initial state snapshot and all live updates are fetched over that single connection - no separate HTTP calls are made to the remote, so it works even when a reverse proxy blocks direct REST requests.
 - Remote entity IDs are namespaced internally as `{id}:{entity_id}` (e.g. `garage:light.bedroom`) so they never collide with local or other-remote entities. This namespacing is transparent to users.
 - Control commands are routed to the correct instance automatically.
 - If a remote is unreachable, its entities are excluded gracefully; the rest of the app continues normally.

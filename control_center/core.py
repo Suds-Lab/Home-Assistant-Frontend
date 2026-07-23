@@ -27,7 +27,7 @@ from flask_sock import Sock
 
 from config import HA_TOKEN, REMOTE_INSTANCES
 from errors import ApiError
-from ha import _invalidate_registries, _ws_url, _ws_token, ha_request
+from ha import _invalidate_registries, _ws_url, _ws_token
 from access import user_can_access
 from security import user_from_token
 
@@ -122,21 +122,26 @@ def _ws_loop(instance_id=None):
                 time.sleep(15)
                 continue
 
-            # Seed the cache with a full snapshot, then subscribe to changes.
-            try:
-                for s in ha_request("/api/states", instance_id=instance_id):
-                    fid = f"{instance_id}:{s['entity_id']}" if instance_id else s["entity_id"]
-                    s = dict(s)
-                    s["entity_id"] = fid
-                    if instance_id:
-                        s["_instance"] = instance_id
-                    STATE_CACHE[fid] = s
-            except Exception as err:  # noqa: BLE001
-                print(f"State snapshot failed ({label}):", err)
-            ws.send(json.dumps(
-                {"id": 1, "type": "subscribe_events", "event_type": "state_changed"}
-            ))
-            ws.recv()  # subscribe ack
+            # Seed the cache via the already-open WebSocket (avoids a separate
+            # REST call, which may be blocked by Cloudflare even when the WS is not).
+            ws.send(json.dumps({"id": 1, "type": "get_states"}))
+            ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "state_changed"}))
+            # Collect both responses; they can arrive in any order.
+            got = {}
+            while len(got) < 2:
+                msg = json.loads(ws.recv())
+                if msg.get("type") == "result":
+                    got[msg["id"]] = msg
+            states_result = got.get(1, {})
+            for s in (states_result.get("result") or []):
+                fid = f"{instance_id}:{s['entity_id']}" if instance_id else s["entity_id"]
+                s = dict(s)
+                s["entity_id"] = fid
+                if instance_id:
+                    s["_instance"] = instance_id
+                STATE_CACHE[fid] = s
+            if not states_result.get("success"):
+                print(f"State snapshot via WebSocket failed ({label}):", states_result.get("error"))
             if instance_id is None:
                 _CACHE_READY.set()
             print(f"HA WebSocket connected ({label}); streaming state changes")
