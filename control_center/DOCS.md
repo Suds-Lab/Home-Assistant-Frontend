@@ -97,6 +97,41 @@ remote_instances:
 
 Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a colored instance badge next to their name. Assign them to users the same way as any local entity.
 
+### Troubleshooting
+
+If remote entities don't appear after restarting the add-on:
+
+1. **Check the add-on log** (Supervisor > Control Center > Log). On startup you
+   should see a line like:
+   ```
+   Remote instances loaded: ['garage -> http://192.168.1.50:8123']
+   Launching WebSocket thread for remote instance 'garage' at http://192.168.1.50:8123
+   HA WebSocket connected (garage); streaming state changes
+   ```
+   If the first line says "No remote instances configured", the add-on is not
+   reading your `remote_instances` config - re-save the add-on configuration in
+   Supervisor and restart. If it says "HA WebSocket error", see the error message
+   for the cause (bad token, unreachable host, SSL error).
+
+2. **Hit the status endpoint** from a browser (while logged in as admin on the
+   management port):
+   ```
+   http://<home-assistant>:4000/api/admin/remote-status
+   ```
+   It returns `reachable`, `cached_entities`, and `error` for each remote.
+
+3. **Re-save the add-on config** after updating. If the add-on schema was
+   previously rejecting your configuration, HA may not have written
+   `remote_instances` to options.json. Open the add-on Configuration tab in
+   Supervisor, verify the entries look correct, and click Save before restarting.
+
+4. **Token**: the token must be a **long-lived access token** created in the
+   remote HA's own Profile settings - not the local Supervisor token.
+
+5. **HTTPS / self-signed cert**: if the remote URL starts with `https://` and
+   the cert is self-signed, the WebSocket connection will be refused with an SSL
+   error. Use `http://` for local network connections, or set up a trusted cert.
+
 ### How it works
 
 - Each remote instance gets its own persistent WebSocket connection. State changes are streamed live and appear on the user dashboard in real time alongside local devices.
