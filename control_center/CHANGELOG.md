@@ -1,10 +1,12 @@
 # Changelog
 
+## 2.6.11
+- Manager Organize view now shows a small instance badge on each area section
+  header when that area contains devices from a remote HA instance. Areas with
+  only main-instance devices show no badge.
+
 ## 2.6.10
-- Area/room section headers on the dashboard now show a small badge for each
-  remote HA instance whose devices appear in that room. Rooms containing only
-  main-instance devices show no badge. Applies to area grouping and to the
-  area sub-headers in floor grouping mode.
+- (reverted - badges were incorrectly placed on the user dashboard)
 
 ## 2.6.9
 - Fix: `_inst_url` was called in `_ws_loop` to build the WebSocket `Origin`
