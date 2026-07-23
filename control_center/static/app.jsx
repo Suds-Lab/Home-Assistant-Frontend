@@ -3316,7 +3316,7 @@ function HistoryChart({ entity, label, start, end }) {
 }
 
 // Styled after Home Assistant's logbook: entries grouped by day, each with a
-// round device-type icon, the entity in accent colour, the action, and a
+// round device-type icon, the entity in accent colorr, the action, and a
 // time / relative-time / user line. Records this app's own control actions,
 // with controls to pick a time range, page by day, and filter by user / item.
 function ActivityLog() {

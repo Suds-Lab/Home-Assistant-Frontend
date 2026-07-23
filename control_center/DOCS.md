@@ -95,7 +95,7 @@ remote_instances:
 | `url` | Base URL of the remote HA (local IP or hostname). |
 | `token` | Long-lived access token from step 1. |
 
-Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a coloured instance badge next to their name. Assign them to users the same way as any local entity.
+Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a colorred instance badge next to their name. Assign them to users the same way as any local entity.
 
 ### How it works
 
