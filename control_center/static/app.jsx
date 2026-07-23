@@ -1265,6 +1265,19 @@ function IntegrationBadge({ domain, name }) {
   );
 }
 
+// Returns unique remote instance names present in a device list (skips main).
+function groupInstances(list) {
+  const seen = new Set();
+  const result = [];
+  for (const d of list) {
+    if (d.instance && !seen.has(d.instance)) {
+      seen.add(d.instance);
+      result.push(d.instance_name || d.instance);
+    }
+  }
+  return result;
+}
+
 function Organizer() {
   const [data, setData] = useState(null); // { devices, areas }
   const [error, setError] = useState('');
@@ -1346,7 +1359,12 @@ function Organizer() {
       ) : (
         order.map((areaName) => (
           <section key={areaName}>
-            <h2>{areaName}</h2>
+            <h2 className="section-h2">
+              <span>{areaName}</span>
+              {groupInstances(groups[areaName]).map((name) => (
+                <span key={name} className="section-instance-badge">{name}</span>
+              ))}
+            </h2>
             {groups[areaName].map((dev) => (
               <button
                 key={dev.id}
@@ -2043,19 +2061,6 @@ function Dashboard({
     if (d.area && d.area_icon && !(d.area in areaIconOf)) areaIconOf[d.area] = d.area_icon;
   }
 
-  // Unique remote instance names present in a device list (skips main).
-  const groupInstances = (list) => {
-    const seen = new Set();
-    const result = [];
-    for (const d of list) {
-      if (d.instance && !seen.has(d.instance)) {
-        seen.add(d.instance);
-        result.push(d.instance_name || d.instance);
-      }
-    }
-    return result;
-  };
-
   // Floor mode nests areas under each floor: returns [[areaName, devices], …].
   const subgroupByArea = (list) => {
     const m = {};
@@ -2185,9 +2190,6 @@ function Dashboard({
                     <MdiIcon icon={areaIconOf[key]} size={20} className="section-icon" />
                   )}
                   <span className="section-title">{groupLabelOf(key)}</span>
-                  {mode === 'area' && groupInstances(groups[key]).map((name) => (
-                    <span key={name} className="section-instance-badge">{name}</span>
-                  ))}
                   <span className="section-count muted">{groups[key].length}</span>
                 </button>
               ) : (
@@ -2196,9 +2198,6 @@ function Dashboard({
                     <MdiIcon icon={areaIconOf[key]} size={20} className="section-icon" />
                   )}
                   {groupLabelOf(key)}
-                  {mode === 'area' && groupInstances(groups[key]).map((name) => (
-                    <span key={name} className="section-instance-badge">{name}</span>
-                  ))}
                 </h2>
               )}
               {open &&
@@ -2219,9 +2218,6 @@ function Dashboard({
                             <MdiIcon icon={areaIconOf[area]} size={18} className="section-icon" />
                           )}
                           <span>{area}</span>
-                          {groupInstances(list).map((name) => (
-                            <span key={name} className="section-instance-badge">{name}</span>
-                          ))}
                           <span className="section-count muted">{list.length}</span>
                         </button>
                         {aopen && (
