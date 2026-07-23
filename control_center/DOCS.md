@@ -101,7 +101,12 @@ Restart the add-on after saving. Remote entities appear immediately in **Manage 
 
 If remote entities don't appear after restarting the add-on:
 
-1. **Check the add-on log** (Supervisor > Control Center > Log). On startup you
+1. **Check the Settings tab.** Open the Control Center sidebar and go to
+   Settings. If remote instances are configured, a **Remote instances** card
+   appears with a green/red status dot for each one, the cached entity count,
+   and any error. Use the **Recheck** button to test connectivity on demand.
+
+2. **Check the add-on log** (Supervisor > Control Center > Log). On startup you
    should see a line like:
    ```
    Remote instances loaded: ['garage -> http://192.168.1.50:8123']
