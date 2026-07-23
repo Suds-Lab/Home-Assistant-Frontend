@@ -99,9 +99,21 @@ def _ws_loop(instance_id=None):
     forever on failure. Remote entity IDs are namespaced as `{instance_id}:{eid}`
     so they never collide with main-instance entities."""
     label = instance_id or "main"
+    # Headers that make the connection look enough like a browser to pass
+    # Cloudflare's basic bot checks. Without these, CF returns a 403 challenge.
+    _ws_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
+        "Origin": _inst_url(instance_id) if instance_id else "",
+    }
     while True:
         try:
-            ws = websocket.create_connection(_ws_url(instance_id), timeout=30)
+            ws = websocket.create_connection(
+                _ws_url(instance_id), timeout=30, header=_ws_headers
+            )
             json.loads(ws.recv())  # auth_required
             ws.send(json.dumps({"type": "auth", "access_token": _ws_token(instance_id)}))
             if json.loads(ws.recv()).get("type") != "auth_ok":
@@ -151,7 +163,16 @@ def _ws_loop(instance_id=None):
         except Exception as err:  # noqa: BLE001
             if instance_id is None:
                 _CACHE_READY.clear()
-            print(f"HA WebSocket error ({label}), reconnecting in 5s:", err)
+            err_str = str(err)
+            if "403" in err_str and "cloudflare" in err_str.lower():
+                print(
+                    f"HA WebSocket blocked by Cloudflare ({label}). "
+                    "The remote HA URL is behind Cloudflare bot protection. "
+                    "Use the direct local IP/port (e.g. http://192.168.x.x:8123) "
+                    "or create a Cloudflare WAF bypass rule for /api/websocket."
+                )
+            else:
+                print(f"HA WebSocket error ({label}), reconnecting in 5s:", err)
             time.sleep(5)
 
 

@@ -137,6 +137,18 @@ If remote entities don't appear after restarting the add-on:
    the cert is self-signed, the WebSocket connection will be refused with an SSL
    error. Use `http://` for local network connections, or set up a trusted cert.
 
+6. **Cloudflare-proxied domain**: if the remote HA is behind a Cloudflare
+   Tunnel or a Cloudflare-proxied domain, Control Center sends browser-like
+   headers to bypass basic bot protection. If Cloudflare is in "Under Attack"
+   mode or has strict Bot Fight Mode enabled, the connection will still be
+   blocked. Options:
+   - Use the remote HA's **direct local IP and port** (e.g.
+     `http://192.168.1.50:8123`) instead of the Cloudflare domain - this
+     bypasses Cloudflare entirely and is the most reliable option for devices
+     on the same LAN.
+   - In Cloudflare, create a **WAF skip rule** for the path `/api/websocket`
+     on that hostname to bypass bot checks for WebSocket connections.
+
 ### How it works
 
 - Each remote instance gets its own persistent WebSocket connection. State changes are streamed live and appear on the user dashboard in real time alongside local devices.
