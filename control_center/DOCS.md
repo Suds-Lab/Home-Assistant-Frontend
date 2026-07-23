@@ -149,6 +149,10 @@ If remote entities don't appear after restarting the add-on:
    - In Cloudflare, create a **WAF skip rule** for the path `/api/websocket`
      on that hostname to bypass bot checks for WebSocket connections.
 
+### Room badges
+
+When viewing the dashboard by Area or Floor, each room section header shows a small badge for every remote instance whose devices appear in that room. Rooms with only main-instance devices show no badge. If you have matched an area by name across instances, both remote badges appear on that room's header.
+
 ### How it works
 
 - Each remote instance gets its own persistent WebSocket connection. The initial state snapshot is fetched immediately on connect; area/floor registry data (used for room grouping on the dashboard) is fetched over the same connection in the background and cached within seconds - no separate HTTP calls are made to the remote.
