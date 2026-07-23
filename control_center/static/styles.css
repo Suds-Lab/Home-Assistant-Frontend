@@ -321,6 +321,22 @@ section h2 {
   letter-spacing: 0;
 }
 
+/* Instance source badge shown on area/room section headers when a room
+   contains devices from a remote HA instance. Uses accent-2 to stay visually
+   distinct from the count pill (which uses accent). */
+.section-instance-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 .dashboard-groupby {
   margin-bottom: 18px;
 }

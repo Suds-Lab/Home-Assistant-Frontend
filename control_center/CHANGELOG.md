@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.10
+- Area/room section headers on the dashboard now show a small badge for each
+  remote HA instance whose devices appear in that room. Rooms containing only
+  main-instance devices show no badge. Applies to area grouping and to the
+  area sub-headers in floor grouping mode.
+
 ## 2.6.9
 - Fix: `_inst_url` was called in `_ws_loop` to build the WebSocket `Origin`
   header for remote instances but was missing from the `ha` import list, causing
