@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.3
+- Diagnostics: the add-on now logs at startup which remote instances were loaded
+  and which URL each one is connecting to, making misconfiguration visible in the
+  add-on log immediately. A new admin endpoint (`/api/admin/remote-status`) lets
+  you check whether each remote is reachable and how many entities are cached from
+  it - useful for verifying a remote instance is connected without reading logs.
+
 ## 2.6.2
 - Docs: all four `remote_instances` fields (`id`, `name`, `url`, `token`) are
   now clearly marked as required in the documentation. Fixed a typo in the docs.

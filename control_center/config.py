@@ -86,6 +86,10 @@ REMOTE_INSTANCES = [
     for r in (_ri or [])
     if isinstance(r, dict) and r.get("id") and r.get("url") and r.get("token")
 ]
+if REMOTE_INSTANCES:
+    print(f"Remote instances loaded: {[r['id'] + ' -> ' + r['url'] for r in REMOTE_INSTANCES]}")
+else:
+    print("No remote instances configured (remote_instances is empty or not set)")
 
 
 def _opt(key, default=""):

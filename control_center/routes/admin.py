@@ -68,6 +68,35 @@ def admin_instances():
     return jsonify(instances=instances)
 
 
+@bp.get("/api/admin/remote-status")
+def admin_remote_status():
+    """Diagnostic: check connectivity to every configured remote HA instance.
+    Returns reachability, cached entity count, and the last error (if any)."""
+    require_admin()
+    from core import STATE_CACHE
+    results = []
+    for r in REMOTE_INSTANCES:
+        cached = sum(1 for k in STATE_CACHE if k.startswith(f"{r['id']}:"))
+        reachable = False
+        error = None
+        try:
+            ha_request("/api/", instance_id=r["id"])
+            reachable = True
+        except ApiError as e:
+            error = e.message
+        except Exception as e:  # noqa: BLE001
+            error = str(e)
+        results.append({
+            "id": r["id"],
+            "name": r["name"],
+            "url": r["url"],
+            "reachable": reachable,
+            "cached_entities": cached,
+            "error": error,
+        })
+    return jsonify(instances=results)
+
+
 @bp.get("/api/admin/entities")
 def admin_entities():
     """Entities for the device picker, annotated with their floor, room, and

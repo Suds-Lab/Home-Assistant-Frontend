@@ -165,6 +165,7 @@ def ensure_realtime():
         _ws_started = True
         threading.Thread(target=_ws_loop, daemon=True).start()
         for inst in REMOTE_INSTANCES:
+            print(f"Launching WebSocket thread for remote instance '{inst['id']}' at {inst['url']}")
             threading.Thread(target=_ws_loop, args=(inst["id"],), daemon=True).start()
 
 
