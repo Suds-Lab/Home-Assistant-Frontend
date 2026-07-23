@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.4
+- The **Settings** tab now shows a **Remote instances** card when remote
+  instances are configured. It displays each instance with a green/red
+  connection indicator, its URL, how many entities are cached from it, and any
+  error message if unreachable. A **Recheck** button lets you test connectivity
+  on demand without reading the add-on log.
+
 ## 2.6.3
 - Diagnostics: the add-on now logs at startup which remote instances were loaded
   and which URL each one is connecting to, making misconfiguration visible in the

@@ -185,6 +185,7 @@ const adminGetDeviceTypes = () => request('/admin/device-types');
 const adminSetDeviceTypes = (types) =>
   request('/admin/device-types', { method: 'POST', body: JSON.stringify({ types }) });
 const adminGetSettings = () => request('/admin/settings');
+const adminGetRemoteStatus = () => request('/admin/remote-status');
 const adminSetSettings = (s) =>
   request('/admin/settings', { method: 'POST', body: JSON.stringify(s) });
 const adminGetActivity = (limit = 200) => request(`/admin/activity?limit=${limit}`);
@@ -2916,6 +2917,61 @@ function AuthProviderSettings() {
 
 // Session-signing secret: show whether it's pinned by config or auto-managed,
 // and let an admin rotate the managed one (signs everyone out).
+function RemoteInstancesSettings() {
+  const [instances, setInstances] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function check() {
+    setBusy(true);
+    try {
+      const d = await adminGetRemoteStatus();
+      setInstances(d.instances || []);
+    } catch (e) {
+      setInstances([]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => { check(); }, []);
+
+  if (instances !== null && instances.length === 0) return null;
+
+  return (
+    <div className="card settings-card">
+      <span className="device-name">Remote instances</span>
+      {instances === null ? (
+        <span className="muted">Checking…</span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+          {instances.map((inst) => (
+            <div key={inst.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  display: 'inline-block', width: '0.55rem', height: '0.55rem',
+                  borderRadius: '50%', flexShrink: 0,
+                  background: inst.reachable ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)',
+                }}
+              />
+              <span style={{ fontWeight: 600 }}>{inst.name}</span>
+              <span className="muted" style={{ fontSize: '0.8rem' }}>{inst.url}</span>
+              {inst.reachable
+                ? <span className="muted" style={{ fontSize: '0.8rem' }}>{inst.cached_entities} entities cached</span>
+                : <span style={{ color: 'var(--red, #ef4444)', fontSize: '0.8rem' }}>{inst.error || 'Unreachable'}</span>
+              }
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="tab-actions" style={{ marginTop: '0.5rem' }}>
+        <button className="ghost" disabled={busy} onClick={check}>
+          {busy ? 'Checking…' : 'Recheck'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SecretSettings() {
   const [source, setSource] = useState(null);
   const [status, setStatus] = useState('');
@@ -3721,6 +3777,7 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
           <DeviceTypesSettings onChange={reload} />
           <IncludedEntitiesSettings />
           <AuthProviderSettings />
+          <RemoteInstancesSettings />
           <SecretSettings />
           <BackupSettings />
         </>
