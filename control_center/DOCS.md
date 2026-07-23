@@ -118,26 +118,26 @@ If remote entities don't appear after restarting the add-on:
    Supervisor and restart. If it says "HA WebSocket error", see the error message
    for the cause (bad token, unreachable host, SSL error).
 
-2. **Hit the status endpoint** from a browser (while logged in as admin on the
+3. **Hit the status endpoint** from a browser (while logged in as admin on the
    management port):
    ```
    http://<home-assistant>:4000/api/admin/remote-status
    ```
    It returns `reachable`, `cached_entities`, and `error` for each remote.
 
-3. **Re-save the add-on config** after updating. If the add-on schema was
+4. **Re-save the add-on config** after updating. If the add-on schema was
    previously rejecting your configuration, HA may not have written
    `remote_instances` to options.json. Open the add-on Configuration tab in
    Supervisor, verify the entries look correct, and click Save before restarting.
 
-4. **Token**: the token must be a **long-lived access token** created in the
+5. **Token**: the token must be a **long-lived access token** created in the
    remote HA's own Profile settings - not the local Supervisor token.
 
-5. **HTTPS / self-signed cert**: if the remote URL starts with `https://` and
+6. **HTTPS / self-signed cert**: if the remote URL starts with `https://` and
    the cert is self-signed, the WebSocket connection will be refused with an SSL
    error. Use `http://` for local network connections, or set up a trusted cert.
 
-6. **Cloudflare-proxied domain**: if the remote HA is behind a Cloudflare
+7. **Cloudflare-proxied domain**: if the remote HA is behind a Cloudflare
    Tunnel or a Cloudflare-proxied domain, Control Center sends browser-like
    headers to bypass basic bot protection. If Cloudflare is in "Under Attack"
    mode or has strict Bot Fight Mode enabled, the connection will still be

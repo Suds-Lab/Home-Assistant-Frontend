@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.9
+- Fix: `_inst_url` was called in `_ws_loop` to build the WebSocket `Origin`
+  header for remote instances but was missing from the `ha` import list, causing
+  a `NameError` at startup when any remote instance is configured.
+
 ## 2.6.8
 - Fix: remote instance state cache (entities on the dashboard) was still empty
   after 2.6.7 because the loop waited for all 7 WebSocket responses before
