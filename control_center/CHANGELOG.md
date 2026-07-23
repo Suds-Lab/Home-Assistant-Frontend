@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.1
+- Fix: `remote_instances` add-on schema now uses `name: str` instead of
+  `name: str?` to avoid rejection by the HA add-on schema validator. The
+  default options entry now shows all four fields so the expected format is
+  visible in the add-on configuration UI.
+
 ## 2.6.0
 - New: **remote instance support**. Connect additional Home Assistant instances to Control Center. Devices from every instance are pooled into a single view: they appear in the entity picker (tagged with a colorred instance badge), can be assigned to users exactly like local devices, and are controlled directly from the dashboard - user management stays in one place.
 - The manager **Organize** tab now covers all instances: devices from remote HAs appear alongside local ones (with an instance badge), and rename/area changes write through to the correct HA registry automatically. The area dropdown in the device editor shows only areas from that device's own instance, and the new-area dialog lets the manager pick which instance to create it on when multiple are configured.
