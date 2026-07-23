@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6.7
+- Fix: remote instance area and floor assignments now populate correctly on the
+  dashboard. Floors, areas, entity and device registries are now fetched through
+  the already-open persistent WebSocket at connect time, so no separate
+  connections to the remote HA are needed - the data is cached immediately and
+  remote devices appear in their correct rooms without any additional Cloudflare
+  handshakes.
+
 ## 2.6.6
 - Fix: remote instance state cache was empty after connect when Cloudflare (or
   a proxy) blocked the separate REST call to `/api/states`. The initial state

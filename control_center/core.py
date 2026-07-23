@@ -27,7 +27,7 @@ from flask_sock import Sock
 
 from config import HA_TOKEN, REMOTE_INSTANCES
 from errors import ApiError
-from ha import _invalidate_registries, _ws_url, _ws_token
+from ha import _invalidate_registries, _ws_url, _ws_token, cache_registries_from_ws
 from access import user_can_access
 from security import user_from_token
 
@@ -122,16 +122,25 @@ def _ws_loop(instance_id=None):
                 time.sleep(15)
                 continue
 
-            # Seed the cache via the already-open WebSocket (avoids a separate
-            # REST call, which may be blocked by Cloudflare even when the WS is not).
-            ws.send(json.dumps({"id": 1, "type": "get_states"}))
-            ws.send(json.dumps({"id": 2, "type": "subscribe_events", "event_type": "state_changed"}))
-            # Collect both responses; they can arrive in any order.
+            # Seed everything via the already-open WebSocket so no separate HTTP
+            # or WS connections are needed (those may be blocked by Cloudflare).
+            cmds = {
+                1: {"type": "get_states"},
+                2: {"type": "subscribe_events", "event_type": "state_changed"},
+                3: {"type": "config/floor_registry/list"},
+                4: {"type": "config/area_registry/list"},
+                5: {"type": "config/entity_registry/list"},
+                6: {"type": "config/device_registry/list"},
+                7: {"type": "manifest/list"},
+            }
+            for mid, payload in cmds.items():
+                ws.send(json.dumps({"id": mid, **payload}))
             got = {}
-            while len(got) < 2:
+            while len(got) < len(cmds):
                 msg = json.loads(ws.recv())
-                if msg.get("type") == "result":
+                if msg.get("type") == "result" and msg.get("id") in cmds:
                     got[msg["id"]] = msg
+            # Populate state cache.
             states_result = got.get(1, {})
             for s in (states_result.get("result") or []):
                 fid = f"{instance_id}:{s['entity_id']}" if instance_id else s["entity_id"]
@@ -142,6 +151,15 @@ def _ws_loop(instance_id=None):
                 STATE_CACHE[fid] = s
             if not states_result.get("success"):
                 print(f"State snapshot via WebSocket failed ({label}):", states_result.get("error"))
+            # Warm the registry cache so area/floor lookups don't need a fresh WS.
+            cache_registries_from_ws(
+                instance_id,
+                floors=got.get(3, {}).get("result") or [],
+                areas=got.get(4, {}).get("result") or [],
+                entities=got.get(5, {}).get("result") or [],
+                devices=got.get(6, {}).get("result") or [],
+                integrations=got.get(7, {}).get("result") or [],
+            )
             if instance_id is None:
                 _CACHE_READY.set()
             print(f"HA WebSocket connected ({label}); streaming state changes")
