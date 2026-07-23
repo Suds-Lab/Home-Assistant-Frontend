@@ -1,5 +1,5 @@
 /* Control Center palette: brand blue accent (#5B8DB8) from the logo, on neutral
-   dark/light surfaces. Navy (#1C3A5E) is the brand surface colour (PWA chrome /
+   dark/light surfaces. Navy (#1C3A5E) is the brand surface colorr (PWA chrome /
    status bar); #7AB3E0 is the light highlight. */
 :root {
   --bg: #111111;
@@ -297,7 +297,7 @@ section h2 {
   text-align: left;
 }
 
-/* Area icon shown in the group/sub-group headers (mdi, accent-coloured). */
+/* Area icon shown in the group/sub-group headers (mdi, accent-colorred). */
 .section-icon {
   flex-shrink: 0;
   color: var(--accent);
