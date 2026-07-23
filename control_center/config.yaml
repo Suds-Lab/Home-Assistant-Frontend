@@ -3,7 +3,7 @@
 # NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
 # install's /data is keyed to it, so changing it would orphan existing data.
 name: Control Center
-version: "2.5.3"
+version: "2.6.0"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -56,6 +56,7 @@ homeassistant_api: true
 # an iframe (clickjacking). Leave false if you embed it via a panel_iframe.
 options:
   jwt_secret: ""
+  remote_instances: []
   oauth_client_id: ""
   oauth_client_secret: ""
   oauth_redirect_url: ""
@@ -71,6 +72,11 @@ options:
   oauth_logo_url: ""
 schema:
   jwt_secret: str?
+  remote_instances:
+    - id: str
+      name: str?
+      url: str
+      token: str
   oauth_client_id: str?
   oauth_client_secret: str?
   oauth_redirect_url: str?

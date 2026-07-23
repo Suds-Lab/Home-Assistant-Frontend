@@ -66,6 +66,27 @@ if _dt is None:
     _dt = [d.strip() for d in os.environ.get("DEVICE_TYPES", "").split(",") if d.strip()]
 DEVICE_TYPES = set(_dt) if _dt else set()
 
+# Remote HA instances: each exposes additional entities pooled into this app.
+# Configured via the add-on options as a list of {id, name, url, token} objects,
+# or as REMOTE_INSTANCES_JSON (a JSON array) in the environment for dev runs.
+_ri = addon_options.get("remote_instances")
+if _ri is None:
+    _ri_raw = os.environ.get("REMOTE_INSTANCES_JSON", "")
+    try:
+        _ri = json.loads(_ri_raw) if _ri_raw.strip() else []
+    except (ValueError, TypeError):
+        _ri = []
+REMOTE_INSTANCES = [
+    {
+        "id": str(r["id"]).strip(),
+        "name": str(r.get("name") or r["id"]).strip(),
+        "url": str(r["url"]).rstrip("/"),
+        "token": str(r["token"]),
+    }
+    for r in (_ri or [])
+    if isinstance(r, dict) and r.get("id") and r.get("url") and r.get("token")
+]
+
 
 def _opt(key, default=""):
     return addon_options.get(key) or os.environ.get(key.upper()) or default

@@ -25,9 +25,9 @@ import websocket  # websocket-client
 from flask import Flask, Response, jsonify, request
 from flask_sock import Sock
 
-from config import HA_TOKEN
+from config import HA_TOKEN, REMOTE_INSTANCES
 from errors import ApiError
-from ha import _invalidate_registries, _ws_url, ha_request
+from ha import _invalidate_registries, _ws_url, _ws_token, ha_request
 from access import user_can_access
 from security import user_from_token
 
@@ -52,10 +52,14 @@ def handle_api_error(err):
 
 def _device_view(s):
     attrs = s.get("attributes", {})
+    full_id = s["entity_id"]
+    # Strip instance prefix (e.g. "garage:light.bedroom") to get the real HA entity id
+    # so domain extraction is always correct regardless of namespacing.
+    real_id = full_id.split(":", 1)[1] if ":" in full_id else full_id
     return {
-        "entity_id": s["entity_id"],
-        "domain": s["entity_id"].split(".")[0],
-        "name": attrs.get("friendly_name") or s["entity_id"],
+        "entity_id": full_id,
+        "domain": real_id.split(".")[0],
+        "name": attrs.get("friendly_name") or real_id,
         "state": s.get("state"),
         "attributes": attrs,
         "last_changed": s.get("last_changed"),
@@ -89,32 +93,41 @@ def _broadcast(entity_id, new_state):
             sub["q"].put(payload)
 
 
-def _ws_loop():
-    """Maintain the HA WebSocket connection, refilling the cache and fanning
-    state_changed events out to subscribers. Reconnects forever on failure."""
+def _ws_loop(instance_id=None):
+    """Maintain one HA WebSocket connection (main or a remote instance), refilling
+    the state cache and fanning state_changed events to subscribers. Reconnects
+    forever on failure. Remote entity IDs are namespaced as `{instance_id}:{eid}`
+    so they never collide with main-instance entities."""
+    label = instance_id or "main"
     while True:
         try:
-            ws = websocket.create_connection(_ws_url(), timeout=30)
+            ws = websocket.create_connection(_ws_url(instance_id), timeout=30)
             json.loads(ws.recv())  # auth_required
-            ws.send(json.dumps({"type": "auth", "access_token": HA_TOKEN}))
+            ws.send(json.dumps({"type": "auth", "access_token": _ws_token(instance_id)}))
             if json.loads(ws.recv()).get("type") != "auth_ok":
-                print("HA WebSocket auth failed")
+                print(f"HA WebSocket auth failed ({label})")
                 ws.close()
                 time.sleep(15)
                 continue
 
             # Seed the cache with a full snapshot, then subscribe to changes.
             try:
-                for s in ha_request("/api/states"):
-                    STATE_CACHE[s["entity_id"]] = s
+                for s in ha_request("/api/states", instance_id=instance_id):
+                    fid = f"{instance_id}:{s['entity_id']}" if instance_id else s["entity_id"]
+                    s = dict(s)
+                    s["entity_id"] = fid
+                    if instance_id:
+                        s["_instance"] = instance_id
+                    STATE_CACHE[fid] = s
             except Exception as err:  # noqa: BLE001
-                print("State snapshot failed:", err)
+                print(f"State snapshot failed ({label}):", err)
             ws.send(json.dumps(
                 {"id": 1, "type": "subscribe_events", "event_type": "state_changed"}
             ))
             ws.recv()  # subscribe ack
-            _CACHE_READY.set()
-            print("HA WebSocket connected; streaming state changes")
+            if instance_id is None:
+                _CACHE_READY.set()
+            print(f"HA WebSocket connected ({label}); streaming state changes")
 
             while True:
                 msg = json.loads(ws.recv())
@@ -122,20 +135,23 @@ def _ws_loop():
                     continue
                 data = msg["event"]["data"]
                 eid = data["entity_id"]
+                fid = f"{instance_id}:{eid}" if instance_id else eid
                 new = data.get("new_state")
                 if new is None:
-                    STATE_CACHE.pop(eid, None)
+                    STATE_CACHE.pop(fid, None)
                 else:
-                    STATE_CACHE[eid] = new
-                # A brand-new entity (no prior state) may belong to a device/area
-                # we haven't cached - refresh the registry so its room/floor is
-                # right on the next fetch.
+                    new = dict(new)
+                    new["entity_id"] = fid
+                    if instance_id:
+                        new["_instance"] = instance_id
+                    STATE_CACHE[fid] = new
                 if data.get("old_state") is None and new is not None:
-                    _invalidate_registries()
-                _broadcast(eid, new)
+                    _invalidate_registries(instance_id)
+                _broadcast(fid, new)
         except Exception as err:  # noqa: BLE001
-            _CACHE_READY.clear()
-            print("HA WebSocket error, reconnecting in 5s:", err)
+            if instance_id is None:
+                _CACHE_READY.clear()
+            print(f"HA WebSocket error ({label}), reconnecting in 5s:", err)
             time.sleep(5)
 
 
@@ -143,11 +159,13 @@ _ws_started = False
 
 
 def ensure_realtime():
-    """Start the HA WebSocket thread once per process."""
+    """Start one WebSocket thread per HA instance (main + all remotes)."""
     global _ws_started
     if not _ws_started:
         _ws_started = True
         threading.Thread(target=_ws_loop, daemon=True).start()
+        for inst in REMOTE_INSTANCES:
+            threading.Thread(target=_ws_loop, args=(inst["id"],), daemon=True).start()
 
 
 @app.get("/api/stream")

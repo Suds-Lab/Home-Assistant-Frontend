@@ -18,24 +18,49 @@ from ha import _location_lookup, call_service, ha_registries_cached, ha_request
 from security import current_user, is_management, user_from_token
 from store import ICON_DIR, _append_activity
 
+def _split_entity(entity_id):
+    """Return (instance_id, real_entity_id) for plain or namespaced entity ids."""
+    if ":" in entity_id:
+        iid, eid = entity_id.split(":", 1)
+        return iid, eid
+    return None, entity_id
+
 bp = Blueprint("devices", __name__)
 
 
 @bp.get("/api/devices")
 def devices():
     """Every entity assigned to the user, with full state + attributes, plus
-    the room/floor it's in (so the dashboard can group by room)."""
+    the room/floor it's in (so the dashboard can group by room). Entities from
+    remote instances are included; their entity_id is namespaced as
+    `{instance_id}:{entity_id}` and the `instance`/`instance_name` fields
+    identify the source."""
     user = current_user()
-    reg = ha_registries_cached()
-    locate = _location_lookup(reg)
-    ent_dev = {e["entity_id"]: e.get("device_id") for e in reg.get("entities", [])}
+    # Pre-load registries per instance so we only open each WebSocket once.
+    _reg_cache = {}
+
+    def _reg(instance_id):
+        if instance_id not in _reg_cache:
+            _reg_cache[instance_id] = ha_registries_cached(instance_id=instance_id)
+        return _reg_cache[instance_id]
+
+    from config import REMOTE_INSTANCES
+    _inst_names = {r["id"]: r["name"] for r in REMOTE_INSTANCES}
+
     result = []
-    for s in ha_request("/api/states"):
-        if not user_can_access(user, s["entity_id"]):
+    for full_id, s in list(STATE_CACHE.items()):
+        if not user_can_access(user, full_id):
             continue
+        instance_id = s.get("_instance")  # None = main
+        real_id = full_id.split(":", 1)[1] if instance_id else full_id
+        reg = _reg(instance_id)
+        locate = _location_lookup(reg)
+        ent_dev = {e["entity_id"]: e.get("device_id") for e in reg.get("entities", [])}
         view = _device_view(s)
-        view["area"], view["floor"], view["area_icon"] = locate(s["entity_id"])
-        view["device_id"] = ent_dev.get(s["entity_id"])  # for the manager edit popup
+        view["area"], view["floor"], view["area_icon"] = locate(real_id)
+        view["device_id"] = ent_dev.get(real_id)
+        view["instance"] = instance_id
+        view["instance_name"] = _inst_names.get(instance_id) if instance_id else None
         result.append(view)
     result.sort(key=lambda d: (d["domain"], d["name"].lower()))
     return jsonify(devices=result)
@@ -46,7 +71,15 @@ def entity_detail(entity_id):
     """Fresh full state for a single owned entity (for the detail panel)."""
     user = current_user()
     assert_owned(user, entity_id)
-    return jsonify(_device_view(ha_request(f"/api/states/{entity_id}")))
+    # Serve from cache when possible; otherwise hit the correct HA instance.
+    s = STATE_CACHE.get(entity_id)
+    if s:
+        return jsonify(_device_view(s))
+    instance_id, real_id = _split_entity(entity_id)
+    state = ha_request(f"/api/states/{real_id}", instance_id=instance_id)
+    view = _device_view(state)
+    view["entity_id"] = entity_id  # keep the namespaced id
+    return jsonify(view)
 
 
 # --- Material Design Icons (fetched once from Iconify, then cached locally) ---
@@ -187,7 +220,9 @@ ALLOWED_SERVICES = {
 
 @bp.post("/api/control")
 def control():
-    """Call a whitelisted service on an entity the user owns."""
+    """Call a whitelisted service on an entity the user owns. The entity_id may
+    be plain (`light.bedroom`) or namespaced (`garage:light.bedroom`); the
+    command is routed to the correct HA instance automatically."""
     user = current_user()
     body = request.get_json(silent=True) or {}
     entity_id = body.get("entity_id")
@@ -198,10 +233,11 @@ def control():
     if not isinstance(data, dict):
         raise ApiError("data must be an object", 400)
     assert_owned(user, entity_id)
-    domain = entity_id.split(".")[0]
+    instance_id, real_entity_id = _split_entity(entity_id)
+    domain = real_entity_id.split(".")[0]
     if service not in ALLOWED_SERVICES.get(domain, set()):
         raise ApiError(f"Service '{service}' is not allowed for {domain} entities", 400)
-    call_service(domain, service, entity_id, data)
+    call_service(domain, service, real_entity_id, data, instance_id=instance_id)
     _log_action(user, domain, service, entity_id, data)
     return jsonify(ok=True)
 
