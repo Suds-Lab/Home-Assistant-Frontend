@@ -169,6 +169,25 @@ _REG_CACHE = {}
 _REG_LOCK = threading.Lock()
 
 
+def cache_registries_from_ws(instance_id, floors, areas, entities, devices, integrations):
+    """Store registry data that was fetched over an existing WebSocket connection
+    (e.g. from _ws_loop) so ha_registries_cached() can serve it without opening
+    a separate WebSocket to the remote HA."""
+    data = {
+        "floors": floors,
+        "areas": areas,
+        "entities": entities,
+        "devices": devices,
+        "integrations": {
+            m.get("domain"): m.get("name")
+            for m in (integrations or [])
+            if m.get("domain") and m.get("name")
+        },
+    }
+    with _REG_LOCK:
+        _REG_CACHE[instance_id] = {"ts": time.time(), "data": data}
+
+
 def _invalidate_registries(instance_id=None):
     with _REG_LOCK:
         if instance_id is not None:
