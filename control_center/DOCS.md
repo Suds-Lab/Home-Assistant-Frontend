@@ -370,6 +370,10 @@ If you uninstall and reinstall the add-on, open Settings → **Restore from
 file** and pick that JSON to bring everything back exactly as it was. Restoring
 replaces all current users, assignments and settings.
 
+## Session expiry
+
+When a login session expires or becomes invalid, the app redirects silently to the login screen with a "session expired" notice. No error banner is shown on the dashboard.
+
 ## Live updates
 
 The dashboard updates in **real time** over a WebSocket: any change (from the

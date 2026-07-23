@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.13
+- Fix: an expired or invalid session now silently redirects to the login screen
+  instead of showing a "Failed to fetch" or "Session expired" error banner. The
+  login page shows a "session expired" notice. No error state is shown on the
+  dashboard.
+
 ## 2.6.12
 - Fix: instance badge now appears on each area row in Organize - Areas & Floors
   (not on Devices tab section headers). Main-instance areas show no badge;
