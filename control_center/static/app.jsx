@@ -1265,19 +1265,6 @@ function IntegrationBadge({ domain, name }) {
   );
 }
 
-// Returns unique remote instance names present in a device list (skips main).
-function groupInstances(list) {
-  const seen = new Set();
-  const result = [];
-  for (const d of list) {
-    if (d.instance && !seen.has(d.instance)) {
-      seen.add(d.instance);
-      result.push(d.instance_name || d.instance);
-    }
-  }
-  return result;
-}
-
 function Organizer() {
   const [data, setData] = useState(null); // { devices, areas }
   const [error, setError] = useState('');
@@ -1359,12 +1346,7 @@ function Organizer() {
       ) : (
         order.map((areaName) => (
           <section key={areaName}>
-            <h2 className="section-h2">
-              <span>{areaName}</span>
-              {groupInstances(groups[areaName]).map((name) => (
-                <span key={name} className="section-instance-badge">{name}</span>
-              ))}
-            </h2>
+            <h2>{areaName}</h2>
             {groups[areaName].map((dev) => (
               <button
                 key={dev.id}
@@ -1646,7 +1628,12 @@ function AreaOrganizer() {
                       <MdiIcon icon={a.icon} />
                     </span>
                     <div className="org-info">
-                      <span className="device-name">{a.name}</span>
+                      <span className="device-name">
+                        {a.name}
+                        {a.instance && (
+                          <span className="section-instance-badge">{a.instance_name || a.instance}</span>
+                        )}
+                      </span>
                     </div>
                     {data.floors.filter((f) => f.instance === a.instance).length > 0 && (
                       <select
