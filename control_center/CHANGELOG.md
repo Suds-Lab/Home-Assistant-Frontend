@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.6
+- Fix: remote instance state cache was empty after connect when Cloudflare (or
+  a proxy) blocked the separate REST call to `/api/states`. The initial state
+  snapshot is now fetched via the already-authenticated WebSocket (`get_states`
+  command) so no additional HTTP request is needed - the entire real-time stream
+  runs over a single WebSocket connection.
+
 ## 2.6.5
 - Fix: remote instance connections to HA servers behind Cloudflare now send
   browser-like headers (`User-Agent`, `Origin`) so Cloudflare's basic bot
