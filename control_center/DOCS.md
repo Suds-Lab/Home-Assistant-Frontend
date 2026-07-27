@@ -404,6 +404,43 @@ instantly (and shows the last-seen state offline).
 > icon that's already on a home screen, because iOS (and some Android launchers)
 > freeze it at install time. Remove and re-add the app to pick up a new icon.
 
+## Climate scheduling
+
+Users can automate their thermostats through the **Schedules** item in the
+profile menu.
+
+### Admin setup
+
+In the **Control Center** sidebar tab, open a user and scroll to **Climate
+scheduling**. The permission panel shows a grid of the climate devices that user
+already controls; tap a device to grant or revoke scheduling access for it. The
+**Schedules** tab in the admin view lists every schedule grouped by user; expand
+any schedule to see its events. You can enable/disable or delete any schedule
+from here.
+
+### User view
+
+The **Schedules** panel lets each user:
+
+1. Create named schedules using the searchable schedule switcher (keyboard
+   navigation supported). The switcher dropdown has a **Create schedule** action
+   at the bottom.
+2. Pick target thermostats as chips - tap a chip's **x** to remove it, or tap
+   **+ AC** to open a searchable multi-select for adding more.
+3. Add **events** - each event fires at a specific time on selected days (with
+   Weekdays / Weekends / Every day presets) and sets a mode (off, cool, heat,
+   auto, dry, fan), temperature, and optional fan speed. The temperature slider
+   range, step, and unit (C or F) are read automatically from the HA entity's
+   own configuration, so °F setpoints work correctly without any extra setup.
+4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
+   colour coding by mode/setpoint.
+5. Switch to **By thermostat** to see the merged program for one unit across all
+   active schedules, with a warning icon on any same-time conflicts.
+
+Events are edge-triggered: a thermostat holds whatever state the last fired
+event set until the next event fires. The scheduler checks for events every
+30 seconds.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +

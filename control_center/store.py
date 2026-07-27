@@ -225,3 +225,39 @@ def _app_image_url():
     """Cache-busted URL for the custom icon, or None when using the default."""
     p = _find_icon()
     return f"./app-icon?v={int(p.stat().st_mtime)}" if p else None
+
+
+# --- Schedule persistence --------------------------------------------------
+
+SCHEDULES_FILE = ICON_DIR / "schedules.json"
+SCHEDULE_PERMS_FILE = ICON_DIR / "schedule_perms.json"
+
+
+def load_schedules():
+    try:
+        data = json.loads(SCHEDULES_FILE.read_text())
+        return data if isinstance(data, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def save_schedules(schedules):
+    SCHEDULES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = SCHEDULES_FILE.with_name(SCHEDULES_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(schedules, indent=2))
+    tmp.replace(SCHEDULES_FILE)
+
+
+def load_schedule_perms():
+    try:
+        data = json.loads(SCHEDULE_PERMS_FILE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_schedule_perms(perms):
+    SCHEDULE_PERMS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = SCHEDULE_PERMS_FILE.with_name(SCHEDULE_PERMS_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(perms, indent=2))
+    tmp.replace(SCHEDULE_PERMS_FILE)

@@ -13,6 +13,7 @@ Runs two ways:
 
 import json
 import mimetypes
+import os
 import threading
 import time
 from queue import Empty, Queue
@@ -292,6 +293,30 @@ def ws_stream(ws):
 # under gunicorn (the add-on) as well as the dev server below.
 ensure_realtime()
 
+if os.environ.get("MOCK_HA"):
+    _MOCK_CLIMATE = [
+        ("climate.living_room_ac", "Living Room AC",  "cool",     22.0, 20.0),
+        ("climate.bedroom_ac",     "Bedroom AC",       "heat",     21.0, 19.5),
+        ("climate.office_ac",      "Office AC",        "off",      24.0, 23.0),
+        ("climate.guest_room_ac",  "Guest Room AC",    "fan_only", 23.0, 22.5),
+    ]
+    _MOCK_FAN_MODES   = ["auto", "low", "medium", "high"]
+    _MOCK_HVAC_MODES  = ["off", "cool", "heat", "heat_cool", "dry", "fan_only"]
+    for _eid, _name, _state, _target, _current in _MOCK_CLIMATE:
+        STATE_CACHE[_eid] = {
+            "entity_id": _eid,
+            "state": _state,
+            "attributes": {
+                "friendly_name": _name,
+                "temperature": _target,
+                "current_temperature": _current,
+                "hvac_modes": _MOCK_HVAC_MODES,
+                "fan_modes": _MOCK_FAN_MODES,
+                "min_temp": 16.0,
+                "max_temp": 30.0,
+            },
+        }
+    print(f"[mock_ha] Seeded {len(_MOCK_CLIMATE)} fake climate entities into STATE_CACHE")
 
 # App-level middleware (security headers) and the dev-server entry point live in
 # app.py, the thin composition/entry module that imports this one.
@@ -303,8 +328,12 @@ from routes.auth import bp as _auth_bp  # noqa: E402
 from routes.devices import bp as _devices_bp  # noqa: E402
 from routes.manager import bp as _manager_bp  # noqa: E402
 from routes.pwa import bp as _pwa_bp  # noqa: E402
+from routes.schedules import bp as _schedules_bp  # noqa: E402
 app.register_blueprint(_admin_bp)
 app.register_blueprint(_auth_bp)
 app.register_blueprint(_devices_bp)
 app.register_blueprint(_manager_bp)
 app.register_blueprint(_pwa_bp)
+app.register_blueprint(_schedules_bp)
+from scheduler import ensure_scheduler  # noqa: E402
+ensure_scheduler()

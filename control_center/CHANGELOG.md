@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.8.0
+- Scheduler UI rewrite: searchable dropdowns (keyboard navigation: arrows, Enter,
+  Escape) replace plain selects for the schedule switcher and AC picker.
+  Enable/disable is now a sliding toggle (button[role=switch]) instead of a
+  checkbox. Target ACs appear as removable chips; a multi-select searchable menu
+  adds more. Bottom sheet editor slides up with animation and is fully
+  mobile-friendly with safe-area insets.
+- Week strip now shows hour-axis tick labels (0, 6, 12, 18, 24).
+- Entry rows show a 26 px colored circle with a mode abbreviation, day letters
+  at proportional opacity, and the source schedule name in the By-thermostat
+  view. Conflict warning icon appears when two events share the same time slot.
+- Admin Schedules tab: "All schedules" is now grouped by user with collapsible
+  cards (chevron + status dot + toggle + delete). "Access" is a 2-column grid
+  of clickable device buttons per user (replacing the old table) - enabled
+  devices show a checkmark, disabled ones show a lock icon.
+- UserEditor scheduling permissions now render as the same 2-column grid,
+  consistent with the admin Access tab.
+- Temperature unit support: slider range, step, and unit label (C or F) are
+  read from the HA climate entity attributes (min_temp, max_temp,
+  target_temp_step, temperature_unit). Falls back to inferring C vs. F from the
+  range when the attribute is absent. Stored values are passed through to HA
+  as-is so HA always receives its configured unit.
+
+## 2.7.0
+- Feature: per-user climate scheduling. Users can create named schedules that
+  fire edge-triggered events (time + day-of-week) against their permitted
+  thermostats: set mode (off/cool/heat/auto/dry/fan), temperature (C), and fan
+  speed. A week preview strip visualizes the program at a glance. A "By
+  thermostat" view merges all active schedules for one entity and flags
+  same-time conflicts.
+- Admin: new "Schedules" tab lists all schedules across users with
+  enable/disable and delete controls. User editor now includes a "Climate
+  scheduling" section to grant per-entity schedule permissions.
+- Backend: schedules persisted in schedules.json and schedule_perms.json under
+  /data; a background daemon thread fires HA climate services at the scheduled
+  times (checks every 30 seconds, fires at most once per HH:MM).
+
 ## 2.6.13
 - Fix: an expired or invalid session now silently redirects to the login screen
   instead of showing a "Failed to fetch" or "Session expired" error banner. The
