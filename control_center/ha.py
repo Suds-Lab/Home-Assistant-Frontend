@@ -11,6 +11,7 @@ None (the default) targets the main HA instance; passing a string targets the
 matching remote instance from REMOTE_INSTANCES.
 """
 import json
+import os
 import threading
 import time
 
@@ -69,6 +70,9 @@ def ha_request(path, method="GET", payload=None, *, instance_id=None):
 
 
 def call_service(domain, service, entity_id, extra=None, *, instance_id=None):
+    if os.environ.get("MOCK_HA"):
+        print(f"[mock_ha] call_service {domain}.{service} {entity_id} {extra}")
+        return {}
     body = {"entity_id": entity_id, **(extra or {})}
     return ha_request(f"/api/services/{domain}/{service}", "POST", body, instance_id=instance_id)
 

@@ -192,6 +192,24 @@ const adminSetSettings = (s) =>
   request('/admin/settings', { method: 'POST', body: JSON.stringify(s) });
 const adminGetActivity = (limit = 200) => request(`/admin/activity?limit=${limit}`);
 const adminClearActivity = () => request('/admin/activity', { method: 'DELETE' });
+
+// Climate scheduling (user-facing)
+const getMySchedules = () => request('/schedules');
+const createSchedule = (fields) => request('/schedules', { method: 'POST', body: JSON.stringify(fields) });
+const updateSchedule = (id, patch) => request(`/schedules/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) });
+const deleteSchedule = (id) => request(`/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+const getScheduleEntities = () => request('/schedule-entities');
+// Climate scheduling (admin)
+const adminGetSchedulePerms = () => request('/admin/schedule-perms');
+const adminSetSchedulePerms = (username, entity_ids) =>
+  request('/admin/schedule-perms', { method: 'POST', body: JSON.stringify({ username, entity_ids }) });
+const adminGetAllSchedules = () => request('/admin/schedules');
+const adminGetClimateEntities = () => request('/admin/climate-entities');
+const adminPatchSchedule = (id, patch) =>
+  request(`/admin/schedules/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+const adminDeleteSchedule = (id) =>
+  request(`/admin/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 // Live pull of Home Assistant's own logbook for a range (never stored by us).
 const adminHaLogbook = (startISO, endISO, entity) => {
   const p = new URLSearchParams({ start: startISO });
@@ -1748,7 +1766,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, organizing, canChangePassword, onChangePassword, onOrganize, onLogout }) {
+function AccountMenu({ name, picture, isManager, organizing, canChangePassword, onChangePassword, onOrganize, onSchedules, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -1783,9 +1801,907 @@ function AccountMenu({ name, picture, isManager, organizing, canChangePassword, 
               Organize
             </button>
           )}
+          {onSchedules && (
+            <button role="menuitem" onClick={() => { setOpen(false); onSchedules(); }}>
+              Schedules
+            </button>
+          )}
           <button role="menuitem" className="danger" onClick={() => { setOpen(false); onLogout(); }}>
             Log out
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Climate Scheduler -------------------------------------------------------
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MODE_LABELS = { off: 'Off', cool: 'Cool', heat: 'Heat', auto: 'Auto', dry: 'Dry', fan: 'Fan only' };
+const FAN_OPTIONS = ['auto', 'low', 'medium', 'high', 'diffuse', 'focus'];
+const TEMP_MIN = 16;
+const TEMP_MAX = 30;
+
+/* Derive temp range/unit from the list of schedule entities (same as climate cards). */
+function schedTempInfo(entities) {
+  const a = (entities && entities[0] && entities[0].attributes) || {};
+  const tMin = a.min_temp ?? TEMP_MIN;
+  const tMax = a.max_temp ?? TEMP_MAX;
+  const tStep = a.target_temp_step ?? 0.5;
+  // HA provides temperature_unit on climate entities; fall back to inferring from range.
+  const tUnit = a.temperature_unit || (tMin > 40 ? '°F' : '°C');
+  return { tMin, tMax, tStep, tUnit };
+}
+
+function segColor(entry, tMin, tMax) {
+  if (!entry) return 'var(--seg-empty)';
+  const { mode, temp } = entry;
+  if (mode === 'off') return '#4a4a4a';
+  if (mode === 'fan') return '#43a047';
+  if (mode === 'dry') return '#ffa726';
+  const lo = tMin ?? TEMP_MIN;
+  const hi = tMax ?? TEMP_MAX;
+  const t = Math.max(lo, Math.min(hi, temp != null ? temp : (lo + hi) / 2));
+  const f = (t - lo) / (hi - lo); // 0 = coldest, 1 = hottest
+  if (mode === 'cool') {
+    return `hsl(210,85%,${Math.round(42 + f * 22)}%)`;
+  }
+  if (mode === 'heat') {
+    return `hsl(${Math.round(28 - f * 18)},88%,${Math.round(60 - f * 15)}%)`;
+  }
+  // auto: blue-to-orange gradient by temperature
+  return `hsl(${Math.round(210 - f * 175)},85%,55%)`;
+}
+
+function segLabel(entry) {
+  if (!entry || entry.mode === 'off') return '';
+  if (entry.mode === 'fan' || entry.mode === 'dry') return MODE_LABELS[entry.mode] || entry.mode;
+  return entry.temp != null ? `${entry.temp}°` : (MODE_LABELS[entry.mode] || entry.mode);
+}
+
+function daySegments(entries, dayIdx, tMin, tMax) {
+  const evs = [];
+  for (const e of entries) {
+    if (!e.time) continue;
+    const [h, m] = e.time.split(':').map(Number);
+    const mins = h * 60 + m;
+    for (const d of (e.days || [])) {
+      evs.push({ absMin: d * 1440 + mins, entry: e });
+    }
+  }
+  evs.sort((a, b) => a.absMin - b.absMin);
+  if (!evs.length) return [{ pctStart: 0, pctEnd: 100, color: 'var(--seg-empty)', label: '' }];
+
+  const dayStart = dayIdx * 1440;
+  const before = evs.filter((e) => e.absMin < dayStart);
+  const carry = before.length ? before[before.length - 1].entry : evs[evs.length - 1].entry;
+
+  const dayEvs = evs
+    .filter((e) => Math.floor(e.absMin / 1440) === dayIdx)
+    .sort((a, b) => a.absMin - b.absMin);
+
+  const segs = [];
+  let cur = carry;
+  let prevMin = 0;
+  for (const { absMin, entry } of dayEvs) {
+    const relMin = absMin - dayStart;
+    if (relMin > prevMin) {
+      segs.push({ pctStart: prevMin / 14.4, pctEnd: relMin / 14.4, color: segColor(cur, tMin, tMax), label: segLabel(cur) });
+    }
+    cur = entry;
+    prevMin = relMin;
+  }
+  segs.push({ pctStart: prevMin / 14.4, pctEnd: 100, color: segColor(cur, tMin, tMax), label: '' });
+  return segs;
+}
+
+const DAY_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const MODE_ABBR = { off: '–', cool: '❄', heat: '▲', auto: '⇅', dry: '∼', fan: '≈' };
+
+/* SchedSwitch: button[role=switch] with sliding knob */
+function SchedSwitch({ checked, onChange, disabled }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={!!checked}
+      type="button"
+      className={`sched-switch${checked ? ' on' : ''}`}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+    >
+      <span className="sched-switch-knob" />
+    </button>
+  );
+}
+
+/* SchedSearchableMenu: searchable dropdown, single or multi select */
+function SchedSearchableMenu({
+  trigger, items, multi,
+  selectedIds, selectedId,
+  onSelect, onToggle,
+  placeholder, emptyText, footer,
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [hi, setHi] = React.useState(-1);
+  const wrapRef = React.useRef(null);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        setQ('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  React.useEffect(() => {
+    if (open && inputRef.current) { inputRef.current.focus(); setHi(-1); }
+  }, [open]);
+
+  const filtered = (items || []).filter(
+    (it) => !q.trim() || it.label.toLowerCase().includes(q.trim().toLowerCase())
+  );
+
+  function handleKey(e) {
+    if (e.key === 'Escape') { setOpen(false); setQ(''); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter' && hi >= 0 && hi < filtered.length) { e.preventDefault(); pick(filtered[hi]); }
+  }
+
+  function pick(item) {
+    if (multi) {
+      onToggle && onToggle(item.id);
+    } else {
+      onSelect && onSelect(item.id);
+      setOpen(false);
+      setQ('');
+    }
+  }
+
+  return (
+    <div className="sched-smenu-wrap" ref={wrapRef}>
+      {React.cloneElement(trigger, { onClick: () => setOpen((o) => !o), 'aria-expanded': open })}
+      {open && (
+        <div className="sched-smenu">
+          <div className="sched-smenu-search">
+            <span className="sched-smenu-search-icon">&#9906;</span>
+            <input
+              ref={inputRef}
+              className="sched-smenu-input"
+              placeholder={placeholder || 'Search…'}
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setHi(-1); }}
+              onKeyDown={handleKey}
+            />
+          </div>
+          <div className="sched-smenu-list">
+            {filtered.length === 0 && (
+              <div className="sched-smenu-empty">{emptyText || 'Nothing found'}</div>
+            )}
+            {filtered.map((item, idx) => {
+              const sel = multi
+                ? (selectedIds && selectedIds.has(item.id))
+                : item.id === selectedId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`sched-smenu-item${sel ? ' sel' : ''}${hi === idx ? ' hi' : ''}`}
+                  onMouseEnter={() => setHi(idx)}
+                  onClick={() => pick(item)}
+                >
+                  <span className="sched-smenu-item-label">{item.label}</span>
+                  {item.sub && <span className="sched-smenu-sub">{item.sub}</span>}
+                  {sel && <span className="sched-smenu-check">&#10003;</span>}
+                </button>
+              );
+            })}
+          </div>
+          {footer && <div className="sched-smenu-footer">{footer}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* SchedWeekStrip: 7-day color bar with hour-axis ticks at 0, 6, 12, 18, 24 */
+function SchedWeekStrip({ entries, tMin, tMax }) {
+  const HOUR_TICKS = [0, 6, 12, 18, 24];
+  return (
+    <div className="sched-strip-wrap">
+      <div className="sched-strip-axis">
+        {HOUR_TICKS.map((h) => (
+          <span key={h} className="sched-strip-tick" style={{ left: `${(h / 24) * 100}%` }}>
+            {h === 0 || h === 24 ? '' : `${h}h`}
+          </span>
+        ))}
+      </div>
+      <div className="sched-strip">
+        {DAY_LABELS.map((label, di) => {
+          const segs = daySegments(entries, di, tMin, tMax);
+          return (
+            <div key={di} className="sched-strip-row">
+              <span className="sched-strip-day">{label}</span>
+              <div className="sched-strip-bar">
+                {segs.map((seg, si) => (
+                  <div
+                    key={si}
+                    className="sched-strip-seg"
+                    style={{ left: `${seg.pctStart}%`, width: `${seg.pctEnd - seg.pctStart}%`, background: seg.color }}
+                    title={seg.label}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* SchedEntryRow: 26x26 colored dot + mode abbr + opacity-based day letters */
+function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
+  const unit = tUnit ?? '°';
+  const tempStr = entry.temp != null ? ` · ${entry.temp}${unit}` : '';
+  return (
+    <div
+      className="sched-entry-row"
+      onClick={onEdit || undefined}
+      role={onEdit ? 'button' : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      onKeyDown={(e) => e.key === 'Enter' && onEdit && onEdit()}
+    >
+      <div className="sched-entry-dot" style={{ background: segColor(entry, tMin, tMax) }}>
+        <span className="sched-entry-dot-icon">{MODE_ABBR[entry.mode] || '?'}</span>
+      </div>
+      <div className="sched-entry-info">
+        <div className="sched-entry-time-line">
+          <span className="sched-entry-time">{entry.time}</span>
+          <span className="sched-entry-mode-label">{MODE_LABELS[entry.mode] || entry.mode}{tempStr}</span>
+        </div>
+        <div className="sched-entry-days">
+          {DAY_SHORT.map((d, i) => (
+            <span key={i} style={{ opacity: entry.days.includes(i) ? 1 : 0.2 }}>{d}</span>
+          ))}
+        </div>
+      </div>
+      {source && <span className="sched-entry-source">{source}</span>}
+      {warn && <span className="sched-entry-warn" title="Conflict">!</span>}
+      {onEdit && <span className="sched-entry-action">&#8250;</span>}
+    </div>
+  );
+}
+
+/* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
+function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit }) {
+  const lo = tMin ?? TEMP_MIN;
+  const hi = tMax ?? TEMP_MAX;
+  const step = tStep ?? 0.5;
+  const unit = tUnit ?? '°C';
+  const defaultTemp = entry?.temp != null ? entry.temp : Math.round((lo + hi) / 2 * 2) / 2;
+  const [time, setTime] = React.useState(entry?.time || '07:00');
+  const [days, setDays] = React.useState(new Set(entry?.days || [0, 1, 2, 3, 4]));
+  const [mode, setMode] = React.useState(entry?.mode || 'heat');
+  const [temp, setTemp] = React.useState(defaultTemp);
+  const [fan, setFan] = React.useState(entry?.fan || '');
+
+  const toggleDay = (d) => setDays((prev) => {
+    const next = new Set(prev);
+    next.has(d) ? next.delete(d) : next.add(d);
+    return next;
+  });
+
+  const daysArr = [...days].sort((a, b) => a - b);
+  const showTemp = mode !== 'off' && mode !== 'fan' && mode !== 'dry';
+
+  const MODE_COLORS = {
+    off: '#555', cool: '#2b9af9', heat: '#ff8100', auto: '#5B8DB8', dry: '#ffa726', fan: '#43a047',
+  };
+
+  function handleSave() {
+    if (!daysArr.length) return;
+    onSave({ id: entry?.id, time, days: daysArr, mode, temp: showTemp ? temp : null, fan: fan || null });
+  }
+
+  return (
+    <div className="sched-sheet">
+      <div className="sched-sheet-topbar">
+        <button className="ghost" onClick={onCancel} type="button">Cancel</button>
+        <h3 className="sched-sheet-title">{entry?.id ? 'Edit event' : 'Add event'}</h3>
+        <button className="btn-primary" onClick={handleSave} disabled={!daysArr.length} type="button">Save</button>
+      </div>
+
+      {schedName && (
+        <div className="sched-edit-ctx">
+          In <strong>{schedName}</strong>
+          {affects > 0 && <span> &middot; also affects {affects} thermostat{affects !== 1 ? 's' : ''}</span>}
+        </div>
+      )}
+
+      <div className="sched-field-group">
+        <span className="sched-field-label">Time</span>
+        <input type="time" className="sched-time-input" value={time} onChange={(e) => setTime(e.target.value)} />
+      </div>
+
+      <div className="sched-field-group">
+        <span className="sched-field-label">Days</span>
+        <div className="sched-day-btn-row">
+          {DAY_SHORT.map((d, i) => (
+            <button key={i} type="button" className={`sched-day-toggle${days.has(i) ? ' on' : ''}`}
+              onClick={() => toggleDay(i)}>{d}</button>
+          ))}
+        </div>
+        <div className="sched-presets">
+          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4]))}>Weekdays</button>
+          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([5,6]))}>Weekend</button>
+          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4,5,6]))}>Every day</button>
+        </div>
+      </div>
+
+      <div className="sched-field-group">
+        <span className="sched-field-label">Mode</span>
+        <div className="sched-mode-grid">
+          {Object.entries(MODE_LABELS).map(([k, v]) => (
+            <button key={k} type="button"
+              className={`sched-mode-btn${mode === k ? ' on' : ''}`}
+              style={mode === k ? { borderColor: MODE_COLORS[k], background: MODE_COLORS[k] + '22' } : {}}
+              onClick={() => setMode(k)}>
+              <span className="sched-mode-dot" style={{ background: MODE_COLORS[k] }} />{v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {showTemp && (
+        <div className="sched-field-group">
+          <span className="sched-field-label">Temperature</span>
+          <div className="sched-temp-row">
+            <span className="sched-temp-big" style={{ color: segColor({ mode, temp }, lo, hi) }}>{temp}{unit}</span>
+            <input type="range" min={lo} max={hi} step={step} value={temp}
+              style={{ accentColor: segColor({ mode, temp }, lo, hi) }}
+              onChange={(e) => { haptic(); setTemp(Number(e.target.value)); }} />
+          </div>
+          <div className="sched-range-ends"><span>{lo}{unit}</span><span>{hi}{unit}</span></div>
+        </div>
+      )}
+
+      <div className="sched-field-group">
+        <span className="sched-field-label">Fan speed</span>
+        <div className="sched-fan-row">
+          {['', ...FAN_OPTIONS.slice(0, 4)].map((f) => (
+            <button key={f || '_auto'} type="button" className={`sched-fan-btn${fan === f ? ' on' : ''}`}
+              onClick={() => setFan(f)}>{f || 'Auto'}</button>
+          ))}
+        </div>
+      </div>
+
+      {entry?.id && onDelete && (
+        <button className="sched-danger-link" type="button"
+          onClick={() => { onCancel(); onDelete(); }}>Delete event</button>
+      )}
+    </div>
+  );
+}
+
+/* SchedMyView: my schedules list + editor (schedule state lifted to SchedulerPanel) */
+function SchedMyView({ entities, schedules, setSchedules }) {
+  const [selId, setSelId] = React.useState(null);
+  const [editEntry, setEditEntry] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const nameInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (schedules && schedules.length && !selId) setSelId(schedules[0].id);
+  }, [schedules]);
+
+  const sched = schedules ? schedules.find((s) => s.id === selId) || null : null;
+  const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
+  const tInfo = schedTempInfo(entities);
+
+  async function createNew() {
+    setBusy(true);
+    setError('');
+    try {
+      const existing = (schedules || []).map((s) => s.name);
+      let n = (schedules || []).length + 1;
+      while (existing.includes(`Schedule ${n}`)) n++;
+      const s = await createSchedule({ name: `Schedule ${n}`, targets: [], entries: [] });
+      setSchedules((prev) => [...(prev || []), s]);
+      setSelId(s.id);
+      setTimeout(() => {
+        if (nameInputRef.current) { nameInputRef.current.focus(); nameInputRef.current.select(); }
+      }, 60);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function patchSched(id, patch) {
+    setBusy(true); setError('');
+    try {
+      const updated = await updateSchedule(id, patch);
+      setSchedules((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function removeSched(id) {
+    if (!window.confirm('Delete this schedule?')) return;
+    setBusy(true); setError('');
+    try {
+      await deleteSchedule(id);
+      setSchedules((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        setSelId(next.length ? next[0].id : null);
+        return next;
+      });
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function saveEntry(entryData) {
+    if (!sched) return;
+    const entries = entryData.id
+      ? sched.entries.map((e) => (e.id === entryData.id ? entryData : e))
+      : [...sched.entries, entryData];
+    await patchSched(sched.id, { entries });
+    setEditEntry(null);
+  }
+
+  async function deleteEntry(entryId) {
+    if (!sched) return;
+    await patchSched(sched.id, { entries: sched.entries.filter((e) => e.id !== entryId) });
+  }
+
+  function removeTarget(eid) {
+    if (!sched) return;
+    patchSched(sched.id, { targets: sched.targets.filter((t) => t !== eid) });
+  }
+
+  function addTarget(eid) {
+    if (!sched || sched.targets.includes(eid)) return;
+    patchSched(sched.id, { targets: [...sched.targets, eid] });
+  }
+
+  const schedItems = (schedules || []).map((s) => ({
+    id: s.id,
+    label: s.name,
+    sub: `${s.entries.length} event${s.entries.length !== 1 ? 's' : ''}`,
+  }));
+
+  const addableEntities = (entities || []).filter(
+    (en) => !sched || !sched.targets.includes(en.entity_id)
+  );
+
+  const sortedEntries = sched ? [...sched.entries].sort((a, b) => a.time.localeCompare(b.time)) : [];
+
+  if (!schedules) return <p className="muted">Loading…</p>;
+
+  return (
+    <div className="sched-view">
+      {error && <div className="error banner">{error}</div>}
+
+      <SchedSearchableMenu
+        trigger={
+          <button className="sched-switcher" type="button">
+            <span className="sched-status-dot" style={{
+              background: sched ? (sched.enabled ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)'
+            }} />
+            <span className="sched-switcher-label">{sched ? sched.name : 'No schedules yet'}</span>
+            {sched && <span className="sched-switcher-meta">{sched.entries.length} event{sched.entries.length !== 1 ? 's' : ''}</span>}
+            <span className="sched-caret">&#9660;</span>
+          </button>
+        }
+        items={schedItems}
+        selectedId={selId}
+        onSelect={(id) => setSelId(id)}
+        placeholder="Search schedules…"
+        emptyText="No schedules found"
+        footer={
+          <button className="sched-menu-create" type="button" onClick={createNew} disabled={busy}>
+            + Create schedule
+          </button>
+        }
+      />
+
+      {!sched && (schedules || []).length === 0 && (
+        <div className="sched-card">
+          <p className="muted" style={{ margin: 0 }}>No schedules yet. Use the menu above to create one.</p>
+        </div>
+      )}
+
+      {sched && (
+        <div className="sched-card">
+          <div className="sched-card-header">
+            <input
+              ref={nameInputRef}
+              className="sched-name-input"
+              value={sched.name}
+              onChange={(e) => setSchedules((prev) => prev.map((s) =>
+                s.id === sched.id ? { ...s, name: e.target.value } : s))}
+              onBlur={(e) => { if (e.target.value.trim()) patchSched(sched.id, { name: e.target.value.trim() }); }}
+              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+            />
+            <SchedSwitch checked={sched.enabled} disabled={busy}
+              onChange={(v) => patchSched(sched.id, { enabled: v })} />
+            <button className="ghost" type="button" onClick={() => removeSched(sched.id)}
+              disabled={busy} title="Delete schedule">&#x1F5D1;</button>
+          </div>
+
+          <div className="sched-sub">
+            <span className="sched-unit-title">Thermostats</span>
+            {entities.length === 0 ? (
+              <p className="muted">No climate devices granted. Ask an admin.</p>
+            ) : (
+              <div className="sched-chip-row">
+                {(sched.targets || []).map((eid) => (
+                  <span key={eid} className="sched-chip">
+                    {entityName(eid)}
+                    <button className="sched-chip-x" type="button"
+                      onClick={() => removeTarget(eid)} aria-label={`Remove ${entityName(eid)}`}>&#215;</button>
+                  </span>
+                ))}
+                {addableEntities.length > 0 && (
+                  <SchedSearchableMenu
+                    trigger={<button className="sched-chip sched-chip-add" type="button">+ AC</button>}
+                    items={addableEntities.map((en) => ({ id: en.entity_id, label: en.name }))}
+                    onSelect={(id) => addTarget(id)}
+                    placeholder="Search…"
+                    emptyText="All added"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {sortedEntries.length > 0 && (
+            <div className="sched-sub">
+              <span className="sched-unit-title">Week preview</span>
+              <SchedWeekStrip entries={sortedEntries} tMin={tInfo.tMin} tMax={tInfo.tMax} />
+            </div>
+          )}
+
+          <div className="sched-sub">
+            <span className="sched-unit-title">Events</span>
+            {sortedEntries.length === 0 ? (
+              <p className="muted">No events yet.</p>
+            ) : (
+              sortedEntries.map((e) => (
+                <SchedEntryRow key={e.id} entry={e} onEdit={() => setEditEntry(e)} tMin={tInfo.tMin} tMax={tInfo.tMax} tUnit={tInfo.tUnit} />
+              ))
+            )}
+            <button className="sched-add-btn" type="button" onClick={() => setEditEntry({})}>
+              + Add event
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editEntry !== null && (
+        <div className="sched-overlay" onClick={(e) => e.target === e.currentTarget && setEditEntry(null)}>
+          <SchedEntryEditor
+            entry={editEntry.id ? editEntry : null}
+            schedName={sched?.name}
+            affects={Math.max(0, (sched?.targets || []).length - 1)}
+            onSave={saveEntry}
+            onCancel={() => setEditEntry(null)}
+            onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); setEditEntry(null); } : null}
+            tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* SchedByThermostat: view merged events per thermostat, with searchable picker */
+function SchedByThermostat({ entities, schedules }) {
+  const [selEntityId, setSelEntityId] = React.useState((entities[0] || {}).entity_id || '');
+
+  if (!entities.length) {
+    return (
+      <div className="sched-view">
+        <p className="muted">No permitted climate entities.</p>
+      </div>
+    );
+  }
+
+  const selEntity = entities.find((e) => e.entity_id === selEntityId) || entities[0];
+  const tInfo = schedTempInfo([selEntity]);
+  const targetSchedules = (schedules || []).filter(
+    (s) => s.enabled && s.targets.includes(selEntity.entity_id)
+  );
+
+  const merged = [];
+  const byKey = {};
+  for (const s of targetSchedules) {
+    for (const e of s.entries) {
+      for (const d of e.days) {
+        const key = `${d}:${e.time}`;
+        if (!byKey[key]) byKey[key] = [];
+        byKey[key].push(s.name);
+      }
+      merged.push(e);
+    }
+  }
+  const conflictCount = Object.values(byKey).filter((v) => v.length > 1).length;
+
+  const entItems = entities.map((e) => ({ id: e.entity_id, label: e.name }));
+
+  return (
+    <div className="sched-view">
+      <SchedSearchableMenu
+        trigger={
+          <button className="sched-switcher" type="button">
+            <span className="sched-switcher-label">{selEntity.name}</span>
+            <span className="sched-caret">&#9660;</span>
+          </button>
+        }
+        items={entItems}
+        selectedId={selEntity.entity_id}
+        onSelect={(id) => setSelEntityId(id)}
+        placeholder="Search thermostats…"
+        emptyText="None found"
+      />
+
+      <div className="sched-card">
+        {targetSchedules.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>No active schedules target this thermostat.</p>
+        ) : (
+          <>
+            <SchedWeekStrip entries={merged} tMin={tInfo.tMin} tMax={tInfo.tMax} />
+            {conflictCount > 0 && (
+              <div className="sched-clash-note">
+                Conflict: {conflictCount} time slot{conflictCount > 1 ? 's' : ''} overlap.
+              </div>
+            )}
+            {targetSchedules.map((s) => {
+              return (
+                <div key={s.id} className="sched-sub">
+                  <span className="sched-unit-title">{s.name}</span>
+                  <span className="muted" style={{ fontSize: '0.82em' }}>
+                    by {s.owner} &middot; {s.entries.length} event{s.entries.length !== 1 ? 's' : ''}
+                  </span>
+                  {s.entries.map((e) => {
+                    const hasConflict = e.days.some((d) => (byKey[`${d}:${e.time}`] || []).length > 1);
+                    return <SchedEntryRow key={e.id} entry={e} source={s.name} warn={hasConflict} tMin={tInfo.tMin} tMax={tInfo.tMax} tUnit={tInfo.tUnit} />;
+                  })}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* SchedulerPanel: main panel, lifts schedule+entity state */
+function SchedulerPanel({ onClose }) {
+  const [view, setView] = React.useState('mine');
+  const [entities, setEntities] = React.useState([]);
+  const [schedules, setSchedules] = React.useState(null);
+  const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    Promise.all([getScheduleEntities(), getMySchedules()])
+      .then(([entData, scheds]) => {
+        setEntities(entData.entities || []);
+        setSchedules(scheds);
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <div className="sched-panel">
+      <div className="sched-topbar">
+        <button className="ghost" onClick={onClose} aria-label="Back" type="button">&#8592; Back</button>
+        <h2 style={{ margin: 0 }}>Schedules</h2>
+      </div>
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`seg${view === 'mine' ? ' on' : ''}`} onClick={() => setView('mine')} type="button">My schedules</button>
+        <button className={`seg${view === 'thermostat' ? ' on' : ''}`} onClick={() => setView('thermostat')} type="button">By thermostat</button>
+      </div>
+      {error && <div className="error banner">{error}</div>}
+      {view === 'mine' ? (
+        <SchedMyView entities={entities} schedules={schedules} setSchedules={setSchedules} />
+      ) : (
+        <SchedByThermostat entities={entities} schedules={schedules || []} />
+      )}
+    </div>
+  );
+}
+
+/* SchedAdminSchedRow: collapsible schedule row for the admin "All schedules" tab */
+function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
+  const [open, setOpen] = React.useState(false);
+  const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
+
+  return (
+    <div className="sched-admin-sched">
+      <div className="sched-admin-sched-head">
+        <button className="sched-admin-chevron" type="button" onClick={() => setOpen((o) => !o)}>
+          {open ? '▾' : '▸'}
+        </button>
+        <div className="sched-admin-sched-main">
+          <span className="sched-admin-sched-name">{sched.name}</span>
+          <span className="sched-admin-meta">
+            {sched.entries.length} event{sched.entries.length !== 1 ? 's' : ''}
+            {sched.targets.length > 0 && ` · ${sched.targets.length} thermostat${sched.targets.length !== 1 ? 's' : ''}`}
+          </span>
+        </div>
+        <SchedSwitch checked={sched.enabled} onChange={() => onToggle(sched)} />
+        <button className="sched-admin-trash" type="button" onClick={() => onDelete(sched)}>&#x1F5D1;</button>
+      </div>
+      {open && (
+        <div className="sched-admin-body">
+          {sched.targets.length > 0 && (
+            <div className="sched-admin-targets">
+              {sched.targets.map((t) => (
+                <span key={t} className="sched-chip">{entityName(t)}</span>
+              ))}
+            </div>
+          )}
+          {sched.entries.length === 0 ? (
+            <p className="muted" style={{ margin: '6px 0' }}>No events.</p>
+          ) : (
+            [...sched.entries].sort((a, b) => a.time.localeCompare(b.time)).map((e) => (
+              <SchedEntryRow key={e.id} entry={e} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* AdminSchedulesView: admin sub-panel with Access (2-col grid) and All schedules (grouped+collapsible) */
+function AdminSchedulesView() {
+  const [subTab, setSubTab] = React.useState('access');
+  const [schedules, setSchedules] = React.useState(null);
+  const [users, setUsers] = React.useState(null);
+  const [climateEntities, setClimateEntities] = React.useState([]);
+  const [perms, setPerms] = React.useState({});
+  const [error, setError] = React.useState('');
+  const [permBusy, setPermBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    Promise.all([adminGetAllSchedules(), adminGetUsers(), adminGetClimateEntities(), adminGetSchedulePerms()])
+      .then(([scheds, usersData, entData, permsData]) => {
+        setSchedules(scheds);
+        setUsers(usersData.users);
+        setClimateEntities(entData.entities || []);
+        setPerms(permsData);
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+
+  async function toggleEnabled(s) {
+    try {
+      const updated = await adminPatchSchedule(s.id, { enabled: !s.enabled });
+      setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
+    } catch (e) { setError(e.message); }
+  }
+
+  async function removeSched(s) {
+    if (!window.confirm(`Delete schedule "${s.name}" by ${s.owner}?`)) return;
+    try {
+      await adminDeleteSchedule(s.id);
+      setSchedules((prev) => prev.filter((x) => x.id !== s.id));
+    } catch (e) { setError(e.message); }
+  }
+
+  async function togglePerm(username, entityId, nowOn) {
+    setPermBusy(true);
+    try {
+      const current = new Set(perms[username] || []);
+      if (nowOn) current.add(entityId); else current.delete(entityId);
+      await adminSetSchedulePerms(username, [...current]);
+      setPerms((prev) => ({ ...prev, [username]: [...current] }));
+    } catch (e) { setError(e.message); }
+    finally { setPermBusy(false); }
+  }
+
+  function userHasDevice(user, entityId) {
+    return user.all || user.manager || (user.entities || []).includes(entityId);
+  }
+
+  const loading = !schedules || !users;
+
+  const userMap = {};
+  (users || []).forEach((u) => { userMap[u.username] = u; });
+
+  const grouped = schedules
+    ? [...new Set(schedules.map((s) => s.owner))].map((owner) => ({
+        owner,
+        scheds: schedules.filter((s) => s.owner === owner),
+      }))
+    : [];
+
+  return (
+    <div>
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`seg${subTab === 'access' ? ' on' : ''}`} onClick={() => setSubTab('access')} type="button">Access</button>
+        <button className={`seg${subTab === 'schedules' ? ' on' : ''}`} onClick={() => setSubTab('schedules')} type="button">All schedules</button>
+      </div>
+
+      {error && <div className="error banner">{error}</div>}
+      {loading && <p className="muted">Loading…</p>}
+
+      {!loading && subTab === 'access' && (
+        <div>
+          {climateEntities.length === 0 ? (
+            <p className="muted">No climate entities found.</p>
+          ) : (
+            (users || []).map((u) => {
+              const userPerms = new Set(perms[u.username] || []);
+              return (
+                <div key={u.username} className="sched-admin-user-section">
+                  <div className="sched-admin-user-label">
+                    {u.displayName || u.username}
+                    {u.admin && <span className="sched-admin-badge">admin</span>}
+                  </div>
+                  <div className="sched-perm-grid">
+                    {climateEntities.map((e) => {
+                      const eligible = userHasDevice(u, e.entity_id);
+                      const on = userPerms.has(e.entity_id);
+                      return (
+                        <button
+                          key={e.entity_id}
+                          type="button"
+                          className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
+                          onClick={() => eligible && !permBusy && togglePerm(u.username, e.entity_id, !on)}
+                          disabled={!eligible}
+                        >
+                          <span className="sched-perm-cell-name">{e.name}</span>
+                          <span className="sched-perm-check">
+                            {!eligible ? '🔒' : on ? '✓' : ''}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <p className="muted" style={{ fontSize: '0.78em', marginTop: 12 }}>
+            Locked devices require device-control access first (Users tab).
+          </p>
+        </div>
+      )}
+
+      {!loading && subTab === 'schedules' && (
+        <div>
+          {grouped.length === 0 ? (
+            <p className="muted">No schedules created yet.</p>
+          ) : (
+            grouped.map(({ owner, scheds }) => (
+              <div key={owner} className="sched-admin-user-section">
+                <div className="sched-admin-user-label">
+                  {userMap[owner]?.displayName || owner}
+                  <span className="sched-admin-count">{scheds.length} schedule{scheds.length !== 1 ? 's' : ''}</span>
+                </div>
+                {scheds.map((s) => (
+                  <SchedAdminSchedRow
+                    key={s.id}
+                    sched={s}
+                    entities={climateEntities}
+                    onToggle={toggleEnabled}
+                    onDelete={removeSched}
+                  />
+                ))}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -1806,6 +2722,8 @@ function Dashboard({
 }) {
   const [organizing, setOrganizing] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [hasSchedPerms, setHasSchedPerms] = useState(false);
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1820,6 +2738,12 @@ function Dashboard({
       .then(setMgrData)
       .catch(() => {});
   }, [isManager]);
+
+  useEffect(() => {
+    getScheduleEntities()
+      .then((d) => setHasSchedPerms((d.entities || []).length > 0))
+      .catch(() => {});
+  }, []);
 
   function openDeviceEdit(entity) {
     if (!mgrData || !entity.device_id) return;
@@ -2095,6 +3019,7 @@ function Dashboard({
             canChangePassword={canChangePassword}
             onChangePassword={() => setShowPw(true)}
             onOrganize={() => setOrganizing(true)}
+            onSchedules={hasSchedPerms ? () => setShowScheduler(true) : undefined}
             onLogout={onLogout}
           />
         </div>
@@ -2104,7 +3029,9 @@ function Dashboard({
         <ChangePasswordDialog rules={passwordRules} onClose={() => setShowPw(false)} />
       )}
 
-      {organizing ? (
+      {showScheduler ? (
+        <SchedulerPanel onClose={() => setShowScheduler(false)} />
+      ) : organizing ? (
         <Organize />
       ) : (
       <>{/* normal dashboard */}
@@ -2267,7 +3194,7 @@ function Dashboard({
   );
 }
 
-function UserEditor({ user, entities, onSave, onCancel }) {
+function UserEditor({ user, entities, schedPerms = [], onSave, onCancel }) {
   const isNew = !user;
   const [username, setUsername] = useState(user?.username || '');
   const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -2286,12 +3213,20 @@ function UserEditor({ user, entities, onSave, onCancel }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Per-user climate scheduling permissions
+  const [schedPicked, setSchedPicked] = useState(new Set(schedPerms));
+  const [allEntitiesForSched, setAllEntitiesForSched] = useState([]);
   // Every entity (any type), for the per-user "add a specific device" search -
   // lets the admin grant one user a disabled-type entity without globalising it.
   const [allEntities, setAllEntities] = useState([]);
   useEffect(() => {
     adminGetAllEntities()
       .then((e) => setAllEntities(e.entities))
+      .catch(() => {});
+    // Climate entities come from STATE_CACHE via a dedicated endpoint so this
+    // works whether HA is reachable or not (e.g. mock/dev mode).
+    adminGetClimateEntities()
+      .then((e) => setAllEntitiesForSched(e.entities))
       .catch(() => {});
   }, []);
 
@@ -2326,6 +3261,9 @@ function UserEditor({ user, entities, onSave, onCancel }) {
         // Only keep per-entity expiry for entities still assigned to this user.
         entityExpires: Object.fromEntries(
           Object.entries(entityExpires).filter(([id]) => picked.has(id))
+        ),
+        scheduleEntityIds: [...schedPicked].filter((id) =>
+          (all || manager) || allEntitiesForSched.filter((en) => picked.has(en.entity_id)).some((en) => en.entity_id === id)
         ),
       });
     } catch (err) {
@@ -2646,6 +3584,48 @@ function UserEditor({ user, entities, onSave, onCancel }) {
           </ul>
         </div>
       )}
+
+      {/* Scheduling permissions */}
+      <h4 className="devices-heading">Scheduling permissions</h4>
+      <p className="muted field-note">
+        Grant access to schedule specific devices. Only devices this user can already control are shown.
+      </p>
+      {(() => {
+        const schedEligible = (all || manager)
+          ? allEntitiesForSched
+          : allEntitiesForSched.filter((en) => picked.has(en.entity_id));
+        if (schedEligible.length === 0) {
+          return (
+            <p className="muted">
+              {allEntitiesForSched.length === 0
+                ? 'No schedulable entities found.'
+                : 'Assign climate entities to this user first.'}
+            </p>
+          );
+        }
+        return (
+          <div className="sched-perm-grid" style={{ marginTop: 8 }}>
+            {schedEligible.map((en) => {
+              const on = schedPicked.has(en.entity_id);
+              return (
+                <button
+                  key={en.entity_id}
+                  type="button"
+                  className={`sched-perm-cell${on ? ' on' : ''}`}
+                  onClick={() => setSchedPicked((prev) => {
+                    const next = new Set(prev);
+                    next.has(en.entity_id) ? next.delete(en.entity_id) : next.add(en.entity_id);
+                    return next;
+                  })}
+                >
+                  <span className="sched-perm-cell-name">{en.name || en.entity_id}</span>
+                  <span className="sched-perm-check">{on ? '✓' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {error && <div className="error">{error}</div>}
       <div className="editor-actions">
@@ -3686,8 +4666,9 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
   const [users, setUsers] = useState(null);
   const [entities, setEntities] = useState([]);
   const [editing, setEditing] = useState(null); // {user} or {} for new
-  const [tab, setTab] = useState('users'); // 'users' | 'activity' | 'settings'
+  const [tab, setTab] = useState('users'); // 'users' | 'activity' | 'settings' | 'schedules'
   const [error, setError] = useState('');
+  const [schedPermsAll, setSchedPermsAll] = useState({});
 
   const reload = useCallback(async () => {
     setError('');
@@ -3705,6 +4686,12 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
     } catch (err) {
       setError((prev) => prev || `Couldn't load device list: ${err.message}`);
     }
+    try {
+      const p = await adminGetSchedulePerms();
+      setSchedPermsAll(p);
+    } catch {
+      // non-fatal: schedule perms simply won't be pre-populated
+    }
   }, []);
 
   useEffect(() => {
@@ -3720,8 +4707,12 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
       .catch(() => {});
   }, [editing]);
 
-  async function handleSave(user) {
-    await adminSaveUser(user);
+  async function handleSave(data) {
+    const { scheduleEntityIds, ...userFields } = data;
+    await adminSaveUser(userFields);
+    if (scheduleEntityIds !== undefined) {
+      await adminSetSchedulePerms(userFields.username || userFields.original, scheduleEntityIds);
+    }
     setEditing(null);
     reload();
   }
@@ -3742,6 +4733,7 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
         <UserEditor
           user={editing.user}
           entities={entities}
+          schedPerms={schedPermsAll[editing.user?.username] || []}
           onSave={handleSave}
           onCancel={() => setEditing(null)}
         />
@@ -3770,6 +4762,9 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
         <button className={`seg ${tab === 'activity' ? 'on' : ''}`} onClick={() => setTab('activity')}>
           Activity
         </button>
+        <button className={`seg ${tab === 'schedules' ? 'on' : ''}`} onClick={() => setTab('schedules')}>
+          Schedules
+        </button>
         <button className={`seg ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>
           Settings
         </button>
@@ -3790,6 +4785,8 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
         </>
       ) : tab === 'activity' ? (
         <ActivityLog />
+      ) : tab === 'schedules' ? (
+        <AdminSchedulesView />
       ) : (
         <>
           <div className="tab-actions">
