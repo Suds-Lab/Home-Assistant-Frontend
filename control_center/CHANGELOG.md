@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.8.1
+- Fix scheduling permission grid: long device names now wrap instead of being
+  truncated. Grid collapses from 2 columns to 1 automatically when the panel is
+  narrow or names are long. Lone last item still spans the full width.
+
 ## 2.8.0
 - Scheduler UI rewrite: searchable dropdowns (keyboard navigation: arrows, Enter,
   Escape) replace plain selects for the schedule switcher and AC picker.
