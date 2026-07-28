@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.8.2
+- RGB lights now glow in their actual current color on the dashboard card.
+  Color is read from HA's rgb_color attribute, with hs_color as fallback.
+  Near-black or near-white colors fall back to the warm yellow glow.
+- Device card name now truncates with ellipsis instead of pushing the edit
+  pencil outside the card on long names.
+
 ## 2.8.1
 - Fix scheduling permission grid: long device names now wrap instead of being
   truncated. Grid collapses from 2 columns to 1 automatically when the panel is

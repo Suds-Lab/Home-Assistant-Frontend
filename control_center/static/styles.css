@@ -981,6 +981,10 @@ img.install-icon {
 
 .device-name {
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Manager-only edit pencil on a control card */

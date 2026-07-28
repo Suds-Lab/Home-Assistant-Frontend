@@ -1037,11 +1037,36 @@ function DeviceCard({ device, onChange, onEdit }) {
     }
   }
 
+  // For RGB lights: extract the current color as a CSS rgb() string, or null.
+  function lightRgb() {
+    if (device.domain !== 'light' || !on) return null;
+    if (a.rgb_color) {
+      const [r, g, b] = a.rgb_color;
+      // Very dark colors (nearly black) look bad as a glow - fall back to warm.
+      if (r + g + b < 30) return null;
+      return `rgb(${r},${g},${b})`;
+    }
+    if (a.hs_color) {
+      // Convert HS (hue 0-360, sat 0-100) to RGB for the glow color.
+      const h = a.hs_color[0] / 360;
+      const s = a.hs_color[1] / 100;
+      if (s < 0.08) return null; // nearly white - warm fallback looks better
+      const i = Math.floor(h * 6);
+      const f = h * 6 - i;
+      const q = 1 - f, t = f;
+      const [r, g, b] = [
+        [1,t,0],[q,1,0],[0,1,t],[0,q,1],[t,0,1],[1,0,q],
+      ][i % 6];
+      return `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    }
+    return null;
+  }
+
   // Pick a state-reactive accent: warm light, blue cool, red heat, etc.
   // Every active accent pulses for a consistent "live" feel.
   function accent() {
     const d = device.domain;
-    if (d === 'light' && on) return 'accent-warm glow pulse';
+    if (d === 'light' && on) return lightRgb() ? 'glow pulse' : 'accent-warm glow pulse';
     if (d === 'climate') {
       // heat_cool can heat OR cool. Color by what it's actually doing now if HA
       // reports it (hvac_action): red heating, blue cooling. Many setups don't
@@ -1065,8 +1090,9 @@ function DeviceCard({ device, onChange, onEdit }) {
     return isActive ? 'accent-on glow pulse' : '';
   }
 
+  const rgb = lightRgb();
   return (
-    <div className={`card device ${accent()}`}>
+    <div className={`card device ${accent()}`} style={rgb ? { '--g': rgb } : undefined}>
       <div className="device-head">
         <span className="device-name">{device.name}</span>
         {onEdit && device.device_id && (
