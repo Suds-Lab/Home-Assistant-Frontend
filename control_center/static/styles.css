@@ -2931,10 +2931,11 @@ img.install-icon {
 .sched-admin-count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
 
 /* Admin permissions 2-col grid */
-.sched-perm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.sched-perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.sched-perm-grid .sched-perm-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .sched-perm-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -2950,8 +2951,8 @@ img.install-icon {
 .sched-perm-cell:hover:not(:disabled):not(.locked) { background: var(--card-active); }
 .sched-perm-cell.on { border-color: var(--accent); }
 .sched-perm-cell.locked { opacity: 0.45; cursor: not-allowed; }
-.sched-perm-cell-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.sched-perm-check { font-size: 0.9rem; color: var(--accent); flex-shrink: 0; }
+.sched-perm-cell-name { flex: 1; min-width: 0; font-weight: 500; word-break: break-word; }
+.sched-perm-check { font-size: 0.9rem; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 
 /* Admin collapsible schedule rows */
 .sched-admin-sched {
