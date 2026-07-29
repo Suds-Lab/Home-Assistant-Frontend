@@ -147,14 +147,16 @@ If remote entities don't appear after restarting the add-on:
      bypasses Cloudflare entirely and is the most reliable option for devices
      on the same LAN.
    - In Cloudflare, create a **WAF skip rule** for the path `/api/websocket`
-     on that hostname to bypass bot checks for WebSocket connections.
+     on that hostname to bypass bot checks for WebSocket connections. Both
+     reading state and sending control commands run over `/api/websocket`, so
+     this single rule is enough for full remote functionality.
 
 ### How it works
 
 - In the manager's **Organize - Areas & Floors** view, each area row shows a small badge with the remote instance name. Main-instance areas show no badge.
 - Each remote instance gets its own persistent WebSocket connection. The initial state snapshot is fetched immediately on connect; area/floor registry data (used for room grouping on the dashboard) is fetched over the same connection in the background and cached within seconds - no separate HTTP calls are made to the remote.
 - Remote entity IDs are namespaced internally as `{id}:{entity_id}` (e.g. `garage:light.bedroom`) so they never collide with local or other-remote entities. This namespacing is transparent to users.
-- Control commands are routed to the correct instance automatically.
+- Control commands (from the dashboard and from climate schedules) are routed to the correct instance automatically, and for remote instances they are sent over the same WebSocket used for reading state - so remote control works wherever the state stream works, including through Cloudflare.
 - If a remote is unreachable, its entities are excluded gracefully; the rest of the app continues normally.
 - The remote HA does not need to know about Control Center at all - only the token is required.
 

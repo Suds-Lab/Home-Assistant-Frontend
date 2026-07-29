@@ -35,6 +35,18 @@ def _inst_token(instance_id):
     return _INSTANCES.get(instance_id, _INSTANCES[None])[1]
 
 
+def split_instance_entity(entity_id):
+    """Split a dashboard entity id into (instance_id, real_entity_id).
+
+    Remote entities are namespaced as `{instance_id}:{entity_id}` (e.g.
+    `garage:light.bedroom`); main-instance entities are plain. Returns
+    (None, entity_id) for the main instance."""
+    if ":" in entity_id:
+        iid, eid = entity_id.split(":", 1)
+        return iid, eid
+    return None, entity_id
+
+
 _BROWSER_UA = (
     "Mozilla/5.0 (X11; Linux x86_64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -73,6 +85,21 @@ def call_service(domain, service, entity_id, extra=None, *, instance_id=None):
     if os.environ.get("MOCK_HA"):
         print(f"[mock_ha] call_service {domain}.{service} {entity_id} {extra}")
         return {}
+    # Remote instances: issue the command over the WebSocket (like reads and
+    # registry writes), not REST. The WebSocket path sends the Origin header that
+    # gets past Cloudflare bot protection; a REST POST would be 403'd while the
+    # read stream keeps working, so CC changes never reached the remote HA.
+    if instance_id is not None:
+        return ha_ws_command(
+            {
+                "type": "call_service",
+                "domain": domain,
+                "service": service,
+                "service_data": dict(extra or {}),
+                "target": {"entity_id": entity_id},
+            },
+            instance_id=instance_id,
+        )
     body = {"entity_id": entity_id, **(extra or {})}
     return ha_request(f"/api/services/{domain}/{service}", "POST", body, instance_id=instance_id)
 

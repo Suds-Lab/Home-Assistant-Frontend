@@ -22,21 +22,26 @@ _MODE_TO_HVAC = {
 
 
 def _fire_event(entry, target):
-    from ha import call_service
+    from ha import call_service, split_instance_entity
     mode = entry.get("mode", "heat")
     temp = entry.get("temp")
     fan = entry.get("fan")
 
+    # Targets are stored namespaced for remote entities (e.g. "garage:climate.ac").
+    # Split so the command routes to the owning instance; without this the call
+    # goes to the main HA with a bogus id and silently no-ops.
+    instance_id, real_target = split_instance_entity(target)
+
     if mode == "off":
-        call_service("climate", "turn_off", target)
+        call_service("climate", "turn_off", real_target, instance_id=instance_id)
         return
 
     hvac_mode = _MODE_TO_HVAC.get(mode, mode)
-    call_service("climate", "set_hvac_mode", target, {"hvac_mode": hvac_mode})
+    call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
     if temp is not None:
-        call_service("climate", "set_temperature", target, {"temperature": float(temp)})
+        call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
     if fan:
-        call_service("climate", "set_fan_mode", target, {"fan_mode": fan})
+        call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
 
 
 def _scheduler_loop():
