@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.8.4
+- Fix: a remote instance with little activity (e.g. a quiet secondary home) no
+  longer reconnects every ~30 seconds. The read connection now sends a keepalive
+  ping when it goes idle and only reconnects if the ping goes unanswered, instead
+  of treating a quiet-but-healthy link as a dropped connection.
+- Fix: remote commands now use the same 30-second connection timeout as the read
+  stream. A shorter timeout could silently drop a command while a fresh
+  connection was still completing its handshake over a slow (e.g. Cloudflare)
+  link.
+- Remote commands are now logged (what was sent, to which instance, and any
+  failure reason) so a command that does not reach the remote HA leaves a clear
+  trace in the add-on log instead of failing silently.
+
 ## 2.8.3
 - Fix: changes made in Control Center to a remote-instance device (lights,
   climate, etc.) now actually reach the remote Home Assistant. Commands to

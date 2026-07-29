@@ -155,8 +155,28 @@ def _ws_loop(instance_id=None):
                 _CACHE_READY.set()
             print(f"HA WebSocket connected ({label}); streaming state changes")
 
+            # Keepalive: the socket timeout also governs recv() in this loop, so
+            # an idle instance (no state_changed for the timeout window) would
+            # otherwise trip a recv() timeout and force a needless reconnect - a
+            # reconnect storm for quiet remotes. Instead, when the socket goes
+            # quiet we send an HA-level ping and only reconnect if the pong never
+            # comes back (i.e. the connection is genuinely dead).
+            ping_pending = False
+            ping_id = 100
             while True:
-                msg = json.loads(ws.recv())
+                try:
+                    raw = ws.recv()
+                except websocket.WebSocketTimeoutException:
+                    if ping_pending:
+                        raise  # our ping went unanswered - the link is dead
+                    ping_id += 1
+                    ws.send(json.dumps({"id": ping_id, "type": "ping"}))
+                    ping_pending = True
+                    continue
+                ping_pending = False  # any inbound traffic proves the link is alive
+                msg = json.loads(raw)
+                if msg.get("type") == "pong":
+                    continue
                 # Collect pending registry results (arrive after phase-2 requests).
                 mid = msg.get("id")
                 if mid in _REG_IDS and msg.get("type") == "result" and mid not in _reg_buf:
