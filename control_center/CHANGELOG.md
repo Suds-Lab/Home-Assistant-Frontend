@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.8.3
+- Fix: changes made in Control Center to a remote-instance device (lights,
+  climate, etc.) now actually reach the remote Home Assistant. Commands to
+  remote instances are sent over the same WebSocket used for reading state,
+  which carries the browser headers that get past Cloudflare bot protection.
+  Previously commands went over a REST call that Cloudflare could block with a
+  403 while the read stream kept working, so remote changes silently failed.
+- Fix: scheduled climate events now fire against the correct instance. A
+  schedule targeting a remote-instance thermostat was being sent to the main
+  Home Assistant with an unknown entity id and silently did nothing; the target
+  is now routed to its owning instance.
+- Fix: a climate card's target temperature now stays in sync when it changes
+  from anywhere other than that card (the scheduler, another user, or the HA
+  instance itself). It previously froze at the value shown when the card first
+  loaded, so current and target temperature could drift out of sync (worst for
+  remote devices, which could stick at a default of 22).
+
 ## 2.8.2
 - RGB lights now glow in their actual current color on the dashboard card.
   Color is read from HA's rgb_color attribute, with hs_color as fallback.

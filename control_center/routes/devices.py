@@ -14,16 +14,15 @@ from access import assert_owned, user_can_access
 from config import HA_TOKEN, HA_URL
 from core import STATE_CACHE, _device_view
 from errors import ApiError
-from ha import _location_lookup, call_service, ha_registries_cached, ha_request
+from ha import (
+    _location_lookup,
+    call_service,
+    ha_registries_cached,
+    ha_request,
+    split_instance_entity,
+)
 from security import current_user, is_management, user_from_token
 from store import ICON_DIR, _append_activity
-
-def _split_entity(entity_id):
-    """Return (instance_id, real_entity_id) for plain or namespaced entity ids."""
-    if ":" in entity_id:
-        iid, eid = entity_id.split(":", 1)
-        return iid, eid
-    return None, entity_id
 
 bp = Blueprint("devices", __name__)
 
@@ -75,7 +74,7 @@ def entity_detail(entity_id):
     s = STATE_CACHE.get(entity_id)
     if s:
         return jsonify(_device_view(s))
-    instance_id, real_id = _split_entity(entity_id)
+    instance_id, real_id = split_instance_entity(entity_id)
     state = ha_request(f"/api/states/{real_id}", instance_id=instance_id)
     view = _device_view(state)
     view["entity_id"] = entity_id  # keep the namespaced id
@@ -233,7 +232,7 @@ def control():
     if not isinstance(data, dict):
         raise ApiError("data must be an object", 400)
     assert_owned(user, entity_id)
-    instance_id, real_entity_id = _split_entity(entity_id)
+    instance_id, real_entity_id = split_instance_entity(entity_id)
     domain = real_entity_id.split(".")[0]
     if service not in ALLOWED_SERVICES.get(domain, set()):
         raise ApiError(f"Service '{service}' is not allowed for {domain} entities", 400)

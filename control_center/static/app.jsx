@@ -600,6 +600,22 @@ function DeviceCard({ device, onChange, onEdit }) {
     act('set_swing_mode', { swing_mode: sm });
   }
 
+  // Optimistic target temperature: like fan/swing, re-sync from the live stream
+  // when a new state arrives (the scheduler, another client, or the remote HA
+  // itself changed it), unless the user just adjusted it. Without this the
+  // target froze at mount - or at the `?? 22` fallback for a late-loading remote
+  // entity - while the current temp kept updating: the visible "out of sync".
+  const targetFreeze = useRef(0);
+  useEffect(() => {
+    if (Date.now() >= targetFreeze.current) {
+      const t = (device.attributes || {}).temperature;
+      if (t != null) {
+        setTarget(t);
+        targetRef.current = t;
+      }
+    }
+  }, [device]);
+
   const on = state === 'on';
   const isActive = ACTIVE_STATES.has(state);
 
@@ -704,6 +720,9 @@ function DeviceCard({ device, onChange, onEdit }) {
         // tapping or holding 70 -> 64 is one call, not six.
         const commitTemp = () => {
           clearTimeout(tempTimer.current);
+          // Hold the optimistic value past the send so the stream echo of the
+          // new target doesn't briefly bounce back to the old one.
+          targetFreeze.current = Date.now() + 3000;
           control(device.entity_id, 'set_temperature', { temperature: targetRef.current })
             .then(onChange)
             .catch(() => {});
@@ -713,6 +732,9 @@ function DeviceCard({ device, onChange, onEdit }) {
           if (next === targetRef.current) return; // already at the limit
           targetRef.current = next;
           setTarget(next);
+          // Freeze stream re-syncs while the user is still adjusting (extends on
+          // each tap/hold); commitTemp refreshes it again when the value is sent.
+          targetFreeze.current = Date.now() + 3000;
           clearTimeout(tempTimer.current); // fallback commit if release is missed
           tempTimer.current = setTimeout(commitTemp, 2000);
         };
