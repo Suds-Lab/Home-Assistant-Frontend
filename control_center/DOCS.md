@@ -118,6 +118,11 @@ If remote entities don't appear after restarting the add-on:
    Supervisor and restart. If it says "HA WebSocket error", see the error message
    for the cause (bad token, unreachable host, SSL error).
 
+   When you control a remote device, the log also records the outcome of each
+   remote command (`HA WS command OK (instance: garage): light.turn_on ...` or a
+   failure reason). So if a change you make in Control Center does not reach the
+   remote HA, the log shows exactly why (timeout, auth, or a rejection from HA).
+
 3. **Hit the status endpoint** from a browser (while logged in as admin on the
    management port):
    ```

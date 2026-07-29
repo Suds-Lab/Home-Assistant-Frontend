@@ -160,20 +160,31 @@ def ha_registries(instance_id=None):
 
 def ha_ws_command(payload, instance_id=None):
     """Send one WebSocket command to HA and return its result, or raise ApiError.
-    Used for registry writes (e.g. moving a device to an area)."""
+    Used for device control on remote instances and for registry writes (e.g.
+    moving a device to an area). Logs what it sends and why it failed - a silent
+    failure here is why a remote command could vanish with no trace in the log."""
+    label = f" (instance: {instance_id})" if instance_id else ""
+    what = payload.get("type", "command")
+    if what == "call_service":
+        what = f"{payload.get('domain')}.{payload.get('service')} on {payload.get('target', {}).get('entity_id')}"
     token = _ws_token(instance_id)
     _headers = {
         "User-Agent": _BROWSER_UA,
         "Origin": _inst_url(instance_id),
     } if instance_id else {}
+    # Match the read connection's 30s timeout: a fresh handshake over a slow
+    # Cloudflare tunnel can take well over 10s, and a too-short timeout silently
+    # dropped remote commands while the (longer-lived) read stream kept working.
     try:
-        ws = websocket.create_connection(_ws_url(instance_id), timeout=10, header=_headers)
-    except Exception:  # noqa: BLE001
+        ws = websocket.create_connection(_ws_url(instance_id), timeout=30, header=_headers)
+    except Exception as err:  # noqa: BLE001
+        print(f"HA WS command connect failed{label} for {what}: {err}")
         raise ApiError("Could not reach Home Assistant", 502)
     try:
         json.loads(ws.recv())  # auth_required
         ws.send(json.dumps({"type": "auth", "access_token": token}))
         if json.loads(ws.recv()).get("type") != "auth_ok":
+            print(f"HA WS command auth failed{label} for {what}")
             raise ApiError("Home Assistant rejected the connection", 502)
         msg = dict(payload)
         msg["id"] = 1
@@ -182,12 +193,16 @@ def ha_ws_command(payload, instance_id=None):
             res = json.loads(ws.recv())
             if res.get("type") == "result" and res.get("id") == 1:
                 if not res.get("success"):
-                    raise ApiError(
-                        (res.get("error") or {}).get("message")
-                        or "Home Assistant rejected the change",
-                        502,
-                    )
+                    err_msg = (res.get("error") or {}).get("message") or "Home Assistant rejected the change"
+                    print(f"HA WS command rejected{label} for {what}: {err_msg}")
+                    raise ApiError(err_msg, 502)
+                print(f"HA WS command OK{label}: {what}")
                 return res.get("result")
+    except ApiError:
+        raise
+    except Exception as err:  # noqa: BLE001
+        print(f"HA WS command error{label} for {what}: {err}")
+        raise ApiError("Couldn't reach Home Assistant.", 502)
     finally:
         try:
             ws.close()
