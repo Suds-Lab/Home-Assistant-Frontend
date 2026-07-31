@@ -2544,7 +2544,7 @@ function SchedByThermostat({ entities, schedules }) {
 }
 
 /* SchedulerPanel: main panel, lifts schedule+entity state */
-function SchedulerPanel({ onClose }) {
+function SchedulerPanel() {
   const [view, setView] = React.useState('mine');
   const [entities, setEntities] = React.useState([]);
   const [schedules, setSchedules] = React.useState(null);
@@ -2562,7 +2562,6 @@ function SchedulerPanel({ onClose }) {
   return (
     <div className="sched-panel">
       <div className="sched-topbar">
-        <button className="ghost" onClick={onClose} aria-label="Back" type="button">&#8592; Back</button>
         <h2 style={{ margin: 0 }}>Schedules</h2>
       </div>
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -2869,7 +2868,6 @@ function Dashboard({
   // Live-connection state for the "Connection lost" toast.
   const [connected, setConnected] = useState(true);
   const [lost, setLost] = useState(false);
-  const reconnectRef = useRef(null);
 
   // Transient toast for a failed control command, so a rejected action (e.g. an
   // unreachable remote instance) shows a reason instead of silently snapping back.
@@ -2924,7 +2922,6 @@ function Dashboard({
     // Polling mode (e.g. local preview): no persistent connection, so the page
     // reaches network-idle and stays interactive/screenshottable.
     if (!live) {
-      reconnectRef.current = refresh;
       const id = setInterval(refresh, 3000);
       return () => clearInterval(id);
     }
@@ -2997,12 +2994,6 @@ function Dashboard({
         } catch {}
       };
     }
-    // "Retry now": reconnect immediately (supersedes any pending/in-flight
-    // socket) and re-sync over REST.
-    reconnectRef.current = () => {
-      connect();
-      refresh();
-    };
     connect();
 
     // Safety net so the dashboard can't go stale if the socket is unavailable.
@@ -3089,12 +3080,12 @@ function Dashboard({
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
-          {view === 'organize' && (
+          {(view === 'organize' || view === 'schedules') && (
             <button className="ghost" onClick={() => setView('none')}>
               Done
             </button>
           )}
-          {view !== 'organize' && devices.length > 4 && (
+          {view === 'none' && devices.length > 4 && (
             <button
               className="ghost icon-only"
               onClick={toggleCompact}
@@ -3124,7 +3115,7 @@ function Dashboard({
       )}
 
       {view === 'schedules' ? (
-        <SchedulerPanel onClose={() => setView('none')} />
+        <SchedulerPanel />
       ) : view === 'organize' ? (
         <Organize />
       ) : (
@@ -3285,7 +3276,7 @@ function Dashboard({
           <button
             type="button"
             className="conn-retry"
-            onClick={() => reconnectRef.current && reconnectRef.current()}
+            onClick={() => window.location.reload()}
           >
             Retry now
           </button>
