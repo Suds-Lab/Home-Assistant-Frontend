@@ -382,7 +382,7 @@ replaces all current users, assignments and settings.
 
 ## Session expiry
 
-When a login session expires or becomes invalid, the app redirects silently to the login screen with a "session expired" notice. No error banner is shown on the dashboard.
+When a login session expires or becomes invalid, the app redirects silently to the login screen with a "Your session has ended. Please log in again" notice. No error banner is shown on the dashboard. This is distinct from an expired **account**, which shows a message to contact the system administrator.
 
 ## Live updates
 

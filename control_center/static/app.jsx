@@ -345,8 +345,17 @@ function Login({
 
         {expired && (
           <div className="expired-notice" role="alert">
-            <strong>Your account has expired.</strong>
-            <span>Please contact the system administrator for help.</span>
+            {expired === 'session' ? (
+              <>
+                <strong>Your session has ended.</strong>
+                <span>Please log in again, or contact your system administrator if this keeps happening.</span>
+              </>
+            ) : (
+              <>
+                <strong>Your account has expired.</strong>
+                <span>Please contact the system administrator for help.</span>
+              </>
+            )}
           </div>
         )}
 
@@ -2922,23 +2931,52 @@ function Dashboard({
     // Live updates over a WebSocket (proxy/Cloudflare-friendly). WebSockets
     // don't auto-reconnect, so we reconnect ourselves and re-sync over REST on
     // each (re)open. The token rides as a query param.
-    let ws;
-    let retry;
+    // Single-flight reconnect: only ever one socket exists. A superseded socket
+    // has its handlers detached before it is closed, so a stale close can't
+    // schedule a duplicate reconnect, flip `connected`, or leak a server-side
+    // connection. Leaks matter: each live socket holds one of gunicorn's worker
+    // threads, so churning/leaking sockets could starve the server and hang both
+    // the REST refresh and the next reconnect - which is what broke "Retry now"
+    // and auto-refresh once the connection dropped.
+    let ws = null;
+    let retry = null;
     let stopped = false;
     let opened = false;
 
+    function teardown(sock) {
+      if (!sock) return;
+      sock.onopen = sock.onmessage = sock.onclose = sock.onerror = null;
+      try {
+        sock.close();
+      } catch {}
+    }
+
+    function scheduleReconnect() {
+      if (stopped || retry) return; // never stack reconnect timers
+      retry = setTimeout(() => {
+        retry = null;
+        connect();
+      }, 3000);
+    }
+
     function connect() {
       if (stopped) return;
+      clearTimeout(retry);
+      retry = null;
+      teardown(ws); // supersede any prior/in-flight socket without re-triggering
       const u = new URL('api/ws', document.baseURI);
       u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
       u.searchParams.set('token', getToken() || '');
-      ws = new WebSocket(u.href);
-      ws.onopen = () => {
+      const sock = new WebSocket(u.href);
+      ws = sock;
+      sock.onopen = () => {
+        if (ws !== sock) return;
         setConnected(true);
         if (opened) refresh(); // reconnect: catch up on anything missed
         opened = true;
       };
-      ws.onmessage = (e) => {
+      sock.onmessage = (e) => {
+        if (ws !== sock) return;
         let m;
         try {
           m = JSON.parse(e.data);
@@ -2947,22 +2985,20 @@ function Dashboard({
         }
         if (m && m.entity_id) setDevices((prev) => applyUpdate(prev, m));
       };
-      ws.onclose = () => {
+      sock.onclose = () => {
+        if (ws !== sock) return; // ignore a socket we already superseded
         setConnected(false);
-        if (!stopped) retry = setTimeout(connect, 3000);
+        scheduleReconnect();
       };
-      ws.onerror = () => {
+      sock.onerror = () => {
         try {
-          ws.close();
+          sock.close();
         } catch {}
       };
     }
-    // "Retry now": drop the socket and reconnect immediately (and re-sync REST).
+    // "Retry now": reconnect immediately (supersedes any pending/in-flight
+    // socket) and re-sync over REST.
     reconnectRef.current = () => {
-      clearTimeout(retry);
-      try {
-        ws && ws.close();
-      } catch {}
       connect();
       refresh();
     };
@@ -2975,9 +3011,7 @@ function Dashboard({
       stopped = true;
       clearTimeout(retry);
       clearInterval(pollId);
-      try {
-        ws && ws.close();
-      } catch {}
+      teardown(ws);
     };
   }, [refresh, live]);
 
@@ -5096,7 +5130,10 @@ function UserApp({ live, title, appName, appIcon, appImage, providers, oauth, au
       setPicture('');
       setCanChangePassword(false);
       setPasswordRules(null);
-      setExpiredNotice('expired');
+      // A silent auth:logout is a session timeout, NOT an account expiry - the
+      // user just needs to sign in again, so use the 'session' notice (not the
+      // 'contact your administrator' account-expired one).
+      setExpiredNotice('session');
     }
     window.addEventListener('auth:logout', onAuthLogout);
     return () => window.removeEventListener('auth:logout', onAuthLogout);
