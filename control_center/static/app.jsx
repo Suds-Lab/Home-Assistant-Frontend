@@ -531,7 +531,7 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 // One card for any entity, with controls tailored to its domain.
-function DeviceCard({ device, onChange, onEdit }) {
+function DeviceCard({ device, onChange, onEdit, onError }) {
   const [busy, setBusy] = useState(false);
   const a = device.attributes || {};
   const [pct, setPct] = useState(
@@ -631,6 +631,8 @@ function DeviceCard({ device, onChange, onEdit }) {
     try {
       await control(device.entity_id, service, data || {});
       onChange();
+    } catch (err) {
+      onError?.(err.message);
     } finally {
       setBusy(false);
     }
@@ -646,7 +648,7 @@ function DeviceCard({ device, onChange, onEdit }) {
     commitTimer.current = setTimeout(() => {
       control(device.entity_id, nextOn ? 'turn_on' : 'turn_off', {})
         .then(onChange)
-        .catch(() => {});
+        .catch((err) => onError?.(err.message));
     }, 250);
   }
 
@@ -725,7 +727,7 @@ function DeviceCard({ device, onChange, onEdit }) {
           targetFreeze.current = Date.now() + 3000;
           control(device.entity_id, 'set_temperature', { temperature: targetRef.current })
             .then(onChange)
-            .catch(() => {});
+            .catch((err) => onError?.(err.message));
         };
         const bump = (delta) => {
           const next = Math.min(max, Math.max(min, Number((targetRef.current + delta).toFixed(1))));
@@ -810,7 +812,7 @@ function DeviceCard({ device, onChange, onEdit }) {
         const commitFan = (fm) => {
           setFanMode(fm);
           fanFreeze.current = Date.now() + 1500;
-          control(device.entity_id, 'set_fan_mode', { fan_mode: fm }).then(onChange).catch(() => {});
+          control(device.entity_id, 'set_fan_mode', { fan_mode: fm }).then(onChange).catch((err) => onError?.(err.message));
         };
         // Build the readout as one string so the separator/spacing don't depend
         // on CSS (a stale cached stylesheet was rendering the two spans joined).
@@ -2859,6 +2861,16 @@ function Dashboard({
   const [lost, setLost] = useState(false);
   const reconnectRef = useRef(null);
 
+  // Transient toast for a failed control command, so a rejected action (e.g. an
+  // unreachable remote instance) shows a reason instead of silently snapping back.
+  const [cmdError, setCmdError] = useState('');
+  const cmdErrorTimer = useRef(null);
+  const flashCmdError = useCallback((msg) => {
+    setCmdError(msg || 'Command failed');
+    clearTimeout(cmdErrorTimer.current);
+    cmdErrorTimer.current = setTimeout(() => setCmdError(''), 4000);
+  }, []);
+
   // Fallback fetch (used for first paint and if the live stream drops).
   const refresh = useCallback(async () => {
     try {
@@ -3191,6 +3203,7 @@ function Dashboard({
                                 key={d.entity_id}
                                 device={d}
                                 onChange={refresh}
+                                onError={flashCmdError}
                                 onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
                               />
                             ))}
@@ -3206,6 +3219,7 @@ function Dashboard({
                         key={d.entity_id}
                         device={d}
                         onChange={refresh}
+                        onError={flashCmdError}
                         onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
                       />
                     ))}
@@ -3224,6 +3238,11 @@ function Dashboard({
           onClose={() => setEditDevice(null)}
           onSave={saveDeviceEdit}
         />
+      )}
+      {cmdError && (
+        <div className="conn-toast err" role="alert" aria-live="assertive">
+          <span>{cmdError}</span>
+        </div>
       )}
       {lost && (
         <div className="conn-toast" role="status" aria-live="polite">

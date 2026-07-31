@@ -84,6 +84,12 @@ body {
   font-size: 0.85rem;
   animation: conn-in 0.2s ease;
 }
+/* Error variant: a failed control command (red accent). */
+.conn-toast.err {
+  padding: 9px 14px;
+  border-color: #ef4444;
+  color: #ef4444;
+}
 @keyframes conn-in {
   from {
     opacity: 0;
