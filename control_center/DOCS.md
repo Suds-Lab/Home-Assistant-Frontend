@@ -348,6 +348,13 @@ calls a service it uses the Supervisor's token, so Home Assistant's own logbook
 can only credit "Supervisor". The Activity tab is the source of truth that
 always shows the actual person. You can clear it at any time.
 
+**Scheduled changes** appear here too. A schedule acts in its owner's name, so
+each fired event is attributed to that person and carries a **Schedule** badge
+plus the schedule's name (e.g. "Cabin Heat Pump was set to Heat 21° - Alice's
+schedule 'Weekday heating'"). A scheduled change is only recorded when it
+actually reaches an online thermostat, so an event that fires at an unavailable
+device leaves no entry.
+
 **These logs / All.** Use the toggle at the top to switch between the app's own
 log (**These logs**) and **All**, which also pulls **Home Assistant's own
 logbook** live for every device, so you see all device events and not just the

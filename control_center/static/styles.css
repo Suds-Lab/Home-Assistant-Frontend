@@ -1677,6 +1677,22 @@ img.install-icon {
   text-decoration: underline;
 }
 
+/* Marks an activity row that was fired by a schedule (not a manual action). */
+.lb-sched-badge {
+  margin-left: 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0 6px;
+  border-radius: 999px;
+  vertical-align: 1px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 /* "Showing only X" banner when filtered to specific entities. */
 .lb-filter-note {
   display: flex;
