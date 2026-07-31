@@ -90,7 +90,7 @@ remote_instances:
 
 | Field | Description |
 |-------|-------------|
-| `id` | Short slug used to namespace entities (`garage:light.bedroom`). Lowercase letters, numbers, underscores only. Must be unique. Required. |
+| `id` | Short slug used to namespace entities (`garage:light.bedroom`). Any characters are accepted (e.g. `ha-2`), but a simple lowercase slug is easiest to read. Must be unique. Required. |
 | `name` | Display name shown as a badge in the entity picker. Required. |
 | `url` | Base URL of the remote HA (local IP or hostname). Required. |
 | `token` | Long-lived access token from step 1. Required. |
@@ -122,6 +122,9 @@ If remote entities don't appear after restarting the add-on:
    remote command (`HA WS command OK (instance: garage): light.turn_on ...` or a
    failure reason). So if a change you make in Control Center does not reach the
    remote HA, the log shows exactly why (timeout, auth, or a rejection from HA).
+   Any request the server rejects is logged too, as
+   `[api-error <status>] <method> <path>: <reason>` (for example a `400` for an
+   entity id it does not recognise).
 
 3. **Hit the status endpoint** from a browser (while logged in as admin on the
    management port):

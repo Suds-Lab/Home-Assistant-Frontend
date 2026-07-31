@@ -88,6 +88,13 @@ REMOTE_INSTANCES = [
 ]
 if REMOTE_INSTANCES:
     print(f"Remote instances loaded: {[r['id'] + ' -> ' + r['url'] for r in REMOTE_INSTANCES]}")
+    # An id may contain any characters and is handled fine, but flag unusual ones
+    # so they are visible in the log (a "dirty" id previously broke remote control
+    # silently via entity-id validation).
+    import re as _re
+    _odd = [r["id"] for r in REMOTE_INSTANCES if not _re.fullmatch(r"[a-z0-9_]+", r["id"])]
+    if _odd:
+        print(f"Note: remote instance ids with non [a-z0-9_] characters: {_odd} (supported, just noting)")
 else:
     print("No remote instances configured (remote_instances is empty or not set)")
 

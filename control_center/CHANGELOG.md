@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.8.5
+- Fix: controlling a remote-instance device now works when the remote instance
+  `id` contains a hyphen, dot, uppercase letter, or other character (e.g. an id
+  like `ha-2`). Entity-id validation previously accepted only `[a-z0-9_]` in the
+  instance part, so every command to such a remote was silently rejected with a
+  400 while the device list still showed fine. Validation now checks the real
+  entity id strictly and accepts the instance prefix if it is a configured remote
+  instance.
+- Fix: API errors are now written to the add-on log (method, path, status, and
+  reason). Rejected requests were previously invisible in the log, which made a
+  failing command impossible to diagnose.
+- A failed control action now shows a brief error message in the dashboard
+  instead of silently reverting.
+
 ## 2.8.4
 - Fix: a remote instance with little activity (e.g. a quiet secondary home) no
   longer reconnects every ~30 seconds. The read connection now sends a keepalive

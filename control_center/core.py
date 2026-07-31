@@ -43,6 +43,11 @@ sock = Sock(app)
 
 @app.errorhandler(ApiError)
 def handle_api_error(err):
+    # Log every API error so failures are visible in the add-on log. gunicorn runs
+    # with no access log, and this handler previously returned JSON silently, so a
+    # rejected request (e.g. a validation 400) left no trace - which made a broken
+    # remote command impossible to diagnose from the log.
+    print(f"[api-error {err.status}] {request.method} {request.path}: {err.message}")
     payload = {"error": err.message}
     payload.update(err.extra)
     return jsonify(payload), err.status
