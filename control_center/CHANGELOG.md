@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.8.6
+- Fix: when a session simply times out, the login screen now says "Your session
+  has ended. Please log in again" instead of the account-expired message telling
+  the user to contact the system administrator. The administrator message is now
+  shown only for a genuinely expired account.
+- Fix: after "Connection lost. Reconnecting...", the dashboard now reliably
+  reconnects on its own, and the "Retry now" button works. Reconnection is now
+  single-flight: only one live connection exists at a time and a superseded one
+  is fully torn down, so repeated drops or retries can no longer pile up leaked
+  connections (which held server worker threads and stalled both auto-refresh
+  and manual retry).
+
 ## 2.8.5
 - Fix: controlling a remote-instance device now works when the remote instance
   `id` contains a hyphen, dot, uppercase letter, or other character (e.g. an id
