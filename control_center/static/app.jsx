@@ -1825,7 +1825,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, organizing, canChangePassword, onChangePassword, onOrganize, onSchedules, onLogout }) {
+function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -1855,7 +1855,7 @@ function AccountMenu({ name, picture, isManager, organizing, canChangePassword, 
               Change password
             </button>
           )}
-          {isManager && !organizing && (
+          {isManager && (
             <button role="menuitem" onClick={() => { setOpen(false); onOrganize(); }}>
               Organize
             </button>
@@ -2779,9 +2779,10 @@ function Dashboard({
   canChangePassword = false,
   passwordRules = null,
 }) {
-  const [organizing, setOrganizing] = useState(false);
+  // The one top-level view. Single source of truth so views are mutually
+  // exclusive; adding a new view later is just another value here, no extra flags.
+  const [view, setView] = useState('none'); // 'none' (devices) | 'organize' | 'schedules'
   const [showPw, setShowPw] = useState(false);
-  const [showScheduler, setShowScheduler] = useState(false);
   const [hasSchedPerms, setHasSchedPerms] = useState(false);
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
@@ -3088,12 +3089,12 @@ function Dashboard({
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
-          {organizing && (
-            <button className="ghost" onClick={() => setOrganizing(false)}>
+          {view === 'organize' && (
+            <button className="ghost" onClick={() => setView('none')}>
               Done
             </button>
           )}
-          {!organizing && devices.length > 4 && (
+          {view !== 'organize' && devices.length > 4 && (
             <button
               className="ghost icon-only"
               onClick={toggleCompact}
@@ -3109,11 +3110,10 @@ function Dashboard({
             name={displayName}
             picture={picture}
             isManager={isManager}
-            organizing={organizing}
             canChangePassword={canChangePassword}
             onChangePassword={() => setShowPw(true)}
-            onOrganize={() => setOrganizing(true)}
-            onSchedules={hasSchedPerms ? () => setShowScheduler(true) : undefined}
+            onOrganize={() => setView('organize')}
+            onSchedules={hasSchedPerms ? () => setView('schedules') : undefined}
             onLogout={onLogout}
           />
         </div>
@@ -3123,9 +3123,9 @@ function Dashboard({
         <ChangePasswordDialog rules={passwordRules} onClose={() => setShowPw(false)} />
       )}
 
-      {showScheduler ? (
-        <SchedulerPanel onClose={() => setShowScheduler(false)} />
-      ) : organizing ? (
+      {view === 'schedules' ? (
+        <SchedulerPanel onClose={() => setView('none')} />
+      ) : view === 'organize' ? (
         <Organize />
       ) : (
       <>{/* normal dashboard */}

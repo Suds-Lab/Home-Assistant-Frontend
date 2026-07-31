@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.8.8
+- Fix: switching between the dashboard, Organize, and Schedules from the account
+  menu now always lands on the view you picked. Previously, opening Organize while
+  on the Schedules page left you on Schedules (Organize loaded behind it), and the
+  Organize menu item vanished while organizing but Schedules did not. The three
+  views are now mutually exclusive and both menu items stay available, so you can
+  jump straight between them.
+
 ## 2.8.7
 - New: scheduled climate changes now appear in the activity log. A schedule acts
   on the thermostat in its owner's name, so each entry is attributed to that
