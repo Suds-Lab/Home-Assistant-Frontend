@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.8.9
+- The Schedules page now has a **Done** button in the top bar (like Organize) and
+  no longer shows the compact-view button, which did nothing there. The old
+  in-page Back button is removed, so leaving Organize or Schedules works the same
+  way from the same place.
+- The "Connection lost" toast's **Retry now** button now forces a full page
+  refresh instead of only reconnecting in the background, so a stuck dashboard
+  reloads cleanly.
+
 ## 2.8.8
 - Fix: switching between the dashboard, Organize, and Schedules from the account
   menu now always lands on the view you picked. Previously, opening Organize while
