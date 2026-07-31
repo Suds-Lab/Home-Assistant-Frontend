@@ -4747,10 +4747,15 @@ function ActivityLog() {
                         {e.entity}
                       </button>{' '}
                       {e.verb}
+                      {e.source === 'schedule' && (
+                        <span className="lb-sched-badge" title={e.schedule ? `Schedule: ${e.schedule}` : 'Ran from a schedule'}>Schedule</span>
+                      )}
                     </div>
                     <div className="lb-meta">
                       {timeLabel(e.ts)} · {relativeTime(e.ts)}
-                      {e.name ? ` · ${e.name}` : ''}
+                      {e.source === 'schedule'
+                        ? (e.name ? ` · ${e.name}'s schedule${e.schedule ? ` “${e.schedule}”` : ''}` : '')
+                        : (e.name ? ` · ${e.name}` : '')}
                     </div>
                   </div>
                 </li>

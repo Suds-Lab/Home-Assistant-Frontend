@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.8.7
+- New: scheduled climate changes now appear in the activity log. A schedule acts
+  on the thermostat in its owner's name, so each entry is attributed to that
+  person and marked with a "Schedule" badge (and the schedule's name), making it
+  clear the change came from a schedule rather than a manual tap.
+- A scheduled change is logged only when it actually reaches an online
+  thermostat. If the device is unavailable at the time the event fires, nothing
+  is logged, so the feed never shows a change that did not really happen.
+
 ## 2.8.6
 - Fix: when a session simply times out, the login screen now says "Your session
   has ended. Please log in again" instead of the account-expired message telling

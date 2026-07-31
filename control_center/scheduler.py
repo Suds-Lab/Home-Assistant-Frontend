@@ -20,8 +20,18 @@ _MODE_TO_HVAC = {
     "fan": "fan_only",
 }
 
+# Human-readable mode names for the activity log (match the schedule editor).
+_MODE_DISPLAY = {
+    "off": "Off", "cool": "Cool", "heat": "Heat",
+    "auto": "Auto", "dry": "Dry", "fan": "Fan only",
+}
 
-def _fire_event(entry, target):
+# States that mean the thermostat isn't actually reachable, so a fired event
+# changes nothing and must not be logged as if the owner acted on it.
+_OFFLINE_STATES = (None, "unavailable", "unknown")
+
+
+def _fire_event(sched, entry, target):
     from ha import call_service, split_instance_entity
     mode = entry.get("mode", "heat")
     temp = entry.get("temp")
@@ -34,14 +44,63 @@ def _fire_event(entry, target):
 
     if mode == "off":
         call_service("climate", "turn_off", real_target, instance_id=instance_id)
-        return
+    else:
+        hvac_mode = _MODE_TO_HVAC.get(mode, mode)
+        call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
+        if temp is not None:
+            call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
+        if fan:
+            call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
 
-    hvac_mode = _MODE_TO_HVAC.get(mode, mode)
-    call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
-    if temp is not None:
-        call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
-    if fan:
-        call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
+    # The service calls above succeeded (or we'd have raised). Record it in the
+    # activity log - but only if the thermostat is actually online, so a schedule
+    # firing at an offline device doesn't show up as if its owner changed it.
+    from core import STATE_CACHE
+    state = (STATE_CACHE.get(target) or {}).get("state")
+    if state not in _OFFLINE_STATES:
+        _log_scheduled(sched, entry, target)
+
+
+def _log_scheduled(sched, entry, target):
+    """Append a scheduled climate change to the activity log, attributed to the
+    schedule's owner and marked as coming from that schedule."""
+    from store import _append_activity, load_users
+    from core import STATE_CACHE
+
+    owner = sched.get("owner")
+    display = next(
+        (u.get("displayName") or u.get("username")
+         for u in load_users() if u.get("username") == owner),
+        owner,
+    ) or "A user"
+
+    attrs = (STATE_CACHE.get(target) or {}).get("attributes") or {}
+    entity_name = attrs.get("friendly_name") or target.split(":", 1)[-1]
+
+    mode = entry.get("mode", "heat")
+    temp = entry.get("temp")
+    mode_label = _MODE_DISPLAY.get(mode, mode)
+    if mode == "off":
+        verb = "was turned off"
+    elif temp is not None:
+        t = float(temp)
+        temp_str = str(int(t)) if t.is_integer() else str(t)
+        verb = f"was set to {mode_label} {temp_str}°"
+    else:
+        verb = f"was set to {mode_label}"
+
+    _append_activity({
+        "ts": time.time(),
+        "username": owner,
+        "name": display,
+        "entity_id": target,
+        "entity": entity_name,
+        "domain": "climate",
+        "service": "schedule",
+        "verb": verb,
+        "source": "schedule",
+        "schedule": sched.get("name") or "Schedule",
+    })
 
 
 def _scheduler_loop():
@@ -66,7 +125,7 @@ def _scheduler_loop():
                             continue
                         for target in sched.get("targets", []):
                             try:
-                                _fire_event(entry, target)
+                                _fire_event(sched, entry, target)
                             except Exception as exc:  # noqa: BLE001
                                 print(f"[scheduler] error firing {entry.get('id')} on {target}: {exc}")
         except Exception as exc:  # noqa: BLE001
