@@ -458,6 +458,23 @@ Events are edge-triggered: a thermostat holds whatever state the last fired
 event set until the next event fires. The scheduler checks for events every
 30 seconds.
 
+## Lists
+
+Every user can create their own **lists** to organise their devices - handy when
+you have a lot of them or want to sort them differently than by Type, Area, or
+Floor. Open the account menu (the avatar, top-right) and choose **Lists**:
+
+- **Create** a list by name; make as many as you like.
+- **Edit devices** on a list to add or remove any of your devices (a device can
+  be in several lists).
+- **Rename** or **Delete** a list at any time. Deleting a list never affects the
+  devices themselves.
+
+Each list then appears as a chip in the dashboard's sort row alongside
+Type/Area/Floor. Tap a list to show **only** its devices; tap **All** (or the
+active chip again) to clear the filter. Lists are per-user - everyone manages
+their own, and one person's lists are never visible to another.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +

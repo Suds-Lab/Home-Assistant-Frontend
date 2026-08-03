@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.0
+- New: **Lists**. Create your own named lists of devices from the account menu
+  (top-right avatar), add any of your devices to them, and each list appears as a
+  chip in the dashboard's sort row next to Type/Area/Floor. Tap a list to show
+  only its devices; tap it again (or "All") to clear. Make as many lists as you
+  like - handy when you have a lot of devices or want to organise them your own
+  way. Lists are per-user: each person manages their own.
+
 ## 2.8.9
 - The Schedules page now has a **Done** button in the top bar (like Organize) and
   no longer shows the compact-view button, which did nothing there. The old

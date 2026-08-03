@@ -351,12 +351,14 @@ if os.environ.get("MOCK_HA"):
 from routes.admin import bp as _admin_bp  # noqa: E402
 from routes.auth import bp as _auth_bp  # noqa: E402
 from routes.devices import bp as _devices_bp  # noqa: E402
+from routes.lists import bp as _lists_bp  # noqa: E402
 from routes.manager import bp as _manager_bp  # noqa: E402
 from routes.pwa import bp as _pwa_bp  # noqa: E402
 from routes.schedules import bp as _schedules_bp  # noqa: E402
 app.register_blueprint(_admin_bp)
 app.register_blueprint(_auth_bp)
 app.register_blueprint(_devices_bp)
+app.register_blueprint(_lists_bp)
 app.register_blueprint(_manager_bp)
 app.register_blueprint(_pwa_bp)
 app.register_blueprint(_schedules_bp)
