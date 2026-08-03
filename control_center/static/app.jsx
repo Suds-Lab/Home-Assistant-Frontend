@@ -9,6 +9,7 @@ const TOKEN_KEY = 'ha_app_token';
 const NAME_KEY = 'ha_app_name';
 const COMPACT_KEY = 'ha_app_compact';
 const GROUPBY_KEY = 'ha_app_groupby'; // 'type' | 'area' | 'floor'
+const LIST_FILTER_KEY = 'ha_app_list_filter'; // active list id, or '' for all
 const COLLAPSED_KEY = 'ha_app_collapsed';
 const OPEN_AREAS_KEY = 'ha_app_open_areas'; // areas under a floor are collapsed by default
 const GROUPING_THRESHOLD = 8; // show grouping controls once a user has this many devices
@@ -199,6 +200,11 @@ const createSchedule = (fields) => request('/schedules', { method: 'POST', body:
 const updateSchedule = (id, patch) => request(`/schedules/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) });
 const deleteSchedule = (id) => request(`/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
 const getScheduleEntities = () => request('/schedule-entities');
+// Per-user device lists (tags / filters)
+const getLists = () => request('/lists');
+const createList = (fields) => request('/lists', { method: 'POST', body: JSON.stringify(fields) });
+const updateList = (id, patch) => request(`/lists/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) });
+const deleteList = (id) => request(`/lists/${encodeURIComponent(id)}`, { method: 'DELETE' });
 // Climate scheduling (admin)
 const adminGetSchedulePerms = () => request('/admin/schedule-perms');
 const adminSetSchedulePerms = (username, entity_ids) =>
@@ -1825,7 +1831,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLogout }) {
+function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLists, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -1863,6 +1869,11 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
           {onSchedules && (
             <button role="menuitem" onClick={() => { setOpen(false); onSchedules(); }}>
               Schedules
+            </button>
+          )}
+          {onLists && (
+            <button role="menuitem" onClick={() => { setOpen(false); onLists(); }}>
+              Lists
             </button>
           )}
           <button role="menuitem" className="danger" onClick={() => { setOpen(false); onLogout(); }}>
@@ -2766,6 +2777,136 @@ function AdminSchedulesView() {
   );
 }
 
+/* ListsManager: create/rename/delete per-user device lists and assign devices
+   to them (reuses EntityChips). Rendered as a full panel like SchedulerPanel;
+   the shared topbar "Done" leaves the view. onChange() lets the dashboard
+   refresh its filter chips after edits. */
+function ListsManager({ onChange }) {
+  const [lists, setLists] = React.useState(null);
+  const [devices, setDevices] = React.useState([]);
+  const [error, setError] = React.useState('');
+  const [newName, setNewName] = React.useState('');
+  const [editingId, setEditingId] = React.useState(null);
+
+  const reload = React.useCallback(() => {
+    Promise.all([getLists(), getDevices()])
+      .then(([ls, d]) => { setLists(ls); setDevices(d.devices || []); })
+      .catch((e) => setError(e.message));
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const notify = () => { if (onChange) onChange(); };
+
+  async function addList() {
+    const name = newName.trim();
+    if (!name) return;
+    try {
+      const created = await createList({ name });
+      setNewName('');
+      setLists((prev) => [...(prev || []), created]);
+      setEditingId(created.id);
+      notify();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function rename(id, name) {
+    const clean = name.trim();
+    if (!clean) { reload(); return; }
+    try {
+      const updated = await updateList(id, { name: clean });
+      setLists((prev) => prev.map((l) => (l.id === id ? updated : l)));
+      notify();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function remove(id) {
+    if (!window.confirm('Delete this list? Devices are not affected.')) return;
+    try {
+      await deleteList(id);
+      setLists((prev) => prev.filter((l) => l.id !== id));
+      if (editingId === id) setEditingId(null);
+      notify();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function toggleDevice(id, entityId) {
+    const lst = (lists || []).find((l) => l.id === id);
+    if (!lst) return;
+    const set = new Set(lst.entities || []);
+    set.has(entityId) ? set.delete(entityId) : set.add(entityId);
+    const entities = [...set];
+    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, entities } : l))); // optimistic
+    try {
+      await updateList(id, { entities });
+      notify();
+    } catch (e) { setError(e.message); reload(); }
+  }
+
+  return (
+    <div className="sched-panel">
+      <div className="sched-topbar">
+        <h2 style={{ margin: 0 }}>Lists</h2>
+      </div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Group your devices your own way. Each list shows as a filter chip on the dashboard.
+      </p>
+      {error && <div className="error banner">{error}</div>}
+
+      <div className="list-create">
+        <input
+          className="list-name-input"
+          value={newName}
+          placeholder="New list name…"
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addList(); }}
+        />
+        <button className="btn-primary" type="button" onClick={addList} disabled={!newName.trim()}>
+          Create list
+        </button>
+      </div>
+
+      {lists === null ? (
+        <p className="muted">Loading…</p>
+      ) : lists.length === 0 ? (
+        <p className="muted">No lists yet. Create one above.</p>
+      ) : (
+        lists.map((l) => {
+          const count = (l.entities || []).length;
+          const editing = editingId === l.id;
+          return (
+            <div key={l.id} className="card list-row">
+              <div className="list-head">
+                <input
+                  className="list-name-input list-name-edit"
+                  value={l.name}
+                  onChange={(e) => setLists((prev) => prev.map((x) => (x.id === l.id ? { ...x, name: e.target.value } : x)))}
+                  onBlur={(e) => rename(l.id, e.target.value)}
+                  aria-label="List name"
+                />
+                <span className="muted list-count">{count} device{count !== 1 ? 's' : ''}</span>
+                <button className="ghost" type="button" onClick={() => setEditingId(editing ? null : l.id)}>
+                  {editing ? 'Close' : 'Edit devices'}
+                </button>
+                <button className="ghost danger" type="button" onClick={() => remove(l.id)}>Delete</button>
+              </div>
+              {editing && (
+                <div className="list-assign">
+                  <EntityChips
+                    entities={devices}
+                    selected={new Set(l.entities || [])}
+                    onToggle={(eid) => toggleDevice(l.id, eid)}
+                    placeholder="Add a device to this list…"
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 function Dashboard({
   displayName,
   onLogout,
@@ -2780,7 +2921,7 @@ function Dashboard({
 }) {
   // The one top-level view. Single source of truth so views are mutually
   // exclusive; adding a new view later is just another value here, no extra flags.
-  const [view, setView] = useState('none'); // 'none' (devices) | 'organize' | 'schedules'
+  const [view, setView] = useState('none'); // 'none' (devices) | 'organize' | 'schedules' | 'lists'
   const [showPw, setShowPw] = useState(false);
   const [hasSchedPerms, setHasSchedPerms] = useState(false);
   const [devices, setDevices] = useState([]);
@@ -2818,6 +2959,9 @@ function Dashboard({
   }
   const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
   const [groupBy, setGroupBy] = useState(localStorage.getItem(GROUPBY_KEY) || 'type');
+  // Per-user lists (tags) and the active list filter (list id, or '' for all).
+  const [lists, setLists] = useState([]);
+  const [listFilter, setListFilter] = useState(localStorage.getItem(LIST_FILTER_KEY) || '');
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]'));
@@ -2845,6 +2989,21 @@ function Dashboard({
   function chooseGroupBy(v) {
     setGroupBy(v);
     localStorage.setItem(GROUPBY_KEY, v);
+  }
+
+  const refreshLists = useCallback(() => {
+    getLists().then((ls) => setLists(Array.isArray(ls) ? ls : [])).catch(() => {});
+  }, []);
+  // Load lists on first paint and whenever returning to the device view, so a
+  // list created/renamed/deleted in the manager updates the filter chips.
+  useEffect(() => {
+    if (view === 'none') refreshLists();
+  }, [view, refreshLists]);
+
+  function chooseListFilter(id) {
+    const next = listFilter === id ? '' : id; // tapping the active list clears it
+    setListFilter(next);
+    localStorage.setItem(LIST_FILTER_KEY, next);
   }
 
   function toggleCollapse(key) {
@@ -3008,11 +3167,15 @@ function Dashboard({
   }, [refresh, live]);
 
   const q = query.trim().toLowerCase();
-  const visible = q
+  const searched = q
     ? devices.filter(
         (d) => d.name.toLowerCase().includes(q) || d.entity_id.toLowerCase().includes(q)
       )
     : devices;
+  // Active list filter (if any): show only devices in that list.
+  const activeList = listFilter ? lists.find((l) => l.id === listFilter) : null;
+  const activeSet = activeList ? new Set(activeList.entities || []) : null;
+  const visible = activeSet ? searched.filter((d) => activeSet.has(d.entity_id)) : searched;
 
   const hasRooms = devices.some((d) => d.area);
   const hasFloors = devices.some((d) => d.floor);
@@ -3080,7 +3243,7 @@ function Dashboard({
           {displayName && <span className="muted">Hi, {displayName}</span>}
         </div>
         <div className="topbar-actions">
-          {(view === 'organize' || view === 'schedules') && (
+          {view !== 'none' && (
             <button className="ghost" onClick={() => setView('none')}>
               Done
             </button>
@@ -3105,6 +3268,7 @@ function Dashboard({
             onChangePassword={() => setShowPw(true)}
             onOrganize={() => setView('organize')}
             onSchedules={hasSchedPerms ? () => setView('schedules') : undefined}
+            onLists={() => setView('lists')}
             onLogout={onLogout}
           />
         </div>
@@ -3118,6 +3282,8 @@ function Dashboard({
         <SchedulerPanel />
       ) : view === 'organize' ? (
         <Organize />
+      ) : view === 'lists' ? (
+        <ListsManager onChange={refreshLists} />
       ) : (
       <>{/* normal dashboard */}
 
@@ -3130,33 +3296,59 @@ function Dashboard({
           onChange={(e) => setQuery(e.target.value)}
         />
       )}
-      {!loading && dense && (hasRooms || hasFloors) && (
+      {!loading && ((dense && (hasRooms || hasFloors)) || lists.length > 0) && (
         <div className="group-by dashboard-groupby">
-          <span className="muted">Group by</span>
-          <button
-            type="button"
-            className={`seg ${mode === 'type' ? 'on' : ''}`}
-            onClick={() => chooseGroupBy('type')}
-          >
-            Type
-          </button>
-          {hasRooms && (
-            <button
-              type="button"
-              className={`seg ${mode === 'area' ? 'on' : ''}`}
-              onClick={() => chooseGroupBy('area')}
-            >
-              Area
-            </button>
+          {dense && (hasRooms || hasFloors) && (
+            <>
+              <span className="muted">Group by</span>
+              <button
+                type="button"
+                className={`seg ${mode === 'type' ? 'on' : ''}`}
+                onClick={() => chooseGroupBy('type')}
+              >
+                Type
+              </button>
+              {hasRooms && (
+                <button
+                  type="button"
+                  className={`seg ${mode === 'area' ? 'on' : ''}`}
+                  onClick={() => chooseGroupBy('area')}
+                >
+                  Area
+                </button>
+              )}
+              {hasFloors && (
+                <button
+                  type="button"
+                  className={`seg ${mode === 'floor' ? 'on' : ''}`}
+                  onClick={() => chooseGroupBy('floor')}
+                >
+                  Floor
+                </button>
+              )}
+            </>
           )}
-          {hasFloors && (
-            <button
-              type="button"
-              className={`seg ${mode === 'floor' ? 'on' : ''}`}
-              onClick={() => chooseGroupBy('floor')}
-            >
-              Floor
-            </button>
+          {lists.length > 0 && (
+            <>
+              {dense && (hasRooms || hasFloors) && <span className="group-by-sep" aria-hidden="true" />}
+              <button
+                type="button"
+                className={`seg ${!listFilter ? 'on' : ''}`}
+                onClick={() => chooseListFilter('')}
+              >
+                All
+              </button>
+              {lists.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  className={`seg ${listFilter === l.id ? 'on' : ''}`}
+                  onClick={() => chooseListFilter(l.id)}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </>
           )}
         </div>
       )}

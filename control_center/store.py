@@ -261,3 +261,24 @@ def save_schedule_perms(perms):
     tmp = SCHEDULE_PERMS_FILE.with_name(SCHEDULE_PERMS_FILE.name + ".tmp")
     tmp.write_text(json.dumps(perms, indent=2))
     tmp.replace(SCHEDULE_PERMS_FILE)
+
+
+# --- Per-user device lists (user-created tags/filters) ---------------------
+# Shape: { username: [ {"id": str, "name": str, "entities": [entity_id, ...]} ] }
+
+LISTS_FILE = ICON_DIR / "lists.json"
+
+
+def load_lists():
+    try:
+        data = json.loads(LISTS_FILE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_lists(lists):
+    LISTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = LISTS_FILE.with_name(LISTS_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(lists, indent=2))
+    tmp.replace(LISTS_FILE)
