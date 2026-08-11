@@ -17,7 +17,7 @@ import config  # live config module (single source of truth for runtime toggles)
 from config import HA_URL, INGRESS_BIND, INGRESS_PORT, USER_PORT
 from core import app
 from errors import ApiError
-from security import is_management, user_from_token
+from security import is_management, refresh_token_if_stale, user_from_token
 
 # Endpoints reachable WITHOUT authentication, by necessity (the login page and
 # the OAuth handshake run before a session exists). Everything else under /api/
@@ -60,6 +60,12 @@ def _require_auth():
     # Resolve once (raises 401/403 on a bad/expired token) and cache for the
     # route's current_user() so the session isn't validated twice per request.
     g.current_user = user_from_token(token)
+    # Rolling session: once a token is past halfway, hand back a fresh one (the
+    # after_request adds it as a header the client stores), so active users stay
+    # signed in and don't get logged out mid-use.
+    fresh = refresh_token_if_stale(token)
+    if fresh:
+        g.refresh_token = fresh
 
 
 @app.after_request
@@ -71,6 +77,9 @@ def _security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     if config.BLOCK_IFRAME and not is_management():
         resp.headers.setdefault("X-Frame-Options", "DENY")
+    fresh = getattr(g, "refresh_token", None)
+    if fresh:
+        resp.headers["X-Session-Token"] = fresh
     return resp
 
 

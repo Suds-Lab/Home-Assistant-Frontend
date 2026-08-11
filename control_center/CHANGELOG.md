@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.2
+- Sessions now last 30 days (up from 7) and are rolling: while you use the app,
+  your session is quietly refreshed in the background, so regular use keeps you
+  signed in. Only a session left unused for the full 30 days asks you to log in
+  again. This addresses having to log in again every week.
+
 ## 2.9.1
 - Lists refinements: the list chips now sit on a single row that scrolls sideways
   instead of wrapping onto a second line, and a list is now an alternative to
