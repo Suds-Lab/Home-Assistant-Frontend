@@ -2188,16 +2188,17 @@ img.install-icon {
   gap: 6px;
   margin: 4px 0 10px;
   font-size: 0.8rem;
-  flex-wrap: wrap;
+  /* One line: the Type/Area/Floor + list chips scroll horizontally, never wrap. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
 }
-
-/* Divider between the group-by chips and the list-filter chips in the sort row. */
-.group-by-sep {
-  width: 1px;
-  align-self: stretch;
-  min-height: 20px;
-  background: var(--border);
-  margin: 0 4px;
+.group-by::-webkit-scrollbar {
+  display: none; /* WebKit: hide the scrollbar, still scrollable by wheel/drag */
+}
+.group-by > * {
+  flex: 0 0 auto; /* keep each chip its natural width - no shrinking or wrapping */
 }
 
 /* Lists manager (account menu -> Lists) */
@@ -2245,6 +2246,7 @@ img.install-icon {
   background: transparent;
   color: var(--text);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .seg.on {

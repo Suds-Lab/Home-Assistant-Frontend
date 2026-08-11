@@ -9,7 +9,6 @@ const TOKEN_KEY = 'ha_app_token';
 const NAME_KEY = 'ha_app_name';
 const COMPACT_KEY = 'ha_app_compact';
 const GROUPBY_KEY = 'ha_app_groupby'; // 'type' | 'area' | 'floor'
-const LIST_FILTER_KEY = 'ha_app_list_filter'; // active list id, or '' for all
 const COLLAPSED_KEY = 'ha_app_collapsed';
 const OPEN_AREAS_KEY = 'ha_app_open_areas'; // areas under a floor are collapsed by default
 const GROUPING_THRESHOLD = 8; // show grouping controls once a user has this many devices
@@ -2959,9 +2958,9 @@ function Dashboard({
   }
   const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
   const [groupBy, setGroupBy] = useState(localStorage.getItem(GROUPBY_KEY) || 'type');
-  // Per-user lists (tags) and the active list filter (list id, or '' for all).
+  // Per-user lists (tags). The active selection lives in `groupBy`, which holds
+  // 'type' / 'area' / 'floor' OR a list id - a list is an alternative to those.
   const [lists, setLists] = useState([]);
-  const [listFilter, setListFilter] = useState(localStorage.getItem(LIST_FILTER_KEY) || '');
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]'));
@@ -2999,12 +2998,6 @@ function Dashboard({
   useEffect(() => {
     if (view === 'none') refreshLists();
   }, [view, refreshLists]);
-
-  function chooseListFilter(id) {
-    const next = listFilter === id ? '' : id; // tapping the active list clears it
-    setListFilter(next);
-    localStorage.setItem(LIST_FILTER_KEY, next);
-  }
 
   function toggleCollapse(key) {
     setCollapsed((prev) => {
@@ -3172,8 +3165,9 @@ function Dashboard({
         (d) => d.name.toLowerCase().includes(q) || d.entity_id.toLowerCase().includes(q)
       )
     : devices;
-  // Active list filter (if any): show only devices in that list.
-  const activeList = listFilter ? lists.find((l) => l.id === listFilter) : null;
+  // A list is an alternative to Type/Area/Floor: when `groupBy` is a list id,
+  // show only that list's devices (grouped by Type).
+  const activeList = lists.find((l) => l.id === groupBy) || null;
   const activeSet = activeList ? new Set(activeList.entities || []) : null;
   const visible = activeSet ? searched.filter((d) => activeSet.has(d.entity_id)) : searched;
 
@@ -3181,11 +3175,12 @@ function Dashboard({
   const hasFloors = devices.some((d) => d.floor);
   const dense = devices.length >= GROUPING_THRESHOLD; // collapsible + group-by
   const OTHER = 'Other';
-  // Resolve the active grouping ('room' is the legacy name for 'area'); fall
-  // back to Type if the chosen grouping has no data.
-  let mode = groupBy === 'room' ? 'area' : groupBy;
+  // Resolve the grouping ('room' is the legacy name for 'area'). A list groups
+  // by Type; fall back to Type for anything without data (or a deleted list).
+  let mode = activeList ? 'type' : groupBy === 'room' ? 'area' : groupBy;
   if (mode === 'area' && !hasRooms) mode = 'type';
   if (mode === 'floor' && !hasFloors) mode = 'type';
+  if (mode !== 'area' && mode !== 'floor') mode = 'type';
   const byLocation = mode === 'area' || mode === 'floor';
 
   const groupKeyOf = (d) =>
@@ -3296,60 +3291,43 @@ function Dashboard({
           onChange={(e) => setQuery(e.target.value)}
         />
       )}
-      {!loading && ((dense && (hasRooms || hasFloors)) || lists.length > 0) && (
+      {!loading && (lists.length > 0 || (dense && (hasRooms || hasFloors))) && (
         <div className="group-by dashboard-groupby">
-          {dense && (hasRooms || hasFloors) && (
-            <>
-              <span className="muted">Group by</span>
-              <button
-                type="button"
-                className={`seg ${mode === 'type' ? 'on' : ''}`}
-                onClick={() => chooseGroupBy('type')}
-              >
-                Type
-              </button>
-              {hasRooms && (
-                <button
-                  type="button"
-                  className={`seg ${mode === 'area' ? 'on' : ''}`}
-                  onClick={() => chooseGroupBy('area')}
-                >
-                  Area
-                </button>
-              )}
-              {hasFloors && (
-                <button
-                  type="button"
-                  className={`seg ${mode === 'floor' ? 'on' : ''}`}
-                  onClick={() => chooseGroupBy('floor')}
-                >
-                  Floor
-                </button>
-              )}
-            </>
+          <button
+            type="button"
+            className={`seg ${!activeList && mode === 'type' ? 'on' : ''}`}
+            onClick={() => chooseGroupBy('type')}
+          >
+            Type
+          </button>
+          {hasRooms && (
+            <button
+              type="button"
+              className={`seg ${!activeList && mode === 'area' ? 'on' : ''}`}
+              onClick={() => chooseGroupBy('area')}
+            >
+              Area
+            </button>
           )}
-          {lists.length > 0 && (
-            <>
-              {dense && (hasRooms || hasFloors) && <span className="group-by-sep" aria-hidden="true" />}
-              <button
-                type="button"
-                className={`seg ${!listFilter ? 'on' : ''}`}
-                onClick={() => chooseListFilter('')}
-              >
-                All
-              </button>
-              {lists.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  className={`seg ${listFilter === l.id ? 'on' : ''}`}
-                  onClick={() => chooseListFilter(l.id)}
-                >
-                  {l.name}
-                </button>
-              ))}
-            </>
+          {hasFloors && (
+            <button
+              type="button"
+              className={`seg ${!activeList && mode === 'floor' ? 'on' : ''}`}
+              onClick={() => chooseGroupBy('floor')}
+            >
+              Floor
+            </button>
           )}
+          {lists.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              className={`seg ${groupBy === l.id ? 'on' : ''}`}
+              onClick={() => chooseGroupBy(l.id)}
+            >
+              {l.name}
+            </button>
+          ))}
         </div>
       )}
       {loading ? (
@@ -3364,7 +3342,13 @@ function Dashboard({
           </p>
         </div>
       ) : keys.length === 0 ? (
-        <p className="muted">No devices match “{query}”.</p>
+        query ? (
+          <p className="muted">No devices match “{query}”.</p>
+        ) : activeList ? (
+          <p className="muted">“{activeList.name}” has no devices yet. Add some from Lists in the account menu.</p>
+        ) : (
+          <p className="muted">No devices to show.</p>
+        )
       ) : (
         keys.map((key) => {
           const ckey = `${mode}:${key}`;

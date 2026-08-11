@@ -470,10 +470,11 @@ Floor. Open the account menu (the avatar, top-right) and choose **Lists**:
 - **Rename** or **Delete** a list at any time. Deleting a list never affects the
   devices themselves.
 
-Each list then appears as a chip in the dashboard's sort row alongside
-Type/Area/Floor. Tap a list to show **only** its devices; tap **All** (or the
-active chip again) to clear the filter. Lists are per-user - everyone manages
-their own, and one person's lists are never visible to another.
+Each list then appears as a chip in the dashboard's sort row, as an alternative
+to Type/Area/Floor (the chips sit on one line and scroll sideways when there are
+many). Tap a list to show **only** its devices; tap **Type** (or Area/Floor) to
+go back to all your devices. Lists are per-user - everyone manages their own, and
+one person's lists are never visible to another.
 
 ## Supported devices
 
