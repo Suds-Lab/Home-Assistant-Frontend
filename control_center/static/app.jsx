@@ -33,6 +33,11 @@ async function request(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  // Rolling session: the server hands back a refreshed token once ours is past
+  // halfway through its life, so active users stay signed in. Store it for the
+  // next request.
+  const refreshed = res.headers.get('X-Session-Token');
+  if (refreshed && refreshed !== token) setToken(refreshed);
   if (res.status === 401) {
     const body = await res.json().catch(() => ({}));
     // A 401 with an active token = the session expired. Signal the app to

@@ -152,13 +152,33 @@ def _entity_expired_for(user, entity_id):
 
 # --- Session tokens -------------------------------------------------------
 
+# How long a login lasts. Sessions are rolling: an active user's token is
+# reissued once it passes the halfway mark (see refresh_token_if_stale), so
+# regular use keeps them signed in and only a genuinely idle session expires.
+SESSION_SECONDS = 30 * 24 * 3600
+
 
 def _issue_token(user):
     return jwt.encode(
-        {"username": user["username"], "exp": int(time.time()) + 7 * 24 * 3600},
+        {"username": user["username"], "exp": int(time.time()) + SESSION_SECONDS},
         JWT_SECRET,
         algorithm="HS256",
     )
+
+
+def refresh_token_if_stale(token):
+    """If `token` is valid but more than halfway through its life, return a fresh
+    token to hand back to the client (rolling session); otherwise return None."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("exp", 0) - int(time.time()) >= SESSION_SECONDS // 2:
+        return None  # still fresh enough
+    user = next(
+        (u for u in load_users() if u["username"] == payload.get("username")), None
+    )
+    return _issue_token(user) if user and not _user_expired(user) else None
 
 
 def user_from_token(token):

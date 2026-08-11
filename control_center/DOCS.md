@@ -389,7 +389,13 @@ replaces all current users, assignments and settings.
 
 ## Session expiry
 
-When a login session expires or becomes invalid, the app redirects silently to the login screen with a "Your session has ended. Please log in again" notice. No error banner is shown on the dashboard. This is distinct from an expired **account**, which shows a message to contact the system administrator.
+A login lasts **30 days** and is **rolling**: while a user keeps using the app,
+their session is refreshed automatically in the background, so regular use keeps
+them signed in. Only a session left completely unused for 30 days expires.
+
+When a session does expire or become invalid, the app redirects silently to the login screen with a "Your session has ended. Please log in again" notice. No error banner is shown on the dashboard. This is distinct from an expired **account**, which shows a message to contact the system administrator.
+
+(Sessions survive add-on restarts and updates because the signing secret is stored under `/data`. If users are logged out on every restart, check that the add-on's `/data` is writable/persistent.)
 
 ## Live updates
 
