@@ -3097,6 +3097,10 @@ function Dashboard({
     let retry = null;
     let stopped = false;
     let opened = false;
+    // Timestamp of the last frame received on the live socket (data OR the
+    // server's keepalive ping). The heartbeat watchdog below uses it to spot a
+    // silently-dropped connection - see the setInterval near the poll.
+    let lastRx = Date.now();
 
     function teardown(sock) {
       if (!sock) return;
@@ -3126,12 +3130,14 @@ function Dashboard({
       ws = sock;
       sock.onopen = () => {
         if (ws !== sock) return;
+        lastRx = Date.now();
         setConnected(true);
         if (opened) refresh(); // reconnect: catch up on anything missed
         opened = true;
       };
       sock.onmessage = (e) => {
         if (ws !== sock) return;
+        lastRx = Date.now(); // any frame (data or the server's ping) => alive
         let m;
         try {
           m = JSON.parse(e.data);
@@ -3156,10 +3162,29 @@ function Dashboard({
     // Safety net so the dashboard can't go stale if the socket is unavailable.
     const pollId = setInterval(refresh, 30000);
 
+    // Heartbeat watchdog. A reverse proxy (Cloudflare et al.) can silently drop
+    // an idle WebSocket without the browser ever firing onclose - the socket
+    // just goes quiet while still reporting readyState OPEN, so onclose/onerror
+    // never run and the reconnect loop never starts. The server sends a ping
+    // every 25s (core.py), so if an OPEN socket has been silent past 40s the
+    // link is dead despite what readyState claims: mark it lost and reconnect
+    // ourselves. This is what "auto retry" needed but never got, which is why a
+    // manual page refresh used to be the only way back.
+    const beatId = setInterval(() => {
+      if (stopped || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (Date.now() - lastRx <= 40000) return;
+      setConnected(false);
+      const dead = ws;
+      ws = null;
+      teardown(dead); // detaches handlers, so onclose won't double-fire
+      connect(); // immediate reconnect (onopen resets lastRx + re-syncs)
+    }, 10000);
+
     return () => {
       stopped = true;
       clearTimeout(retry);
       clearInterval(pollId);
+      clearInterval(beatId);
       teardown(ws);
     };
   }, [refresh, live]);

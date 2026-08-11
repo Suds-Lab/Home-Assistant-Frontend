@@ -403,7 +403,10 @@ The dashboard updates in **real time** over a WebSocket: any change (from the
 app, a physical switch, or an automation) appears within a fraction of a second,
 with no refresh. If the connection drops, a **"Connection lost. Reconnecting…"**
 notice appears with a **Retry now** button; it clears itself and re-syncs once
-the connection is back. When a new version of the app is deployed, open
+the connection is back. The reconnect is driven by a heartbeat, so it recovers
+even when a reverse proxy (e.g. Cloudflare) closes an idle connection silently
+without the browser noticing; **Retry now** forces an immediate full refresh.
+When a new version of the app is deployed, open
 dashboards **reload themselves** to pick it up; no manual refresh needed. The
 build version is shown as a small label in the corner of each screen.
 

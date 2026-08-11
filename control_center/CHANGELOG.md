@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.3
+- Fix: the dashboard now reconnects on its own after the live connection drops.
+  Some reverse proxies (e.g. Cloudflare) close an idle connection silently, and
+  the browser never noticed, so live updates would stop and a manual page
+  refresh was the only way back. The app now watches the connection's heartbeat
+  and reconnects itself when it goes quiet. "Retry now" still forces a full
+  refresh.
+
 ## 2.9.2
 - Sessions now last 30 days (up from 7) and are rolling: while you use the app,
   your session is quietly refreshed in the background, so regular use keeps you
