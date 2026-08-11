@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.1
+- Lists refinements: the list chips now sit on a single row that scrolls sideways
+  instead of wrapping onto a second line, and a list is now an alternative to
+  Type/Area/Floor - picking a list is the active view, and picking Type (or
+  Area/Floor) goes back to all your devices. The separate "All" chip is gone.
+- Fix: selecting a list with no devices now shows "<list> has no devices yet"
+  instead of the confusing "No devices match \"\"".
+
 ## 2.9.0
 - New: **Lists**. Create your own named lists of devices from the account menu
   (top-right avatar), add any of your devices to them, and each list appears as a
