@@ -97,6 +97,10 @@ remote_instances:
 
 Restart the add-on after saving. Remote entities appear immediately in **Manage users** with a colored instance badge next to their name. Assign them to users the same way as any local entity.
 
+### Managing remote devices
+
+A manager can rename a remote device or move it to another area exactly like a local one, from the pencil **Edit device** button on a device card or in the Organize view. Each edit is routed back to the instance the device belongs to (its id is tagged with the instance), so the change is written to the correct Home Assistant. If a remote is momentarily slow or unreachable, an edit is not falsely blocked; a genuine failure to reach the remote is reported and logged.
+
 ### Troubleshooting
 
 If remote entities don't appear after restarting the add-on:

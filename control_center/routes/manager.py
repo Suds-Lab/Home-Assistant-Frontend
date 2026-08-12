@@ -13,7 +13,7 @@ from flask import Blueprint, jsonify, request
 from access import _domain_assignable
 from config import REMOTE_INSTANCES
 from errors import ApiError
-from ha import _invalidate_registries, ha_registries, ha_request, ha_ws_command
+from ha import _invalidate_registries, ha_registries_cached, ha_request, ha_ws_command
 from security import current_user
 
 bp = Blueprint("manager", __name__)
@@ -51,7 +51,7 @@ def manager_devices():
 
     def _collect(instance_id, instance_name):
         try:
-            reg = ha_registries(instance_id=instance_id)
+            reg = ha_registries_cached(instance_id=instance_id)
         except Exception:  # noqa: BLE001
             return
         floors = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
@@ -135,11 +135,17 @@ def manager_update_device():
 
     instance_id, device_id = _split_id(full_device_id)
 
-    reg = ha_registries(instance_id=instance_id)
-    raw_eids = [e["entity_id"] for e in reg.get("entities", []) if e.get("device_id") == device_id]
-    full_eids = [_prefix(instance_id, eid) for eid in raw_eids]
-    if not any(_domain_assignable(feid) for feid in full_eids):
-        raise ApiError("That device isn't available to manage", 403)
+    # Guard that the device has at least one assignable entity - but only when we
+    # actually have the registry. If the remote is momentarily unreachable (empty
+    # registry), don't reject a legitimate edit as "not available to manage": the
+    # manager role already authorizes it and the write below returns an honest
+    # 502 if the remote is truly down.
+    reg = ha_registries_cached(instance_id=instance_id)
+    if reg:
+        raw_eids = [e["entity_id"] for e in reg.get("entities", []) if e.get("device_id") == device_id]
+        full_eids = [_prefix(instance_id, eid) for eid in raw_eids]
+        if not any(_domain_assignable(feid) for feid in full_eids):
+            raise ApiError("That device isn't available to manage", 403)
 
     update = {"type": "config/device_registry/update", "device_id": device_id}
     if "area_id" in body:
@@ -166,7 +172,7 @@ def manager_areas():
 
     def _collect(instance_id, instance_name):
         try:
-            reg = ha_registries(instance_id=instance_id)
+            reg = ha_registries_cached(instance_id=instance_id)
         except Exception:  # noqa: BLE001
             return
         fname = {f["floor_id"]: f.get("name") for f in reg.get("floors", [])}
@@ -224,8 +230,8 @@ def manager_save_area():
     real_floor_id = None
     if has_floor and full_floor_id is not None:
         _, real_floor_id = _split_id(full_floor_id)
-        reg = ha_registries(instance_id=instance_id)
-        if not any(f.get("floor_id") == real_floor_id for f in reg.get("floors", [])):
+        reg = ha_registries_cached(instance_id=instance_id)
+        if reg and not any(f.get("floor_id") == real_floor_id for f in reg.get("floors", [])):
             raise ApiError("That floor no longer exists", 400)
 
     if area_id:

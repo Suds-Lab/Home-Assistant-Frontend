@@ -245,7 +245,14 @@ def _invalidate_registries(instance_id=None):
 
 
 def ha_registries_cached(ttl=300, instance_id=None):
-    """ha_registries() with a short TTL cache - the registries rarely change."""
+    """ha_registries() with a short TTL cache - the registries rarely change.
+
+    On a refresh failure (remote briefly unreachable / a Cloudflare hiccup)
+    ha_registries() returns {}. Rather than propagate that empty dict - which
+    makes a manageable device look unmanageable - serve the last-known cached
+    data. The background _ws_loop keeps this cache warm, so once an instance has
+    ever been reachable, a transient blip no longer surfaces as an empty
+    registry. Only a never-seen instance returns {}."""
     now = time.time()
     with _REG_LOCK:
         c = _REG_CACHE.get(instance_id)
@@ -255,7 +262,11 @@ def ha_registries_cached(ttl=300, instance_id=None):
     if reg:
         with _REG_LOCK:
             _REG_CACHE[instance_id] = {"ts": now, "data": reg}
-    return reg
+        return reg
+    # Refresh failed: fall back to stale data if we have any (better than {}).
+    with _REG_LOCK:
+        c = _REG_CACHE.get(instance_id)
+        return c["data"] if c and c["data"] else {}
 
 
 def _location_lookup(reg):
