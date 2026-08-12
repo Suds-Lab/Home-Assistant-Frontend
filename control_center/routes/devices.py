@@ -57,7 +57,12 @@ def devices():
         ent_dev = {e["entity_id"]: e.get("device_id") for e in reg.get("entities", [])}
         view = _device_view(s)
         view["area"], view["floor"], view["area_icon"] = locate(real_id)
-        view["device_id"] = ent_dev.get(real_id)
+        # Namespace the device_id for remote instances (matching the manager
+        # convention), so the pencil-edit device_id routes back to the right HA.
+        # A bare (un-prefixed) remote id would split to instance None and get
+        # rejected as "not available to manage".
+        did = ent_dev.get(real_id)
+        view["device_id"] = f"{instance_id}:{did}" if instance_id and did else did
         view["instance"] = instance_id
         view["instance_name"] = _inst_names.get(instance_id) if instance_id else None
         result.append(view)

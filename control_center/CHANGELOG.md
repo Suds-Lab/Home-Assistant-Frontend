@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.4
+- Fix: editing a device (the pencil button on a device card) that lives on a
+  remote instance failed with "That device isn't available to manage." The
+  device's id wasn't being tagged with its instance on the dashboard, so the
+  edit was sent to the main instance instead of the remote one. It now routes to
+  the correct instance.
+- Managing devices and areas is also more resilient to a remote being briefly
+  slow or unreachable: the manager reads registry data from the same warm cache
+  the dashboard uses and no longer rejects a legitimate edit when a remote has a
+  momentary hiccup.
+
 ## 2.9.3
 - Fix: the dashboard now reconnects on its own after the live connection drops.
   Some reverse proxies (e.g. Cloudflare) close an idle connection silently, and
