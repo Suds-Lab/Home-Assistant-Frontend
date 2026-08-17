@@ -443,10 +443,17 @@ profile menu.
 
 In the **Control Center** sidebar tab, open a user and scroll to **Climate
 scheduling**. The permission panel shows a grid of the climate devices that user
-already controls; tap a device to grant or revoke scheduling access for it. The
-**Schedules** tab in the admin view lists every schedule grouped by user; expand
-any schedule to see its events. You can enable/disable or delete any schedule
-from here.
+already controls; tap a device to grant or revoke scheduling access for it.
+
+Turn on **Allow all climate devices (current & future)** to grant scheduling for
+every climate device the user can control, including any added later - so you
+don't have to tick each new thermostat by hand. The same toggle is available per
+user under the admin **Schedules** tab's **Access** grid. It never exceeds the
+devices the user is actually allowed to control (locked devices stay locked).
+
+The **Schedules** tab in the admin view lists every schedule grouped by user;
+expand any schedule to see its events. You can enable/disable or delete any
+schedule from here.
 
 ### User view
 

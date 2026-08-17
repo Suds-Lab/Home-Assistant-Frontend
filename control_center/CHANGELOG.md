@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.5
+- New: **Allow all climate devices (current & future)** toggle for climate
+  scheduling. Instead of ticking each thermostat, an admin can grant a user
+  scheduling for every climate device they can control, and any device added
+  later is included automatically. Available both in the user editor and in the
+  admin Schedules > Access grid. It never exceeds the devices the user is allowed
+  to control.
+
 ## 2.9.4
 - Fix: editing a device (the pencil button on a device card) that lives on a
   remote instance failed with "That device isn't available to manage." The

@@ -3006,6 +3006,26 @@ img.install-icon {
 }
 .sched-admin-count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
 
+/* "Allow all climate (current & future)" toggle - its own row just above the
+   device grid, same in the user editor and the admin access grid. */
+/* `label.` (not just `.sched-all-toggle`) so this outweighs `.editor > label`,
+   which stacks a form label above its input; here the checkbox must sit inline
+   to the LEFT of its text, not centred on top. Same look in the admin access
+   grid, whose toggle is also a <label>. */
+label.sched-all-toggle {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+label.sched-all-toggle input { width: auto; cursor: pointer; accent-color: var(--accent); }
+
 /* Admin permissions 2-col grid */
 .sched-perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .sched-perm-grid .sched-perm-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
