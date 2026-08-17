@@ -2683,6 +2683,19 @@ function AdminSchedulesView() {
     finally { setPermBusy(false); }
   }
 
+  // "Allow all" stores the '*' sentinel so every climate device the user can
+  // control - including ones added later - is schedulable, without the admin
+  // ticking each box.
+  async function toggleAll(username, nowAll) {
+    setPermBusy(true);
+    try {
+      const next = nowAll ? ['*'] : [];
+      await adminSetSchedulePerms(username, next);
+      setPerms((prev) => ({ ...prev, [username]: next }));
+    } catch (e) { setError(e.message); }
+    finally { setPermBusy(false); }
+  }
+
   function userHasDevice(user, entityId) {
     return user.all || user.manager || (user.entities || []).includes(entityId);
   }
@@ -2716,23 +2729,34 @@ function AdminSchedulesView() {
           ) : (
             (users || []).map((u) => {
               const userPerms = new Set(perms[u.username] || []);
+              const allOn = userPerms.has('*');
               return (
                 <div key={u.username} className="sched-admin-user-section">
                   <div className="sched-admin-user-label">
                     {u.displayName || u.username}
                     {u.admin && <span className="sched-admin-badge">admin</span>}
                   </div>
+                  <label className="sched-all-toggle">
+                    <input
+                      type="checkbox"
+                      checked={allOn}
+                      disabled={permBusy}
+                      onChange={(ev) => toggleAll(u.username, ev.target.checked)}
+                    />
+                    All climate (current &amp; future)
+                  </label>
                   <div className="sched-perm-grid">
                     {climateEntities.map((e) => {
                       const eligible = userHasDevice(u, e.entity_id);
-                      const on = userPerms.has(e.entity_id);
+                      const on = eligible && (allOn || userPerms.has(e.entity_id));
                       return (
                         <button
                           key={e.entity_id}
                           type="button"
                           className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
-                          onClick={() => eligible && !permBusy && togglePerm(u.username, e.entity_id, !on)}
-                          disabled={!eligible}
+                          onClick={() => eligible && !allOn && !permBusy && togglePerm(u.username, e.entity_id, !on)}
+                          disabled={!eligible || allOn}
+                          title={allOn && eligible ? 'Included by "All climate"' : undefined}
                         >
                           <span className="sched-perm-cell-name">{e.name}</span>
                           <span className="sched-perm-check">
@@ -3511,8 +3535,11 @@ function UserEditor({ user, entities, schedPerms = [], onSave, onCancel }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Per-user climate scheduling permissions
-  const [schedPicked, setSchedPicked] = useState(new Set(schedPerms));
+  // Per-user climate scheduling permissions. The '*' sentinel means "all
+  // climate (current & future)"; keep it as a separate flag and strip it from
+  // the explicit picks.
+  const [schedAll, setSchedAll] = useState(schedPerms.includes('*'));
+  const [schedPicked, setSchedPicked] = useState(new Set(schedPerms.filter((id) => id !== '*')));
   const [allEntitiesForSched, setAllEntitiesForSched] = useState([]);
   // Every entity (any type), for the per-user "add a specific device" search -
   // lets the admin grant one user a disabled-type entity without globalising it.
@@ -3560,9 +3587,11 @@ function UserEditor({ user, entities, schedPerms = [], onSave, onCancel }) {
         entityExpires: Object.fromEntries(
           Object.entries(entityExpires).filter(([id]) => picked.has(id))
         ),
-        scheduleEntityIds: [...schedPicked].filter((id) =>
-          (all || manager) || allEntitiesForSched.filter((en) => picked.has(en.entity_id)).some((en) => en.entity_id === id)
-        ),
+        scheduleEntityIds: schedAll
+          ? ['*']
+          : [...schedPicked].filter((id) =>
+              (all || manager) || allEntitiesForSched.filter((en) => picked.has(en.entity_id)).some((en) => en.entity_id === id)
+            ),
       });
     } catch (err) {
       setError(err.message);
@@ -3888,10 +3917,23 @@ function UserEditor({ user, entities, schedPerms = [], onSave, onCancel }) {
       <p className="muted field-note">
         Grant access to schedule specific devices. Only devices this user can already control are shown.
       </p>
+      <label className="sched-all-toggle">
+        <input type="checkbox" checked={schedAll} onChange={(e) => setSchedAll(e.target.checked)} />
+        Allow all climate devices (current &amp; future)
+      </label>
       {(() => {
         const schedEligible = (all || manager)
           ? allEntitiesForSched
           : allEntitiesForSched.filter((en) => picked.has(en.entity_id));
+        if (schedAll) {
+          return (
+            <p className="muted field-note">
+              {schedEligible.length === 0
+                ? 'Any climate device this user can control will be schedulable, including ones added later.'
+                : `All ${schedEligible.length} climate device${schedEligible.length === 1 ? '' : 's'} this user can control are schedulable, including any added later.`}
+            </p>
+          );
+        }
         if (schedEligible.length === 0) {
           return (
             <p className="muted">
@@ -5110,7 +5152,7 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
                   </span>
                   <div className="meta">
                     {u.username} ·{' '}
-                    {u.all
+                    {u.all || u.manager
                       ? 'All devices'
                       : `${u.entities.length} device${u.entities.length === 1 ? '' : 's'}`}
                   </div>

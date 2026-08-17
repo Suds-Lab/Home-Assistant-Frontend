@@ -16,6 +16,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
+from access import user_can_access
 from errors import ApiError
 from security import current_user, require_admin
 from store import (
@@ -26,6 +27,34 @@ from store import (
 )
 
 bp = Blueprint("schedules", __name__)
+
+# Sentinel stored in a user's schedule_perms list to mean "all climate devices
+# this user can control, present and future". Resolved live (see _resolve_allowed)
+# so the admin never has to add each new device by hand. It is deliberately not a
+# valid entity id, so it can't collide with a real one.
+ALL_CLIMATE = "*"
+
+
+def _all_climate_ids():
+    """Every climate entity currently known in STATE_CACHE (namespaced ids for
+    remote instances included)."""
+    from core import STATE_CACHE
+    return [
+        eid for eid in STATE_CACHE
+        if (eid.split(":", 1)[1] if ":" in eid else eid).startswith("climate.")
+    ]
+
+
+def _resolve_allowed(user, perms=None):
+    """The set of climate entity ids this user may schedule. If their perms hold
+    the ALL_CLIMATE sentinel, that expands to every climate device they can
+    control right now (so new devices are covered automatically); otherwise it's
+    the explicit stored list. Access is always re-checked, so a broadened "all"
+    grant can never exceed the devices the user is actually allowed to control."""
+    raw = (perms if perms is not None else load_schedule_perms()).get(user["username"], [])
+    if ALL_CLIMATE in raw:
+        return {eid for eid in _all_climate_ids() if user_can_access(user, eid)}
+    return set(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -41,10 +70,10 @@ def get_my_schedules():
 
 @bp.post("/api/schedules")
 def create_schedule():
-    username = current_user()["username"]
+    user = current_user()
+    username = user["username"]
     data = request.get_json(force=True) or {}
-    perms = load_schedule_perms()
-    allowed = set(perms.get(username, []))
+    allowed = _resolve_allowed(user)
     sched = {
         "id": str(uuid.uuid4()),
         "owner": username,
@@ -61,12 +90,12 @@ def create_schedule():
 
 @bp.put("/api/schedules/<sched_id>")
 def update_schedule(sched_id):
-    username = current_user()["username"]
+    user = current_user()
+    username = user["username"]
     schedules = load_schedules()
     idx = _find_owned(schedules, sched_id, username)
     data = request.get_json(force=True) or {}
-    perms = load_schedule_perms()
-    allowed = set(perms.get(username, []))
+    allowed = _resolve_allowed(user)
     sched = schedules[idx]
     if "name" in data:
         sched["name"] = str(data["name"])[:80]
@@ -92,17 +121,20 @@ def delete_schedule(sched_id):
 
 @bp.get("/api/schedule-perms")
 def get_schedule_perms():
-    username = current_user()["username"]
+    user = current_user()
     perms = load_schedule_perms()
-    return jsonify({"entity_ids": perms.get(username, [])})
+    raw = perms.get(user["username"], [])
+    return jsonify({
+        "entity_ids": sorted(_resolve_allowed(user, perms)),
+        "all": ALL_CLIMATE in raw,
+    })
 
 
 @bp.get("/api/schedule-entities")
 def get_schedule_entities():
     """Permitted climate entities with their live HA state from STATE_CACHE."""
-    username = current_user()["username"]
-    perms = load_schedule_perms()
-    allowed = set(perms.get(username, []))
+    user = current_user()
+    allowed = _resolve_allowed(user)
     if not allowed:
         return jsonify({"entities": []})
     from core import STATE_CACHE
@@ -161,7 +193,12 @@ def admin_set_schedule_perms():
     if not username:
         raise ApiError("username required", 400)
     perms = load_schedule_perms()
-    if entity_ids:
+    # "Allow all" is stored as the ALL_CLIMATE sentinel (present + future); the
+    # frontend signals it via all=true or by sending ["*"]. Otherwise store the
+    # explicit list, or drop the user entirely when nothing is selected.
+    if data.get("all") or ALL_CLIMATE in entity_ids:
+        perms[username] = [ALL_CLIMATE]
+    elif entity_ids:
         perms[username] = [str(e) for e in entity_ids]
     else:
         perms.pop(username, None)
