@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.6
+- Redesigned the admin **Schedules** view. Instead of every user's permission
+  grid and every schedule stacked on one page, it now pivots **By user** or **By
+  thermostat** and uses a searchable selector to focus on one at a time.
+  - By user: their scheduling access (including the All-climate toggle) and their
+    schedules, with enable/disable and delete.
+  - By thermostat: which users may schedule it, plus its effective program merged
+    across all users on a week strip, with conflict warnings for overlapping
+    events.
+
 ## 2.9.5
 - New: **Allow all climate devices (current & future)** toggle for climate
   scheduling. Instead of ticking each thermostat, an admin can grant a user

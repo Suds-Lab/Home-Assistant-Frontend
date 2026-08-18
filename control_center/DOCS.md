@@ -447,13 +447,18 @@ already controls; tap a device to grant or revoke scheduling access for it.
 
 Turn on **Allow all climate devices (current & future)** to grant scheduling for
 every climate device the user can control, including any added later - so you
-don't have to tick each new thermostat by hand. The same toggle is available per
-user under the admin **Schedules** tab's **Access** grid. It never exceeds the
-devices the user is actually allowed to control (locked devices stay locked).
+don't have to tick each new thermostat by hand. It never exceeds the devices the
+user is actually allowed to control (locked devices stay locked).
 
-The **Schedules** tab in the admin view lists every schedule grouped by user;
-expand any schedule to see its events. You can enable/disable or delete any
-schedule from here.
+The **Schedules** tab in the admin view pivots **By user** or **By thermostat**,
+with a searchable selector to focus on one at a time:
+
+- **By user**: that user's scheduling access (the same permission grid and
+  All-climate toggle as the user editor) plus all of their schedules - expand any
+  to see its events, and enable/disable or delete it.
+- **By thermostat**: which users may schedule it (toggle access from this side
+  too), plus its effective program merged across every user's schedules, shown on
+  a week strip with warnings on any overlapping (conflicting) events.
 
 ### User view
 
