@@ -2477,23 +2477,14 @@ function SchedMyView({ entities, schedules, setSchedules }) {
 }
 
 /* SchedByThermostat: view merged events per thermostat, with searchable picker */
-function SchedByThermostat({ entities, schedules }) {
-  const [selEntityId, setSelEntityId] = React.useState((entities[0] || {}).entity_id || '');
-
-  if (!entities.length) {
-    return (
-      <div className="sched-view">
-        <p className="muted">No permitted climate entities.</p>
-      </div>
-    );
-  }
-
-  const selEntity = entities.find((e) => e.entity_id === selEntityId) || entities[0];
-  const tInfo = schedTempInfo([selEntity]);
+/* Merge every enabled schedule that targets an entity into one program:
+   `merged` = all entries, `byKey` = day:time -> [schedule names] (for conflicts),
+   `conflictCount` = number of day/time slots more than one entry lands on. Shared
+   by the user "By thermostat" view and the admin thermostat detail. */
+function schedMergeForEntity(entityId, schedules) {
   const targetSchedules = (schedules || []).filter(
-    (s) => s.enabled && s.targets.includes(selEntity.entity_id)
+    (s) => s.enabled && s.targets.includes(entityId)
   );
-
   const merged = [];
   const byKey = {};
   for (const s of targetSchedules) {
@@ -2507,6 +2498,23 @@ function SchedByThermostat({ entities, schedules }) {
     }
   }
   const conflictCount = Object.values(byKey).filter((v) => v.length > 1).length;
+  return { targetSchedules, merged, byKey, conflictCount };
+}
+
+function SchedByThermostat({ entities, schedules }) {
+  const [selEntityId, setSelEntityId] = React.useState((entities[0] || {}).entity_id || '');
+
+  if (!entities.length) {
+    return (
+      <div className="sched-view">
+        <p className="muted">No permitted climate entities.</p>
+      </div>
+    );
+  }
+
+  const selEntity = entities.find((e) => e.entity_id === selEntityId) || entities[0];
+  const tInfo = schedTempInfo([selEntity]);
+  const { targetSchedules, merged, byKey, conflictCount } = schedMergeForEntity(selEntity.entity_id, schedules);
 
   const entItems = entities.map((e) => ({ id: e.entity_id, label: e.name }));
 
@@ -2636,15 +2644,18 @@ function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
   );
 }
 
-/* AdminSchedulesView: admin sub-panel with Access (2-col grid) and All schedules (grouped+collapsible) */
+/* AdminSchedulesView: pivot (By user / By thermostat) + searchable selector + a
+   focused detail card. Replaces the old stacked "Access" + "All schedules" tabs. */
 function AdminSchedulesView() {
-  const [subTab, setSubTab] = React.useState('access');
+  const [pivot, setPivot] = React.useState('user');
   const [schedules, setSchedules] = React.useState(null);
   const [users, setUsers] = React.useState(null);
   const [climateEntities, setClimateEntities] = React.useState([]);
   const [perms, setPerms] = React.useState({});
   const [error, setError] = React.useState('');
   const [permBusy, setPermBusy] = React.useState(false);
+  const [selUser, setSelUser] = React.useState('');
+  const [selEntityId, setSelEntityId] = React.useState('');
 
   React.useEffect(() => {
     Promise.all([adminGetAllSchedules(), adminGetUsers(), adminGetClimateEntities(), adminGetSchedulePerms()])
@@ -2700,106 +2711,276 @@ function AdminSchedulesView() {
     return user.all || user.manager || (user.entities || []).includes(entityId);
   }
 
+  // How many of this entity's users / this user's thermostats, honoring '*'.
+  function usersForEntity(entityId) {
+    return (users || []).filter((u) => {
+      const raw = perms[u.username] || [];
+      return raw.includes('*') ? userHasDevice(u, entityId) : raw.includes(entityId);
+    });
+  }
+  function thermostatCountFor(u) {
+    const raw = perms[u.username] || [];
+    return raw.includes('*')
+      ? climateEntities.filter((e) => userHasDevice(u, e.entity_id)).length
+      : raw.filter((id) => id !== '*').length;
+  }
+
   const loading = !schedules || !users;
+  if (loading) {
+    return (
+      <div>
+        {error && <div className="error banner">{error}</div>}
+        <p className="muted">Loading…</p>
+      </div>
+    );
+  }
 
-  const userMap = {};
-  (users || []).forEach((u) => { userMap[u.username] = u; });
+  const selectedUser = users.find((u) => u.username === selUser) || users[0] || null;
+  const selectedEntity = climateEntities.find((e) => e.entity_id === selEntityId) || climateEntities[0] || null;
 
-  const grouped = schedules
-    ? [...new Set(schedules.map((s) => s.owner))].map((owner) => ({
-        owner,
-        scheds: schedules.filter((s) => s.owner === owner),
-      }))
-    : [];
+  const userItems = users.map((u) => {
+    const n = schedules.filter((s) => s.owner === u.username).length;
+    const t = thermostatCountFor(u);
+    return {
+      id: u.username,
+      label: u.displayName || u.username,
+      sub: `${n} schedule${n !== 1 ? 's' : ''} · ${t} thermostat${t !== 1 ? 's' : ''}`,
+    };
+  });
+  const entItems = climateEntities.map((e) => {
+    const { merged } = schedMergeForEntity(e.entity_id, schedules);
+    const nu = usersForEntity(e.entity_id).length;
+    return {
+      id: e.entity_id,
+      label: e.name,
+      sub: `${nu} user${nu !== 1 ? 's' : ''} · ${merged.length} event${merged.length !== 1 ? 's' : ''}`,
+    };
+  });
 
   return (
     <div>
-      <div className="tabs" style={{ marginBottom: 16 }}>
-        <button className={`seg${subTab === 'access' ? ' on' : ''}`} onClick={() => setSubTab('access')} type="button">Access</button>
-        <button className={`seg${subTab === 'schedules' ? ' on' : ''}`} onClick={() => setSubTab('schedules')} type="button">All schedules</button>
+      {error && <div className="error banner">{error}</div>}
+
+      <div className="tabs" style={{ marginBottom: 12 }}>
+        <button className={`seg${pivot === 'user' ? ' on' : ''}`} onClick={() => setPivot('user')} type="button">By user</button>
+        <button className={`seg${pivot === 'thermostat' ? ' on' : ''}`} onClick={() => setPivot('thermostat')} type="button">By thermostat</button>
       </div>
 
-      {error && <div className="error banner">{error}</div>}
-      {loading && <p className="muted">Loading…</p>}
+      {pivot === 'user' ? (
+        !selectedUser ? (
+          <p className="muted">No users.</p>
+        ) : (
+          <>
+            <div className="sched-admin-select">
+              <SchedSearchableMenu
+                trigger={
+                  <button className="sched-switcher" type="button">
+                    <span className="sched-switcher-label">{selectedUser.displayName || selectedUser.username}</span>
+                    <span className="sched-switcher-meta">{users.length} user{users.length !== 1 ? 's' : ''}</span>
+                    <span className="sched-caret">&#9660;</span>
+                  </button>
+                }
+                items={userItems}
+                selectedId={selectedUser.username}
+                onSelect={(id) => setSelUser(id)}
+                placeholder="Search users…"
+                emptyText="No users match"
+              />
+            </div>
+            <AdminUserSchedDetail
+              user={selectedUser}
+              schedules={schedules}
+              climateEntities={climateEntities}
+              perms={perms}
+              permBusy={permBusy}
+              togglePerm={togglePerm}
+              toggleAll={toggleAll}
+              toggleEnabled={toggleEnabled}
+              removeSched={removeSched}
+              userHasDevice={userHasDevice}
+            />
+          </>
+        )
+      ) : (
+        !selectedEntity ? (
+          <p className="muted">No climate entities found.</p>
+        ) : (
+          <>
+            <div className="sched-admin-select">
+              <SchedSearchableMenu
+                trigger={
+                  <button className="sched-switcher" type="button">
+                    <span className="sched-switcher-label">{selectedEntity.name}</span>
+                    <span className="sched-switcher-meta">{climateEntities.length} thermostat{climateEntities.length !== 1 ? 's' : ''}</span>
+                    <span className="sched-caret">&#9660;</span>
+                  </button>
+                }
+                items={entItems}
+                selectedId={selectedEntity.entity_id}
+                onSelect={(id) => setSelEntityId(id)}
+                placeholder="Search thermostats…"
+                emptyText="No thermostats match"
+              />
+            </div>
+            <AdminAcSchedDetail
+              entity={selectedEntity}
+              schedules={schedules}
+              users={users}
+              perms={perms}
+              permBusy={permBusy}
+              togglePerm={togglePerm}
+              userHasDevice={userHasDevice}
+            />
+          </>
+        )
+      )}
+    </div>
+  );
+}
 
-      {!loading && subTab === 'access' && (
-        <div>
-          {climateEntities.length === 0 ? (
-            <p className="muted">No climate entities found.</p>
-          ) : (
-            (users || []).map((u) => {
-              const userPerms = new Set(perms[u.username] || []);
-              const allOn = userPerms.has('*');
+/* AdminUserSchedDetail: one user's scheduling access (perm grid + all-climate
+   toggle) and their schedules (enable/disable + delete). */
+function AdminUserSchedDetail({ user, schedules, climateEntities, perms, permBusy, togglePerm, toggleAll, toggleEnabled, removeSched, userHasDevice }) {
+  const userPerms = new Set(perms[user.username] || []);
+  const allOn = userPerms.has('*');
+  const mine = (schedules || []).filter((s) => s.owner === user.username);
+  const eligibleCount = climateEntities.filter((e) => userHasDevice(user, e.entity_id)).length;
+  const grantedCount = allOn ? eligibleCount : climateEntities.filter((e) => userPerms.has(e.entity_id)).length;
+
+  return (
+    <div className="sched-card">
+      <div className="sched-unit-title">
+        {user.displayName || user.username}
+        {user.admin && <span className="sched-admin-badge">admin</span>}
+      </div>
+      <div className="sched-sub">
+        {mine.length} schedule{mine.length !== 1 ? 's' : ''} · may schedule {grantedCount} of {climateEntities.length} thermostat{climateEntities.length !== 1 ? 's' : ''}
+      </div>
+
+      <div className="sched-section-label">Can schedule</div>
+      {climateEntities.length === 0 ? (
+        <p className="muted">No climate entities found.</p>
+      ) : (
+        <>
+          <label className="sched-all-toggle">
+            <input type="checkbox" checked={allOn} disabled={permBusy} onChange={(ev) => toggleAll(user.username, ev.target.checked)} />
+            All climate (current &amp; future)
+          </label>
+          <div className="sched-perm-grid">
+            {climateEntities.map((e) => {
+              const eligible = userHasDevice(user, e.entity_id);
+              const on = eligible && (allOn || userPerms.has(e.entity_id));
               return (
-                <div key={u.username} className="sched-admin-user-section">
-                  <div className="sched-admin-user-label">
-                    {u.displayName || u.username}
-                    {u.admin && <span className="sched-admin-badge">admin</span>}
-                  </div>
-                  <label className="sched-all-toggle">
-                    <input
-                      type="checkbox"
-                      checked={allOn}
-                      disabled={permBusy}
-                      onChange={(ev) => toggleAll(u.username, ev.target.checked)}
-                    />
-                    All climate (current &amp; future)
-                  </label>
-                  <div className="sched-perm-grid">
-                    {climateEntities.map((e) => {
-                      const eligible = userHasDevice(u, e.entity_id);
-                      const on = eligible && (allOn || userPerms.has(e.entity_id));
-                      return (
-                        <button
-                          key={e.entity_id}
-                          type="button"
-                          className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
-                          onClick={() => eligible && !allOn && !permBusy && togglePerm(u.username, e.entity_id, !on)}
-                          disabled={!eligible || allOn}
-                          title={allOn && eligible ? 'Included by "All climate"' : undefined}
-                        >
-                          <span className="sched-perm-cell-name">{e.name}</span>
-                          <span className="sched-perm-check">
-                            {!eligible ? '🔒' : on ? '✓' : ''}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <button
+                  key={e.entity_id}
+                  type="button"
+                  className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
+                  onClick={() => eligible && !allOn && !permBusy && togglePerm(user.username, e.entity_id, !on)}
+                  disabled={!eligible || allOn}
+                  title={allOn && eligible ? 'Included by "All climate"' : (!eligible ? 'Needs device-control access first' : undefined)}
+                >
+                  <span className="sched-perm-cell-name">{e.name}</span>
+                  <span className="sched-perm-check">{!eligible ? '🔒' : on ? '✓' : ''}</span>
+                </button>
               );
-            })
-          )}
-          <p className="muted" style={{ fontSize: '0.78em', marginTop: 12 }}>
+            })}
+          </div>
+          <p className="muted" style={{ fontSize: '0.78em', marginTop: 10 }}>
             Locked devices require device-control access first (Users tab).
           </p>
+        </>
+      )}
+
+      <div className="sched-section-label">Schedules</div>
+      {mine.length === 0 ? (
+        <p className="muted" style={{ margin: '4px 0' }}>No schedules.</p>
+      ) : (
+        mine.map((s) => (
+          <SchedAdminSchedRow key={s.id} sched={s} entities={climateEntities} onToggle={toggleEnabled} onDelete={removeSched} />
+        ))
+      )}
+    </div>
+  );
+}
+
+/* AdminAcSchedDetail: one thermostat's access (which users may schedule it) and
+   its effective program merged across all users, with conflict warnings. */
+function AdminAcSchedDetail({ entity, schedules, users, perms, permBusy, togglePerm, userHasDevice }) {
+  const tInfo = schedTempInfo([entity]);
+  const { targetSchedules, merged, byKey, conflictCount } = schedMergeForEntity(entity.entity_id, schedules);
+  const userName = (uname) => (users || []).find((u) => u.username === uname)?.displayName || uname;
+
+  const allowedCount = (users || []).filter((u) => {
+    const raw = perms[u.username] || [];
+    return raw.includes('*') ? userHasDevice(u, entity.entity_id) : raw.includes(entity.entity_id);
+  }).length;
+
+  const progRows = [];
+  for (const s of targetSchedules) for (const e of s.entries) progRows.push({ e, owner: s.owner, name: s.name });
+  progRows.sort((a, b) => a.e.time.localeCompare(b.e.time));
+
+  return (
+    <div className="sched-card">
+      <div className="sched-unit-title">{entity.name}</div>
+      <div className="sched-sub">
+        {allowedCount} user{allowedCount !== 1 ? 's' : ''} may schedule it · {merged.length} event{merged.length !== 1 ? 's' : ''} · {tInfo.tMin}{tInfo.tUnit} to {tInfo.tMax}{tInfo.tUnit}
+      </div>
+
+      <div className="sched-section-label">Who can schedule it</div>
+      {(users || []).length === 0 ? (
+        <p className="muted">No users.</p>
+      ) : (
+        <div className="sched-perm-grid">
+          {(users || []).map((u) => {
+            const raw = perms[u.username] || [];
+            const allMode = raw.includes('*');
+            const eligible = userHasDevice(u, entity.entity_id);
+            const on = eligible && (allMode || raw.includes(entity.entity_id));
+            return (
+              <button
+                key={u.username}
+                type="button"
+                className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
+                onClick={() => eligible && !allMode && !permBusy && togglePerm(u.username, entity.entity_id, !on)}
+                disabled={!eligible || allMode}
+                title={allMode ? "Included by this user's All climate" : (!eligible ? 'User needs device-control access first' : undefined)}
+              >
+                <span className="sched-perm-cell-name">{u.displayName || u.username}</span>
+                <span className="sched-perm-check">{!eligible ? '🔒' : on ? '✓' : ''}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {!loading && subTab === 'schedules' && (
-        <div>
-          {grouped.length === 0 ? (
-            <p className="muted">No schedules created yet.</p>
-          ) : (
-            grouped.map(({ owner, scheds }) => (
-              <div key={owner} className="sched-admin-user-section">
-                <div className="sched-admin-user-label">
-                  {userMap[owner]?.displayName || owner}
-                  <span className="sched-admin-count">{scheds.length} schedule{scheds.length !== 1 ? 's' : ''}</span>
-                </div>
-                {scheds.map((s) => (
-                  <SchedAdminSchedRow
-                    key={s.id}
-                    sched={s}
-                    entities={climateEntities}
-                    onToggle={toggleEnabled}
-                    onDelete={removeSched}
-                  />
-                ))}
-              </div>
-            ))
+      <div className="sched-section-label">Effective program (all users)</div>
+      {targetSchedules.length === 0 ? (
+        <p className="muted" style={{ margin: '4px 0' }}>No active schedules target this thermostat.</p>
+      ) : (
+        <>
+          <SchedWeekStrip entries={merged} tMin={tInfo.tMin} tMax={tInfo.tMax} />
+          {conflictCount > 0 && (
+            <div className="sched-clash-note">
+              Conflict: {conflictCount} time slot{conflictCount > 1 ? 's' : ''} overlap.
+            </div>
           )}
-        </div>
+          <div className="sched-admin-prog">
+            {progRows.map(({ e, owner, name }, i) => {
+              const hasConflict = e.days.some((d) => (byKey[`${d}:${e.time}`] || []).length > 1);
+              return (
+                <SchedEntryRow
+                  key={`${name}:${e.id}:${i}`}
+                  entry={e}
+                  source={`${userName(owner)} · ${name}`}
+                  warn={hasConflict}
+                  tMin={tInfo.tMin}
+                  tMax={tInfo.tMax}
+                  tUnit={tInfo.tUnit}
+                />
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

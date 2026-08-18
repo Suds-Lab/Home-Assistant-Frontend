@@ -13,6 +13,7 @@
   --border: rgba(225, 225, 225, 0.12);
   --input-bg: #242424;
   --switch-bg: #3f3f3f;
+  --seg-empty: rgba(255, 255, 255, 0.06);
   --radius: 12px;
   --card-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
 }
@@ -29,6 +30,7 @@
   --border: rgba(0, 0, 0, 0.12);
   --input-bg: #f4f5f7;
   --switch-bg: #c8ccce;
+  --seg-empty: rgba(0, 0, 0, 0.06);
   --card-shadow: 0 2px 1px -1px rgba(0, 0, 0, 0.2), 0 1px 1px rgba(0, 0, 0, 0.14),
     0 1px 3px rgba(0, 0, 0, 0.12);
 }
@@ -3005,6 +3007,19 @@ img.install-icon {
   font-weight: 600;
 }
 .sched-admin-count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+
+/* Admin pivot: searchable selector spacing + detail section headings */
+.sched-admin-select { margin-bottom: 14px; }
+.sched-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 20px 0 10px;
+}
+.sched-section-label:first-of-type { margin-top: 16px; }
+.sched-admin-prog { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
 
 /* "Allow all climate (current & future)" toggle - its own row just above the
    device grid, same in the user editor and the admin access grid. */
