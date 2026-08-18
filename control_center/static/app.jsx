@@ -4227,14 +4227,15 @@ function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device
   const byId = {};
   for (const e of entities) byId[e.entity_id] = e;
   const term = q.trim().toLowerCase();
+  // No result cap: show every match. The menu scrolls (.chips-menu has a
+  // max-height + overflow), and HA's entity count is bounded, so there's no
+  // reason to hide matches behind an arbitrary limit.
   const matches = term
-    ? entities
-        .filter(
-          (e) =>
-            !sel.has(e.entity_id) &&
-            (e.name.toLowerCase().includes(term) || e.entity_id.toLowerCase().includes(term))
-        )
-        .slice(0, 8)
+    ? entities.filter(
+        (e) =>
+          !sel.has(e.entity_id) &&
+          (e.name.toLowerCase().includes(term) || e.entity_id.toLowerCase().includes(term))
+      )
     : [];
   return (
     <div className="chips-field">

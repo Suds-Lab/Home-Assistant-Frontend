@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.9.7
+- Fix: the device search when adding devices (to a list, a schedule's
+  permissions, or a user's extras) showed at most 8 matches. It now shows every
+  match and the results scroll, so a broad search no longer hides devices.
+
 ## 2.9.6
 - Redesigned the admin **Schedules** view. Instead of every user's permission
   grid and every schedule stacked on one page, it now pivots **By user** or **By
