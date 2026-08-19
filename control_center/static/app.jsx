@@ -550,6 +550,33 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 // One card for any entity, with controls tailored to its domain.
+// Optimistic-state reconcile with confirm-and-release. While a user action is
+// pending we ignore live values, but the moment HA reports the value we set we
+// release the freeze - so a real, quick change right after the action (a lock
+// that auto-relocks after you unlock it, say) shows at once instead of being
+// hidden for the whole freeze window. If HA never confirms, the freeze still
+// times out and we accept whatever HA reports.
+function reconcileOptimistic(incoming, pendingRef, freezeRef, apply) {
+  if (pendingRef.current == null) {
+    apply(incoming);
+    return;
+  }
+  if (incoming === pendingRef.current) {
+    pendingRef.current = null;
+    freezeRef.current = 0;
+    apply(incoming);
+  } else if (Date.now() >= freezeRef.current) {
+    pendingRef.current = null;
+    apply(incoming);
+  }
+  // else: still frozen and not yet confirmed - keep showing the optimistic value
+}
+
+function beginOptimistic(pendingRef, freezeRef, value, ms = 1500) {
+  pendingRef.current = value;
+  freezeRef.current = Date.now() + ms;
+}
+
 function DeviceCard({ device, onChange, onEdit, onError }) {
   const [busy, setBusy] = useState(false);
   const a = device.attributes || {};
@@ -571,6 +598,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
   // read from HA (state not yet propagated) can't bounce the control back.
   const [state, setState] = useState(device.state);
   const freezeUntil = useRef(0);
+  const pendingState = useRef(null);
   const commitTimer = useRef(null);
   const tempTimer = useRef(null);
   // Press-and-hold on the climate +/- buttons: repeat while held, send once on
@@ -580,7 +608,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
   const holdTimer = useRef(null);
   const pressing = useRef(false);
   useEffect(() => {
-    if (Date.now() >= freezeUntil.current) setState(device.state);
+    reconcileOptimistic(device.state, pendingState, freezeUntil, setState);
   }, [device]);
   useEffect(
     () => () => {
@@ -596,26 +624,28 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
   // climate fan buttons respond instantly.
   const [fanMode, setFanMode] = useState(a.fan_mode);
   const fanFreeze = useRef(0);
+  const pendingFan = useRef(null);
   useEffect(() => {
-    if (Date.now() >= fanFreeze.current) setFanMode((device.attributes || {}).fan_mode);
+    reconcileOptimistic((device.attributes || {}).fan_mode, pendingFan, fanFreeze, setFanMode);
   }, [device]);
 
   function setFan(fm) {
     setFanMode(fm);
-    fanFreeze.current = Date.now() + 1500;
+    beginOptimistic(pendingFan, fanFreeze, fm);
     act('set_fan_mode', { fan_mode: fm });
   }
 
   // Optimistic swing mode (same pattern as fan mode).
   const [swingMode, setSwingMode] = useState(a.swing_mode);
   const swingFreeze = useRef(0);
+  const pendingSwing = useRef(null);
   useEffect(() => {
-    if (Date.now() >= swingFreeze.current) setSwingMode((device.attributes || {}).swing_mode);
+    reconcileOptimistic((device.attributes || {}).swing_mode, pendingSwing, swingFreeze, setSwingMode);
   }, [device]);
 
   function setSwing(sm) {
     setSwingMode(sm);
-    swingFreeze.current = Date.now() + 1500;
+    beginOptimistic(pendingSwing, swingFreeze, sm);
     act('set_swing_mode', { swing_mode: sm });
   }
 
@@ -642,9 +672,10 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
   async function act(service, data, optimistic) {
     if (optimistic) {
       setState(optimistic);
-      // Brief hold so a stale read can't bounce the control back; the live
-      // stream confirms the real state within ~a fraction of a second.
-      freezeUntil.current = Date.now() + 1500;
+      // Brief hold so a stale read can't bounce the control back; released early
+      // the moment HA confirms this state (see reconcileOptimistic), so a genuine
+      // quick change right after (e.g. an auto-relock) isn't hidden for the wait.
+      beginOptimistic(pendingState, freezeUntil, optimistic);
     }
     setBusy(true);
     try {
@@ -661,8 +692,9 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
   // turn_off (not a parity-based "toggle") and debounce it, so clicking fast
   // ends in exactly the state shown - the last click wins, no desync.
   function setPower(nextOn) {
-    setState(nextOn ? 'on' : 'off');
-    freezeUntil.current = Date.now() + 1500;
+    const next = nextOn ? 'on' : 'off';
+    setState(next);
+    beginOptimistic(pendingState, freezeUntil, next);
     clearTimeout(commitTimer.current);
     commitTimer.current = setTimeout(() => {
       control(device.entity_id, nextOn ? 'turn_on' : 'turn_off', {})

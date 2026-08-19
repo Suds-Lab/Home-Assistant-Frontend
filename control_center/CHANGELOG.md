@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.9
+- Fix: after you tapped a control, the card briefly ignored incoming states to
+  avoid a stale reading bouncing it back. That hold could also hide a genuine
+  quick change right after - most visibly a lock that auto-relocks moments after
+  you unlock it. The hold now releases the instant Home Assistant confirms the
+  state you set, so a real follow-up change shows immediately (applies to locks,
+  power, and climate fan/swing).
+- Lock (and other mode) buttons no longer tint their text with the card's accent
+  colour, which clashed - especially in dark mode, where a selected button could
+  show amber-on-amber. The active button now keeps neutral, readable text.
+
 ## 2.9.8
 - Schedule times now display in your locale's clock format (12-hour with AM/PM or
   24-hour) instead of always showing 24-hour, so they follow Home Assistant's
