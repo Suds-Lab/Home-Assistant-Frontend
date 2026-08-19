@@ -1224,10 +1224,16 @@ img.install-icon {
   background: var(--g);
 }
 
-.device.glow .btn-row button,
+/* Subtle accent tint on control buttons (media transport, cover open/close,
+   climate +/-). `.mode` buttons are excluded: they already convey state through
+   the accent background (.mode.selected) with white text, so tinting them too
+   made lock Lock/Unlock text clash - amber-on-amber on a selected button, and a
+   loud accent-on-accent tint against the glowing card when not selected. Mode
+   buttons keep neutral text (var(--text)) / white-on-accent when selected. */
+.device.glow .btn-row button:not(.mode),
 .device.glow .temp-control button {
   border-color: color-mix(in srgb, var(--g) 45%, var(--border));
-  color: color-mix(in srgb, var(--g) 65%, var(--text));
+  color: color-mix(in srgb, var(--g) 55%, var(--text));
 }
 
 .device.glow .btn-row button:hover:not(:disabled),
