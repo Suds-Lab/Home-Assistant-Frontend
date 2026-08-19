@@ -1973,6 +1973,16 @@ function daySegments(entries, dayIdx, tMin, tMax) {
 const DAY_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MODE_ABBR = { off: '–', cool: '❄', heat: '▲', auto: '⇅', dry: '∼', fan: '≈' };
 
+/* Format a stored "HH:MM" (always 24h internally) for display, following the
+   viewer's locale - so it shows 12h AM/PM or 24h to match Home Assistant's
+   locale-based default instead of forcing 24h everywhere. */
+function fmtSchedTime(t) {
+  if (typeof t !== 'string' || !t.includes(':')) return t || '';
+  const [h, m] = t.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return t;
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 /* SchedSwitch: button[role=switch] with sliding knob */
 function SchedSwitch({ checked, onChange, disabled }) {
   return (
@@ -2138,7 +2148,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
       </div>
       <div className="sched-entry-info">
         <div className="sched-entry-time-line">
-          <span className="sched-entry-time">{entry.time}</span>
+          <span className="sched-entry-time">{fmtSchedTime(entry.time)}</span>
           <span className="sched-entry-mode-label">{MODE_LABELS[entry.mode] || entry.mode}{tempStr}</span>
         </div>
         <div className="sched-entry-days">
@@ -2866,28 +2876,38 @@ function AdminUserSchedDetail({ user, schedules, climateEntities, perms, permBus
             <input type="checkbox" checked={allOn} disabled={permBusy} onChange={(ev) => toggleAll(user.username, ev.target.checked)} />
             All climate (current &amp; future)
           </label>
-          <div className="sched-perm-grid">
-            {climateEntities.map((e) => {
-              const eligible = userHasDevice(user, e.entity_id);
-              const on = eligible && (allOn || userPerms.has(e.entity_id));
-              return (
-                <button
-                  key={e.entity_id}
-                  type="button"
-                  className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
-                  onClick={() => eligible && !allOn && !permBusy && togglePerm(user.username, e.entity_id, !on)}
-                  disabled={!eligible || allOn}
-                  title={allOn && eligible ? 'Included by "All climate"' : (!eligible ? 'Needs device-control access first' : undefined)}
-                >
-                  <span className="sched-perm-cell-name">{e.name}</span>
-                  <span className="sched-perm-check">{!eligible ? '🔒' : on ? '✓' : ''}</span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="muted" style={{ fontSize: '0.78em', marginTop: 10 }}>
-            Locked devices require device-control access first (Users tab).
-          </p>
+          {allOn ? (
+            <p className="muted field-note">
+              {eligibleCount === 0
+                ? 'Any climate device this user can control will be schedulable, including ones added later.'
+                : `All ${eligibleCount} climate device${eligibleCount === 1 ? '' : 's'} this user can control are schedulable, including any added later.`}
+            </p>
+          ) : (
+            <>
+              <div className="sched-perm-grid">
+                {climateEntities.map((e) => {
+                  const eligible = userHasDevice(user, e.entity_id);
+                  const on = eligible && userPerms.has(e.entity_id);
+                  return (
+                    <button
+                      key={e.entity_id}
+                      type="button"
+                      className={`sched-perm-cell${on ? ' on' : ''}${!eligible ? ' locked' : ''}`}
+                      onClick={() => eligible && !permBusy && togglePerm(user.username, e.entity_id, !on)}
+                      disabled={!eligible}
+                      title={!eligible ? 'Needs device-control access first' : undefined}
+                    >
+                      <span className="sched-perm-cell-name">{e.name}</span>
+                      <span className="sched-perm-check">{!eligible ? '🔒' : on ? '✓' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="muted" style={{ fontSize: '0.78em', marginTop: 10 }}>
+                Locked devices require device-control access first (Users tab).
+              </p>
+            </>
+          )}
         </>
       )}
 
