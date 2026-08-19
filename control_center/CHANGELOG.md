@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.8
+- Schedule times now display in your locale's clock format (12-hour with AM/PM or
+  24-hour) instead of always showing 24-hour, so they follow Home Assistant's
+  default. Applies to the user and admin schedule views.
+- In the admin Schedules "By user" view, turning on **All climate** now collapses
+  the per-device grid to a short summary, the same as the user editor.
+
 ## 2.9.7
 - Fix: the device search when adding devices (to a list, a schedule's
   permissions, or a user's extras) showed at most 8 matches. It now shows every
