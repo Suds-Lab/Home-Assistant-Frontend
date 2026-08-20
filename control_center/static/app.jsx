@@ -1219,14 +1219,21 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
         </label>
         <label>
           Area
-          <select value={areaId} onChange={(e) => setAreaId(e.target.value)}>
-            <option value="">Unassigned</option>
-            {areas.map((a) => (
-              <option key={a.area_id} value={a.area_id}>
-                {a.floor ? `${a.floor} - ${a.name}` : a.name}
-              </option>
-            ))}
-          </select>
+          <SchedSearchableMenu
+            trigger={
+              <button type="button" className="user-filter">
+                {(() => {
+                  const cur = areas.find((a) => a.area_id === areaId);
+                  return cur ? (cur.floor ? `${cur.floor} - ${cur.name}` : cur.name) : 'Unassigned';
+                })()} ▾
+              </button>
+            }
+            items={[{ id: '', label: 'Unassigned' }, ...areas.map((a) => ({ id: a.area_id, label: a.floor ? `${a.floor} - ${a.name}` : a.name }))]}
+            selectedId={areaId || ''}
+            onSelect={(id) => setAreaId(id)}
+            placeholder="Search areas…"
+            emptyText="No areas match"
+          />
         </label>
         {device.entities && device.entities.length > 0 && (
           <p className="meta">{device.entities.length} entit{device.entities.length === 1 ? 'y' : 'ies'}: {device.entities.slice(0, 4).join(', ')}{device.entities.length > 4 ? '…' : ''}</p>
@@ -1634,28 +1641,30 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
             </select>
           </label>
         )}
-        {isNew && (
-          <label>
-            Floor
-            <select value={floorId} onChange={(e) => handleFloorChange(e.target.value)}>
-              <option value="">No floor</option>
-              {hasMultipleInstances
-                ? floorsByInstance.map(({ inst, floors: iFloors }) =>
-                    iFloors.length > 0 && (
-                      <optgroup key={inst.id || '__main'} label={inst.name}>
-                        {iFloors.map((f) => (
-                          <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
-                        ))}
-                      </optgroup>
-                    )
-                  )
-                : floors.map((f) => (
-                    <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
-                  ))
-              }
-            </select>
-          </label>
-        )}
+        {isNew && (() => {
+          const flat = hasMultipleInstances
+            ? floorsByInstance.flatMap(({ inst, floors: iFloors }) =>
+                iFloors.map((f) => ({ id: f.floor_id, label: f.name, sub: inst.name })))
+            : floors.map((f) => ({ id: f.floor_id, label: f.name }));
+          const curF = flat.find((f) => f.id === floorId);
+          return (
+            <label>
+              Floor
+              <SchedSearchableMenu
+                trigger={
+                  <button type="button" className="user-filter">
+                    {curF ? curF.label : 'No floor'} ▾
+                  </button>
+                }
+                items={[{ id: '', label: 'No floor' }, ...flat]}
+                selectedId={floorId}
+                onSelect={(id) => handleFloorChange(id)}
+                placeholder="Search floors…"
+                emptyText="No floors match"
+              />
+            </label>
+          );
+        })()}
         {err && <div className="error">{err}</div>}
         <div className="editor-actions">
           <button className="btn-primary" onClick={save} disabled={busy}>
@@ -1756,19 +1765,24 @@ function AreaOrganizer() {
                         )}
                       </span>
                     </div>
-                    {data.floors.filter((f) => f.instance === a.instance).length > 0 && (
-                      <select
-                        className="user-filter area-floor-select"
-                        value={a.floor_id || ''}
-                        onChange={(e) => move(a.area_id, e.target.value)}
-                        aria-label={`Floor for ${a.name}`}
-                      >
-                        <option value="">No floor</option>
-                        {data.floors.filter((f) => f.instance === a.instance).map((f) => (
-                          <option key={f.floor_id} value={f.floor_id}>{f.name}</option>
-                        ))}
-                      </select>
-                    )}
+                    {data.floors.filter((f) => f.instance === a.instance).length > 0 && (() => {
+                      const iFloors = data.floors.filter((f) => f.instance === a.instance);
+                      const curF = iFloors.find((f) => f.floor_id === a.floor_id);
+                      return (
+                        <SchedSearchableMenu
+                          trigger={
+                            <button type="button" className="user-filter area-floor-select" aria-label={`Floor for ${a.name}`}>
+                              {curF ? curF.name : 'No floor'} ▾
+                            </button>
+                          }
+                          items={[{ id: '', label: 'No floor' }, ...iFloors.map((f) => ({ id: f.floor_id, label: f.name }))]}
+                          selectedId={a.floor_id || ''}
+                          onSelect={(id) => move(a.area_id, id)}
+                          placeholder="Search floors…"
+                          emptyText="No floors match"
+                        />
+                      );
+                    })()}
                     <button
                       className="ghost icon-only org-edit"
                       title="Rename area"
@@ -5125,42 +5139,38 @@ function ActivityLog() {
           </button>
         </div>
         {items && users.length > 1 && (
-          <select
-            className="user-filter"
-            value={who}
-            onChange={(ev) => setWho(ev.target.value)}
-            aria-label="Filter by user"
-          >
-            <option value="">All users</option>
-            {users.map((u) => (
-              <option key={u.value} value={u.value}>
-                {u.label}
-              </option>
-            ))}
-          </select>
+          <SchedSearchableMenu
+            trigger={
+              <button type="button" className="user-filter" aria-label="Filter by user">
+                {who ? ((users.find((u) => u.value === who) || {}).label || who) : 'All users'} ▾
+              </button>
+            }
+            items={[{ id: '', label: 'All users' }, ...users.map((u) => ({ id: u.value, label: u.label }))]}
+            selectedId={who}
+            onSelect={(id) => setWho(id)}
+            placeholder="Search users…"
+            emptyText="No users match"
+          />
         )}
         {items && itemOpts.length > 0 && (
-          <details className="lb-multi">
-            <summary>{selItems.size ? `${selItems.size} item${selItems.size === 1 ? '' : 's'}` : 'All items'}</summary>
-            <div className="lb-menu">
-              {selItems.size > 0 && (
-                <button className="lb-menu-clear" onClick={() => setSelItems(new Set())}>
-                  Clear selection
-                </button>
-              )}
-              {itemOpts.map((it) => (
-                <label key={it.id} className="lb-menu-row">
-                  <input
-                    type="checkbox"
-                    checked={selItems.has(it.id)}
-                    onChange={() => toggleItem(it.id)}
-                  />
-                  <DomainIcon domain={it.domain} />
-                  <span>{it.label}</span>
-                </label>
-              ))}
-            </div>
-          </details>
+          <SchedSearchableMenu
+            multi
+            trigger={
+              <button type="button" className="user-filter" aria-label="Filter by device">
+                {selItems.size ? `${selItems.size} item${selItems.size === 1 ? '' : 's'}` : 'All items'} ▾
+              </button>
+            }
+            items={itemOpts.map((it) => ({ id: it.id, label: it.label }))}
+            selectedIds={selItems}
+            onToggle={toggleItem}
+            placeholder="Search devices…"
+            emptyText="No devices match"
+            footer={selItems.size > 0 ? (
+              <button className="sched-menu-create" onClick={() => setSelItems(new Set())}>
+                Clear selection
+              </button>
+            ) : null}
+          />
         )}
       </div>
 

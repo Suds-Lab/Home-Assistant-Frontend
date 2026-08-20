@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.11
+- The device and user filters in the History tab, the floor pickers in Organize
+  (Areas & Floors), and the area picker when editing a device are now searchable
+  dropdowns (the same kind the scheduler uses). When the list is long, just start
+  typing to narrow it down.
+
 ## 2.9.10
 - Schedules now double-check themselves. Some thermostats (Honeywell is a common
   culprit) don't always accept a change the first time. They look like they took
