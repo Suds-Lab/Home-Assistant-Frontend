@@ -483,6 +483,14 @@ Events are edge-triggered: a thermostat holds whatever state the last fired
 event set until the next event fires. The scheduler checks for events every
 30 seconds.
 
+**Self-verifying:** some thermostats (e.g. Honeywell) don't always apply a change
+on the first command, and quietly revert. For about 10 minutes after an event
+fires, the scheduler keeps checking that the thermostat's live mode and
+temperature match what the schedule set, and re-sends the command (at most once
+every couple of minutes) if they don't. A change that didn't take fixes itself.
+The window is short on purpose, so it won't override a manual change you make
+later.
+
 ## Lists
 
 Every user can create their own **lists** to organise their devices - handy when

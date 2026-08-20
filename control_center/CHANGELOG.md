@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.10
+- Schedules now double-check themselves. Some thermostats (Honeywell is a common
+  culprit) don't always accept a change the first time. They look like they took
+  it, then quietly snap back. So for about 10 minutes after a schedule runs,
+  Control Center keeps an eye on the thermostat and sends the setting again if it
+  didn't stick. That short window is deliberate: it lets a schedule fix itself
+  without stepping on a change you make by hand later on.
+
 ## 2.9.9
 - Fix: after you tapped a control, the card briefly ignored incoming states to
   avoid a stale reading bouncing it back. That hold could also hide a genuine

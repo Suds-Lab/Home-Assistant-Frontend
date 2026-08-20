@@ -30,12 +30,22 @@ _MODE_DISPLAY = {
 # changes nothing and must not be logged as if the owner acted on it.
 _OFFLINE_STATES = (None, "unavailable", "unknown")
 
+# Some thermostats (e.g. Honeywell) don't take a change on the first command -
+# HA shows it, then polls the device and bounces it back. After an event fires we
+# keep an eye on the target for a short window and re-send if its live mode/temp
+# drifts from what the schedule set. The window is deliberately short so we heal a
+# bounce-back (which happens within minutes) without fighting a later MANUAL
+# override. Touched only by the single scheduler thread, so no lock is needed.
+_pending = {}  # target -> {mode, temp, fan, sched_id, name, owner, first_ts, last_try}
+_VERIFY_WINDOW_SECS = 600   # keep verifying for ~10 min after a fire
+_VERIFY_RETRY_SECS = 120    # re-send at most every ~2 min per target
+_VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
 
-def _fire_event(sched, entry, target):
+
+def _send_climate(target, mode, temp, fan):
+    """Issue the HA climate service calls for one target. Shared by the initial
+    fire and the verification re-send so they behave identically."""
     from ha import call_service, split_instance_entity
-    mode = entry.get("mode", "heat")
-    temp = entry.get("temp")
-    fan = entry.get("fan")
 
     # Targets are stored namespaced for remote entities (e.g. "garage:climate.ac").
     # Split so the command routes to the owning instance; without this the call
@@ -52,6 +62,14 @@ def _fire_event(sched, entry, target):
         if fan:
             call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
 
+
+def _fire_event(sched, entry, target):
+    mode = entry.get("mode", "heat")
+    temp = entry.get("temp")
+    fan = entry.get("fan")
+
+    _send_climate(target, mode, temp, fan)
+
     # The service calls above succeeded (or we'd have raised). Record it in the
     # activity log - but only if the thermostat is actually online, so a schedule
     # firing at an offline device doesn't show up as if its owner changed it.
@@ -59,6 +77,16 @@ def _fire_event(sched, entry, target):
     state = (STATE_CACHE.get(target) or {}).get("state")
     if state not in _OFFLINE_STATES:
         _log_scheduled(sched, entry, target)
+
+    # Watch this target for a short window and re-send if the thermostat drifts
+    # from what we just set (see _verify_pending). A new fire for the same target
+    # overwrites the prior entry - the latest event wins.
+    now = time.time()
+    _pending[target] = {
+        "mode": mode, "temp": temp, "fan": fan,
+        "sched_id": sched.get("id"), "name": sched.get("name") or "Schedule",
+        "owner": sched.get("owner"), "first_ts": now, "last_try": now,
+    }
 
 
 def _log_scheduled(sched, entry, target):
@@ -103,6 +131,50 @@ def _log_scheduled(sched, entry, target):
     })
 
 
+def _matches_desired(target, mode, temp):
+    """Whether the target's live state already matches the scheduled mode/temp.
+    Returns None when the device is offline (can't tell), True/False otherwise."""
+    from core import STATE_CACHE
+    st = STATE_CACHE.get(target) or {}
+    cur = st.get("state")
+    if cur in _OFFLINE_STATES:
+        return None
+    want = "off" if mode == "off" else _MODE_TO_HVAC.get(mode, mode)
+    if cur != want:
+        return False
+    if mode != "off" and temp is not None:
+        cur_temp = (st.get("attributes") or {}).get("temperature")
+        if cur_temp is None or abs(float(cur_temp) - float(temp)) > _VERIFY_TEMP_TOL:
+            return False
+    return True
+
+
+def _verify_pending(schedules):
+    """For each recently-fired target still inside its verification window, re-send
+    the scheduled mode/temp if the thermostat has drifted from it (rate-limited).
+    Drops entries once the window closes or their schedule is gone/disabled."""
+    if not _pending:
+        return
+    now = time.time()
+    enabled_ids = {s.get("id") for s in schedules if s.get("enabled", True)}
+    for target in list(_pending.keys()):
+        p = _pending[target]
+        if now - p["first_ts"] > _VERIFY_WINDOW_SECS or p["sched_id"] not in enabled_ids:
+            _pending.pop(target, None)  # window closed, or schedule disabled/removed
+            continue
+        m = _matches_desired(target, p["mode"], p["temp"])
+        if m is None or m:
+            continue  # offline (can't tell) or already correct - leave it watching
+        if now - p["last_try"] < _VERIFY_RETRY_SECS:
+            continue  # drifted, but re-sent too recently - wait
+        p["last_try"] = now
+        try:
+            _send_climate(target, p["mode"], p["temp"], p["fan"])
+            print(f"[scheduler] re-applying {p['name']} on {target} (drifted from schedule)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[scheduler] error re-applying on {target}: {exc}")
+
+
 def _scheduler_loop():
     from store import load_schedules
     last_hhmm = None
@@ -111,10 +183,10 @@ def _scheduler_loop():
             now = datetime.now()
             hhmm = now.strftime("%H:%M")
             dow = now.weekday()  # 0=Mon..6=Sun, matching data shape
+            schedules = load_schedules()
             # Only fire once per minute even if we wake up multiple times in it
             if hhmm != last_hhmm:
                 last_hhmm = hhmm
-                schedules = load_schedules()
                 for sched in schedules:
                     if not sched.get("enabled", True):
                         continue
@@ -128,6 +200,8 @@ def _scheduler_loop():
                                 _fire_event(sched, entry, target)
                             except Exception as exc:  # noqa: BLE001
                                 print(f"[scheduler] error firing {entry.get('id')} on {target}: {exc}")
+            # Every tick: re-apply any recently-fired target that didn't take.
+            _verify_pending(schedules)
         except Exception as exc:  # noqa: BLE001
             print(f"[scheduler] loop error: {exc}")
         time.sleep(30)

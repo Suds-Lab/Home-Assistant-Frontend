@@ -2003,7 +2003,7 @@ function daySegments(entries, dayIdx, tMin, tMax) {
 }
 
 const DAY_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const MODE_ABBR = { off: '–', cool: '❄', heat: '▲', auto: '⇅', dry: '∼', fan: '≈' };
+const MODE_ABBR = { off: '-', cool: '❄', heat: '▲', auto: '⇅', dry: '∼', fan: '≈' };
 
 /* Format a stored "HH:MM" (always 24h internally) for display, following the
    viewer's locale - so it shows 12h AM/PM or 24h to match Home Assistant's
