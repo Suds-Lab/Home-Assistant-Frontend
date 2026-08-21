@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.12
+- Backups now include your climate schedules, the per-user scheduling
+  permissions, and per-user device lists. Before, Export and Restore only covered
+  users, settings, and the activity log, so a reinstall silently lost all of your
+  schedules. Restoring a backup made by an older version leaves the current
+  schedules and lists untouched rather than clearing them.
+
 ## 2.9.11
 - The device and user filters in the History tab, the floor pickers in Organize
   (Areas & Floors), and the area picker when editing a device are now searchable
