@@ -48,7 +48,13 @@ from store import (
     cfg_title,
     enabled_domains,
     included_entities,
+    load_lists,
+    load_schedule_perms,
+    load_schedules,
     load_users,
+    save_lists,
+    save_schedule_perms,
+    save_schedules,
     save_users,
 )
 
@@ -453,14 +459,19 @@ BACKUP_VERSION = 1
 @bp.get("/api/admin/export")
 def admin_export():
     """Download everything in /data as one JSON file: users (with passwords),
-    device assignments, settings, the activity log and the uploaded app icon.
-    Restoring it after a reinstall brings the add-on back exactly as it was."""
+    device assignments, settings, climate schedules and their per-user
+    scheduling permissions, per-user device lists, the activity log and the
+    uploaded app icon. Restoring it after a reinstall brings the add-on back
+    exactly as it was."""
     require_admin()
     data = {
         "type": BACKUP_TYPE,
         "version": BACKUP_VERSION,
         "users": load_users(),
         "settings": _load_settings(),
+        "schedules": load_schedules(),
+        "schedule_perms": load_schedule_perms(),
+        "lists": load_lists(),
     }
     # The activity log can be large and is disposable - allow excluding it
     # with ?activity=0 (omitted entirely so restoring won't clear an existing log).
@@ -483,7 +494,7 @@ def admin_export():
 @bp.post("/api/admin/import")
 def admin_import():
     """Restore a backup produced by /api/admin/export. Replaces all current
-    users, assignments and settings."""
+    users, assignments, settings, schedules, scheduling permissions and lists."""
     require_admin()
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or body.get("type") != BACKUP_TYPE:
@@ -506,6 +517,20 @@ def admin_import():
     settings = body.get("settings")
     if isinstance(settings, dict):
         _save_settings(settings)
+
+    # Restore each store only if the backup carries it, so an older backup that
+    # predates these features leaves the current data untouched instead of wiping it.
+    schedules = body.get("schedules")
+    if isinstance(schedules, list):
+        save_schedules(schedules)
+
+    schedule_perms = body.get("schedule_perms")
+    if isinstance(schedule_perms, dict):
+        save_schedule_perms(schedule_perms)
+
+    lists = body.get("lists")
+    if isinstance(lists, dict):
+        save_lists(lists)
 
     activity = body.get("activity")
     if isinstance(activity, list):
