@@ -560,6 +560,7 @@ def admin_import():
 def admin_list_users():
     require_admin()
     safe = [User.from_dict(u).to_api() for u in load_users()]
+    safe.sort(key=lambda u: (u.get("displayName") or u.get("username") or "").lower())
     return jsonify(users=safe)
 
 

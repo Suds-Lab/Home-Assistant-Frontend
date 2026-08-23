@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.13
+- Users, schedules, and lists now show in alphabetical order wherever they're
+  listed (the admin Users tab, the schedule switcher and admin Schedules view,
+  the History user filter, and the dashboard list chips), so they're easier to
+  find as they grow.
+
 ## 2.9.12
 - Backups now include your climate schedules, the per-user scheduling
   permissions, and per-user device lists. Before, Export and Restore only covered

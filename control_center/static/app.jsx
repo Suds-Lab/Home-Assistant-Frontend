@@ -5046,6 +5046,7 @@ function ActivityLog() {
       }
     }
     itemOpts.sort((a, b) => a.label.localeCompare(b.label));
+    users.sort((a, b) => a.label.localeCompare(b.label));
   }
 
   const startMs = start.getTime();
