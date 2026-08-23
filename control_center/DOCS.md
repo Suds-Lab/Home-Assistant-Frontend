@@ -294,7 +294,7 @@ Supervisor proxy using its auto-injected token.
 The sidebar **Control Center** tab opens the management screen directly, the
 single source of truth (saved to `/data`). Add, edit, and remove users, and
 tick each person's devices from a searchable list of your real HA entities. The
-system won't let you remove the last admin.
+system won't let you remove the last admin. Users are listed alphabetically.
 
 To give **one** user a device whose **type is turned off** (e.g. a single
 `switch.*`), use **Add a specific device** in their editor; it searches every
@@ -440,7 +440,7 @@ instantly (and shows the last-seen state offline).
 ## Climate scheduling
 
 Users can automate their thermostats through the **Schedules** item in the
-profile menu.
+profile menu. Schedules are listed alphabetically by name.
 
 ### Admin setup
 
@@ -498,7 +498,8 @@ later.
 
 Every user can create their own **lists** to organise their devices - handy when
 you have a lot of them or want to sort them differently than by Type, Area, or
-Floor. Open the account menu (the avatar, top-right) and choose **Lists**:
+Floor. Open the account menu (the avatar, top-right) and choose **Lists**. Lists
+are shown in alphabetical order:
 
 - **Create** a list by name; make as many as you like.
 - **Edit devices** on a list to add or remove any of your devices (a device can

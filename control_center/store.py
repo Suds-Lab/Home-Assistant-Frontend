@@ -236,7 +236,10 @@ SCHEDULE_PERMS_FILE = ICON_DIR / "schedule_perms.json"
 def load_schedules():
     try:
         data = json.loads(SCHEDULES_FILE.read_text())
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        data.sort(key=lambda s: (s.get("name") or "").lower())  # alphabetical for display
+        return data
     except (OSError, ValueError):
         return []
 
@@ -272,7 +275,12 @@ LISTS_FILE = ICON_DIR / "lists.json"
 def load_lists():
     try:
         data = json.loads(LISTS_FILE.read_text())
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        for lst in data.values():  # each user's lists, alphabetical for display
+            if isinstance(lst, list):
+                lst.sort(key=lambda x: (x.get("name") or "").lower())
+        return data
     except (OSError, ValueError):
         return {}
 
