@@ -130,6 +130,78 @@ function useOpenHaptic(ms = 8) {
   React.useEffect(() => { haptic(ms); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+// A firmer, longer buzz to signal a rejection (distinct from the light tap).
+function hapticError() {
+  try {
+    if (localStorage.getItem(HAPTICS_KEY) === '0') return;
+    _lastHaptic = Date.now(); // count against the throttle so a stray tap can't stack
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([60, 45, 90]); // buzz, pause, longer buzz
+      return;
+    }
+    if (!_coarsePointer) return;
+    const el = _iosHapticEl(); // iOS: two quick taps stand in for a long buzz
+    if (el) { el.click(); setTimeout(() => el.click(), 110); }
+  } catch { /* ignore */ }
+}
+
+// A quick spring-scale "pop" on tap, for icon toggles that have no open/close of
+// their own (theme, compact view). Runs via the Web Animations API so it never
+// disturbs any CSS animation the element already carries.
+function tapPop(el) {
+  try {
+    if (!el || typeof el.animate !== 'function') return;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate(
+      [{ transform: 'scale(0.82)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }],
+      { duration: 260, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
+    );
+  } catch { /* ignore */ }
+}
+
+// A firm left-right shake to reject something (e.g. a bad password). Web Animations
+// API so it runs independently of whatever CSS entrance the element already has.
+function shakeEl(el) {
+  try {
+    if (!el || typeof el.animate !== 'function') return;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate(
+      [
+        { transform: 'translateX(0)' }, { transform: 'translateX(-14px)' },
+        { transform: 'translateX(12px)' }, { transform: 'translateX(-9px)' },
+        { transform: 'translateX(6px)' }, { transform: 'translateX(-3px)' },
+        { transform: 'translateX(0)' },
+      ],
+      { duration: 450, easing: 'ease-in-out' }
+    );
+  } catch { /* ignore */ }
+}
+
+// Keep a surface mounted for `ms` after it's told to close, so a `.closing` class
+// can play an exit animation before it unmounts. For surfaces that own their
+// open state (the menus).
+function usePresence(open, ms = 160) {
+  const [mounted, setMounted] = React.useState(open);
+  React.useEffect(() => {
+    if (open) { setMounted(true); return undefined; }
+    const t = setTimeout(() => setMounted(false), ms);
+    return () => clearTimeout(t);
+  }, [open, ms]);
+  return mounted;
+}
+
+// Wrap a parent-supplied onClose so a modal can play its `.closing` exit before
+// the parent unmounts it. Returns { closing, close }.
+function useDismiss(onClose, ms = 160) {
+  const [closing, setClosing] = React.useState(false);
+  const t = React.useRef(null);
+  const close = React.useCallback(() => {
+    setClosing((c) => (c ? c : ((t.current = setTimeout(onClose, ms)), true)));
+  }, [onClose, ms]);
+  React.useEffect(() => () => clearTimeout(t.current), []);
+  return { closing, close };
+}
+
 let _hapticsBound = false;
 function bindHaptics() {
   if (_hapticsBound || typeof document === 'undefined') return;
@@ -1198,6 +1270,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
 // Quick edit dialog for a device: rename + reassign area (writes to HA).
 function DeviceEditDialog({ device, areas, onClose, onSave }) {
   useOpenHaptic();
+  const { closing, close } = useDismiss(onClose);
   const [name, setName] = useState(device.name || '');
   const [areaId, setAreaId] = useState(device.area_id || '');
   const [busy, setBusy] = useState(false);
@@ -1208,7 +1281,7 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
     setErr('');
     try {
       await onSave(device.id, { name: name.trim(), area_id: areaId || null });
-      onClose();
+      close();
     } catch (e) {
       setErr(e.message);
       setBusy(false);
@@ -1216,11 +1289,11 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+    <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={close}>
+      <div className={`card modal modal-form${closing ? ' closing' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Edit device</h3>
-          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+          <button className="ghost icon-only" onClick={close} aria-label="Close">✕</button>
         </div>
         <label>
           Name
@@ -1252,7 +1325,7 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
           <button className="btn-primary" onClick={save} disabled={busy}>
             {busy ? 'Saving…' : 'Save'}
           </button>
-          <button className="ghost" onClick={onClose} disabled={busy}>
+          <button className="ghost" onClick={close} disabled={busy}>
             Cancel
           </button>
         </div>
@@ -1284,6 +1357,8 @@ function joinNatural(items) {
 // Self-service "Change password" dialog (local accounts only).
 function ChangePasswordDialog({ rules, onClose }) {
   useOpenHaptic();
+  const { closing, close } = useDismiss(onClose);
+  const modalRef = useRef(null);
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -1292,11 +1367,18 @@ function ChangePasswordDialog({ rules, onClose }) {
   const [done, setDone] = useState(false);
   const reqs = passwordRuleList(rules);
 
+  // Reject: show the message, buzz, and shake the dialog.
+  function reject(msg) {
+    setErr(msg);
+    hapticError();
+    shakeEl(modalRef.current);
+  }
+
   async function submit(e) {
     e.preventDefault();
     setErr('');
     if (next !== confirm) {
-      setErr('The new passwords do not match.');
+      reject('The new passwords do not match.');
       return;
     }
     setBusy(true);
@@ -1304,23 +1386,23 @@ function ChangePasswordDialog({ rules, onClose }) {
       await changeMyPassword({ current: cur, new: next });
       setDone(true);
     } catch (e2) {
-      setErr(e2.message);
+      reject(e2.message);
       setBusy(false);
     }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+    <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={close}>
+      <div className={`card modal modal-form${closing ? ' closing' : ''}`} ref={modalRef} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Change password</h3>
-          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+          <button className="ghost icon-only" onClick={close} aria-label="Close">✕</button>
         </div>
         {done ? (
           <>
             <p className="meta">Your password has been changed.</p>
             <div className="editor-actions">
-              <button className="btn-primary" onClick={onClose}>Done</button>
+              <button className="btn-primary" onClick={close}>Done</button>
             </div>
           </>
         ) : (
@@ -1346,7 +1428,7 @@ function ChangePasswordDialog({ rules, onClose }) {
               <button type="submit" className="btn-primary" disabled={busy}>
                 {busy ? 'Saving…' : 'Change password'}
               </button>
-              <button type="button" className="ghost" onClick={onClose} disabled={busy}>
+              <button type="button" className="ghost" onClick={close} disabled={busy}>
                 Cancel
               </button>
             </div>
@@ -1583,6 +1665,7 @@ function MdiIcon({ icon, size = 22, className = '' }) {
 // Create a new area or rename an existing one (and pick a floor when creating).
 function AreaEditDialog({ area, floors, onClose, onSave }) {
   useOpenHaptic();
+  const { closing, close } = useDismiss(onClose);
   const isNew = !area.area_id;
   const [name, setName] = useState(area.name || '');
   const [floorId, setFloorId] = useState(area.floor_id || '');
@@ -1618,7 +1701,7 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
         ? { name: name.trim(), floor_id: floorId || null, instance: floorId ? undefined : instanceId }
         : { area_id: area.area_id, name: name.trim() };
       await onSave(fields);
-      onClose();
+      close();
     } catch (e) {
       setErr(e.message);
       setBusy(false);
@@ -1632,11 +1715,11 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
   })) : [];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="card modal modal-form" onClick={(e) => e.stopPropagation()}>
+    <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={close}>
+      <div className={`card modal modal-form${closing ? ' closing' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? 'New area' : 'Rename area'}</h3>
-          <button className="ghost icon-only" onClick={onClose} aria-label="Close">✕</button>
+          <button className="ghost icon-only" onClick={close} aria-label="Close">✕</button>
         </div>
         <label>
           Name
@@ -1681,7 +1764,7 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
           <button className="btn-primary" onClick={save} disabled={busy}>
             {busy ? 'Saving…' : isNew ? 'Create' : 'Save'}
           </button>
-          <button className="ghost" onClick={onClose} disabled={busy}>
+          <button className="ghost" onClick={close} disabled={busy}>
             Cancel
           </button>
         </div>
@@ -1903,19 +1986,20 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
+  const menuMounted = usePresence(open);
   return (
     <div className="account" ref={ref}>
       <button
         className="account-btn"
-        onClick={() => setOpen((o) => { if (!o) haptic(8); return !o; })}
+        onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
         title={name || 'Account'}
       >
         <Avatar name={name} picture={picture} />
       </button>
-      {open && (
-        <div className="account-menu" role="menu">
+      {menuMounted && (
+        <div className={`account-menu${open ? '' : ' closing'}`} role="menu">
           {name && <div className="account-head">{name}</div>}
           {canChangePassword && (
             <button role="menuitem" onClick={() => { setOpen(false); onChangePassword(); }}>
@@ -2112,11 +2196,12 @@ function SchedSearchableMenu({
     }
   }
 
+  const menuMounted = usePresence(open);
   return (
     <div className="sched-smenu-wrap" ref={wrapRef}>
-      {React.cloneElement(trigger, { onClick: () => setOpen((o) => { if (!o) haptic(8); return !o; }), 'aria-expanded': open })}
-      {open && (
-        <div className="sched-smenu">
+      {React.cloneElement(trigger, { onClick: () => setOpen((o) => !o), 'aria-expanded': open })}
+      {menuMounted && (
+        <div className={`sched-smenu${open ? '' : ' closing'}`}>
           <div className="sched-smenu-search">
             <span className="sched-smenu-search-icon">&#9906;</span>
             <input
@@ -2228,7 +2313,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2260,7 +2345,7 @@ function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affect
   }
 
   return (
-    <div className="sched-sheet">
+    <div className={`sched-sheet${closing ? ' closing' : ''}`}>
       <div className="sched-sheet-topbar">
         <button className="ghost" onClick={onCancel} type="button">Cancel</button>
         <h3 className="sched-sheet-title">{entry?.id ? 'Edit event' : 'Add event'}</h3>
@@ -2343,9 +2428,16 @@ function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affect
 function SchedMyView({ entities, schedules, setSchedules }) {
   const [selId, setSelId] = React.useState(null);
   const [editEntry, setEditEntry] = React.useState(null);
+  const [sheetClosing, setSheetClosing] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const nameInputRef = React.useRef(null);
+
+  // Close the editor sheet with its slide-down exit, then unmount it.
+  const closeSheet = React.useCallback(() => {
+    setSheetClosing(true);
+    setTimeout(() => { setSheetClosing(false); setEditEntry(null); }, 220);
+  }, []);
 
   React.useEffect(() => {
     if (schedules && schedules.length && !selId) setSelId(schedules[0].id);
@@ -2401,7 +2493,7 @@ function SchedMyView({ entities, schedules, setSchedules }) {
       ? sched.entries.map((e) => (e.id === entryData.id ? entryData : e))
       : [...sched.entries, entryData];
     await patchSched(sched.id, { entries });
-    setEditEntry(null);
+    closeSheet();
   }
 
   async function deleteEntry(entryId) {
@@ -2534,14 +2626,15 @@ function SchedMyView({ entities, schedules, setSchedules }) {
       )}
 
       {editEntry !== null && (
-        <div className="sched-overlay" onClick={(e) => e.target === e.currentTarget && setEditEntry(null)}>
+        <div className={`sched-overlay${sheetClosing ? ' closing' : ''}`} onClick={(e) => e.target === e.currentTarget && closeSheet()}>
           <SchedEntryEditor
             entry={editEntry.id ? editEntry : null}
+            closing={sheetClosing}
             schedName={sched?.name}
             affects={Math.max(0, (sched?.targets || []).length - 1)}
             onSave={saveEntry}
-            onCancel={() => setEditEntry(null)}
-            onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); setEditEntry(null); } : null}
+            onCancel={closeSheet}
+            onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
           />
         </div>
@@ -3682,7 +3775,7 @@ function Dashboard({
           {view === 'none' && devices.length > 4 && (
             <button
               className="ghost icon-only"
-              onClick={toggleCompact}
+              onClick={(e) => { tapPop(e.currentTarget); toggleCompact(); }}
               title={compact ? 'Comfortable view' : 'Compact view'}
               aria-pressed={compact}
             >
@@ -5613,7 +5706,7 @@ function ThemeToggle() {
   return (
     <button
       className="ghost icon-only"
-      onClick={() => setPref(next)}
+      onClick={(e) => { tapPop(e.currentTarget); setPref(next); }}
       title={title}
       aria-label={title}
     >
