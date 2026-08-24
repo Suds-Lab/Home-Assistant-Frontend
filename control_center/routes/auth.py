@@ -118,7 +118,11 @@ def change_my_password():
         raise ApiError("Too many attempts. Please wait a few minutes and try again.", 429)
     if not verify_password(user.get("password"), current):
         _login_note_fail(key)
-        raise ApiError("Current password is incorrect.", 401)
+        # 403, not 401: the session is perfectly valid, it's the *current
+        # password* that's wrong. A 401 here would trip the client's
+        # session-expired handler and silently log the user out instead of
+        # showing the error.
+        raise ApiError("Current password is incorrect.", 403)
     _login_clear(key)
     problems = _password_problems(new)
     if problems:

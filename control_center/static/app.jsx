@@ -405,6 +405,7 @@ function Login({
   // redirect (the `notice` prop), or raised by a fresh login attempt below.
   const [expired, setExpired] = useState(notice || '');
   const [busy, setBusy] = useState(false);
+  const cardRef = useRef(null);
 
   async function submit(e) {
     e.preventDefault();
@@ -415,8 +416,14 @@ function Login({
       const { token, displayName } = await login(username, password);
       onLogin(token, displayName);
     } catch (err) {
-      if (err.expired) setExpired(err.message);
-      else setError(err.message);
+      if (err.expired) {
+        setExpired(err.message);
+      } else {
+        // Wrong credentials: same rejection as the password-change dialog.
+        setError(err.message);
+        hapticError();
+        shakeEl(cardRef.current);
+      }
     } finally {
       setBusy(false);
     }
@@ -429,7 +436,7 @@ function Login({
 
   return (
     <div className="centered">
-      <div className="card login">
+      <div className="card login" ref={cardRef}>
         <h1><BrandIcon icon={appIcon} image={appImage} /> {title}</h1>
         <p className="muted">Sign in to control your lights and AC</p>
 
@@ -1307,7 +1314,7 @@ function DeviceEditDialog({ device, areas, onClose, onSave }) {
                 {(() => {
                   const cur = areas.find((a) => a.area_id === areaId);
                   return cur ? (cur.floor ? `${cur.floor} - ${cur.name}` : cur.name) : 'Unassigned';
-                })()} ▾
+                })()} <span className="sm-caret">▾</span>
               </button>
             }
             items={[{ id: '', label: 'Unassigned' }, ...areas.map((a) => ({ id: a.area_id, label: a.floor ? `${a.floor} - ${a.name}` : a.name }))]}
@@ -1747,7 +1754,7 @@ function AreaEditDialog({ area, floors, onClose, onSave }) {
               <SchedSearchableMenu
                 trigger={
                   <button type="button" className="user-filter">
-                    {curF ? curF.label : 'No floor'} ▾
+                    {curF ? curF.label : 'No floor'} <span className="sm-caret">▾</span>
                   </button>
                 }
                 items={[{ id: '', label: 'No floor' }, ...flat]}
@@ -1866,7 +1873,7 @@ function AreaOrganizer() {
                         <SchedSearchableMenu
                           trigger={
                             <button type="button" className="user-filter area-floor-select" aria-label={`Floor for ${a.name}`}>
-                              {curF ? curF.name : 'No floor'} ▾
+                              {curF ? curF.name : 'No floor'} <span className="sm-caret">▾</span>
                             </button>
                           }
                           items={[{ id: '', label: 'No floor' }, ...iFloors.map((f) => ({ id: f.floor_id, label: f.name }))]}
@@ -5371,7 +5378,7 @@ function ActivityLog() {
           <SchedSearchableMenu
             trigger={
               <button type="button" className="user-filter" aria-label="Filter by user">
-                {who ? ((users.find((u) => u.value === who) || {}).label || who) : 'All users'} ▾
+                {who ? ((users.find((u) => u.value === who) || {}).label || who) : 'All users'} <span className="sm-caret">▾</span>
               </button>
             }
             items={[{ id: '', label: 'All users' }, ...users.map((u) => ({ id: u.value, label: u.label }))]}
@@ -5386,7 +5393,7 @@ function ActivityLog() {
             multi
             trigger={
               <button type="button" className="user-filter" aria-label="Filter by device">
-                {selItems.size ? `${selItems.size} item${selItems.size === 1 ? '' : 's'}` : 'All items'} ▾
+                {selItems.size ? `${selItems.size} item${selItems.size === 1 ? '' : 's'}` : 'All items'} <span className="sm-caret">▾</span>
               </button>
             }
             items={itemOpts.map((it) => ({ id: it.id, label: it.label }))}
