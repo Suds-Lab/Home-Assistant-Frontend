@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.9.14
+- Schedules now stand down when a person takes over. If someone changes a
+  thermostat (in Home Assistant directly, or through Control Center) after a
+  schedule fired, the schedule stops re-applying to that device until its next
+  event, so it won't fight you. A change with no person behind it (a device
+  quietly bouncing back on its own) is still treated as a miss and re-applied.
+- The add-on log now shows detailed climate-scheduling diagnostics, so you can
+  see exactly what the scheduler is doing and why. Every fire is logged with the
+  device's state before and after and how long the command took; failures, offline
+  devices, drift re-applies, and disabled schedules are all called out; and the
+  log warns when the loop skipped one or more minutes (for example because a slow
+  command blocked it or the add-on was down), which means events in that window
+  did not fire. Thermostat mode and setpoint changes are logged too, so a change
+  that didn't take (or bounced back) is visible. Lines are tagged `[sched]` and
+  `[device]` for easy filtering.
+
 ## 2.9.13
 - Users, schedules, and lists now show in alphabetical order wherever they're
   listed (the admin Users tab, the schedule switcher and admin Schedules view,

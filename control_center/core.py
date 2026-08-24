@@ -210,6 +210,28 @@ def _ws_loop(instance_id=None):
                     if instance_id:
                         new["_instance"] = instance_id
                     STATE_CACHE[fid] = new
+                # Diagnostics: log thermostat mode / setpoint changes (skip the
+                # noisy current-temperature-only updates) so a schedule's effect,
+                # and any bounce-back, is visible next to the [sched] log lines.
+                if eid.startswith("climate."):
+                    old = data.get("old_state") or {}
+                    o_s, n_s = old.get("state"), (new.get("state") if new else None)
+                    o_t = (old.get("attributes") or {}).get("temperature")
+                    n_t = (new.get("attributes") or {}).get("temperature") if new else None
+                    if o_s != n_s or o_t != n_t:
+                        o_str = f"{o_s}" + (f" {o_t}°" if o_t is not None else "")
+                        n_str = f"{n_s}" + (f" {n_t}°" if n_t is not None else "")
+                        # If a real HA user made this change (and it wasn't our own
+                        # command echoing back), tell the scheduler so it stops
+                        # enforcing the schedule on this device (the person wins).
+                        uid = (new.get("context") or {}).get("user_id") if new else None
+                        by = ""
+                        if uid:
+                            import scheduler
+                            if not scheduler.was_recently_commanded(fid):
+                                scheduler.note_user_change(fid, who=uid)
+                                by = " (by user)"
+                        print(f"[device {time.strftime('%Y-%m-%d %H:%M:%S')}] {fid}: {o_str} -> {n_str}{by}", flush=True)
                 if data.get("old_state") is None and new is not None:
                     _invalidate_registries(instance_id)
                 _broadcast(fid, new)
