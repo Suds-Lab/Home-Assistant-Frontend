@@ -2261,8 +2261,8 @@ img.install-icon {
 /* ---- Jelly entrances: menus, popups, dialogs and sheets spring into view,
    sharing the same overshoot curve as the drag reorder above. ---- */
 @keyframes cc-pop-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.94); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes cc-modal-in {
   from { opacity: 0; transform: scale(0.9); }
@@ -2278,9 +2278,15 @@ img.install-icon {
 }
 .account-menu, .sched-smenu, .chips-menu {
   animation: cc-pop-in 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: top center;
+  transform-origin: top left; /* grow out of the trigger, so the motion reads clearly */
 }
 .account-menu { transform-origin: top right; }
+
+/* The dropdown caret flips up while its menu is open, so the trigger itself
+   responds (not just the panel). */
+.sm-caret { display: inline-block; transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.sched-smenu-wrap button[aria-expanded="true"] .sm-caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .sm-caret { transition: none; } }
 .modal { animation: cc-modal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .modal-overlay, .sched-overlay { animation: cc-overlay-in 0.18s ease; }
 .sched-sheet {
@@ -2292,7 +2298,7 @@ img.install-icon {
 }
 
 /* ...and reverse on the way out (quick, no overshoot) so closing is animated too. */
-@keyframes cc-pop-out { to { opacity: 0; transform: translateY(-6px) scale(0.94); } }
+@keyframes cc-pop-out { to { opacity: 0; transform: scale(0.6); } }
 @keyframes cc-modal-out { to { opacity: 0; transform: scale(0.92); } }
 @keyframes cc-sheet-out { to { transform: translateY(100%); } }
 @keyframes cc-overlay-out { to { opacity: 0; } }

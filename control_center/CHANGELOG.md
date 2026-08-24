@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.19
+- Fixed a real problem with **changing your password**: entering the wrong
+  current password used to silently log you out instead of telling you it was
+  wrong. Now it stays put, shakes, and shows "Current password is incorrect.",
+  and only a correct current password goes through.
+- A **wrong password on the login screen** now shakes and gives the same firmer
+  buzz, instead of just quietly showing the message.
+- **Dropdowns** now clearly grow open and shrink closed out of the button they
+  belong to, and their little arrow flips up while the menu is open, so opening a
+  picker is something you can actually see rather than a tiny static arrow.
+
 ## 2.9.18
 - More of that springy feel throughout. Menus, dialogs and the schedule editor
   now animate **closed** too (not just open), so dismissing them feels as smooth
