@@ -86,6 +86,34 @@ def update_list(list_id):
     return jsonify(lst)
 
 
+@bp.post("/api/lists/reorder")
+def reorder_lists():
+    """Set the display order of this user's lists to the given list of ids. Ids not
+    belonging to the user are ignored; any of the user's lists the client omitted
+    are kept, appended in their existing order (so nothing is ever lost)."""
+    username = current_user()["username"]
+    body = request.get_json(force=True) or {}
+    order = body.get("order")
+    if not isinstance(order, list):
+        raise ApiError("order must be a list of ids", 400)
+    all_lists = load_lists()
+    user_lists = all_lists.get(username, [])
+    by_id = {item.get("id"): item for item in user_lists}
+    seen = set()
+    reordered = []
+    for lid in order:
+        item = by_id.get(lid)
+        if item is not None and lid not in seen:
+            seen.add(lid)
+            reordered.append(item)
+    for item in user_lists:  # keep any the client didn't mention
+        if item.get("id") not in seen:
+            reordered.append(item)
+    all_lists[username] = reordered
+    save_lists(all_lists)
+    return jsonify({"ok": True})
+
+
 @bp.delete("/api/lists/<list_id>")
 def delete_list(list_id):
     username = current_user()["username"]

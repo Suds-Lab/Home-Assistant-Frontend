@@ -511,12 +511,13 @@ and spot any that bounced back.
 
 Every user can create their own **lists** to organise their devices - handy when
 you have a lot of them or want to sort them differently than by Type, Area, or
-Floor. Open the account menu (the avatar, top-right) and choose **Lists**. Lists
-are shown in alphabetical order:
+Floor. Open the account menu (the avatar, top-right) and choose **Lists**:
 
 - **Create** a list by name; make as many as you like.
 - **Edit devices** on a list to add or remove any of your devices (a device can
   be in several lists).
+- **Reorder** lists by dragging the handle (mouse or touch). The order you set is
+  the order the filter chips appear in on the dashboard.
 - **Rename** or **Delete** a list at any time. Deleting a list never affects the
   devices themselves.
 

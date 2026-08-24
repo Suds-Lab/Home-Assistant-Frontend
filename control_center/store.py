@@ -273,14 +273,11 @@ LISTS_FILE = ICON_DIR / "lists.json"
 
 
 def load_lists():
+    # Stored array order IS the display order - the user arranges their own lists
+    # (see the reorder route), so we don't sort here.
     try:
         data = json.loads(LISTS_FILE.read_text())
-        if not isinstance(data, dict):
-            return {}
-        for lst in data.values():  # each user's lists, alphabetical for display
-            if isinstance(lst, list):
-                lst.sort(key=lambda x: (x.get("name") or "").lower())
-        return data
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 
