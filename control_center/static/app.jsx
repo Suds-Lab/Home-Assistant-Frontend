@@ -209,6 +209,7 @@ const getLists = () => request('/lists');
 const createList = (fields) => request('/lists', { method: 'POST', body: JSON.stringify(fields) });
 const updateList = (id, patch) => request(`/lists/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) });
 const deleteList = (id) => request(`/lists/${encodeURIComponent(id)}`, { method: 'DELETE' });
+const reorderLists = (ids) => request('/lists/reorder', { method: 'POST', body: JSON.stringify({ order: ids }) });
 // Climate scheduling (admin)
 const adminGetSchedulePerms = () => request('/admin/schedule-perms');
 const adminSetSchedulePerms = (username, entity_ids) =>
@@ -3068,6 +3069,9 @@ function ListsManager({ onChange }) {
   const [error, setError] = React.useState('');
   const [newName, setNewName] = React.useState('');
   const [editingId, setEditingId] = React.useState(null);
+  const [dragId, setDragId] = React.useState(null);   // list being dragged (for styling)
+  const dragRef = React.useRef(null);                 // same, but synchronous for pointer events
+  const rowsRef = React.useRef(null);                 // container, to measure rows
 
   const reload = React.useCallback(() => {
     Promise.all([getLists(), getDevices()])
@@ -3123,13 +3127,117 @@ function ListsManager({ onChange }) {
     } catch (e) { setError(e.message); reload(); }
   }
 
+  // Drag-to-reorder (WhatsApp style), pointer-based so it works with mouse and
+  // touch, no library. Grab the handle, drag over other rows to reposition the
+  // list live, release to save. The stored order is the order the filter chips
+  // appear in on the dashboard.
+  const _rows = () => (rowsRef.current ? [...rowsRef.current.querySelectorAll('[data-list-id]')] : []);
+
+  // The lifted row's POSITION springs toward the pointer (Tier 3): rather than
+  // pinning translateY to the finger, we integrate a little spring each frame so
+  // the row trails and overshoots like a physical object, and its lean/squash are
+  // read straight off the spring's own velocity.
+  const _SPRING_K = 0.18;   // stiffness: how hard it's pulled toward the target
+  const _SPRING_DAMP = 0.72; // damping: how much velocity survives each frame
+
+  function _springTransform(d) {
+    const ease = d.dropping ? d.settle : 1;                          // fade the flourish out on drop
+    const rot = Math.max(-9, Math.min(9, d.vel * 0.9)) * ease;       // lean from spring velocity
+    const stretch = Math.min(0.06, Math.abs(d.vel) * 0.006) * ease;  // squash-and-stretch along travel
+    const lift = 1 + 0.03 * ease;                                    // shrink back to normal on drop
+    return `translateY(${d.pos}px) scale(${lift - stretch * 0.6}, ${lift + stretch}) rotate(${rot}deg)`;
+  }
+
+  function onDragStart(e, id, idx) {
+    e.preventDefault();
+    setEditingId(null); // keep rows a uniform height while dragging
+    const rows = _rows();
+    if (rows.length < 2) return;
+    const pitch = rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top;
+    if (dragRef.current && dragRef.current.raf) cancelAnimationFrame(dragRef.current.raf);
+    dragRef.current = {
+      id, fromIdx: idx, startY: e.clientY, pitch, overIdx: idx,
+      pointerY: e.clientY, pos: 0, vel: 0, dropping: false, settle: 1, raf: null,
+    };
+    setDragId(id);
+    const el = rows[idx];
+    if (el) { el.style.transition = 'none'; el.style.zIndex = '20'; }
+    haptic(15); // a tick when you pick it up
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    const tick = () => {
+      const d = dragRef.current;
+      if (!d) return;
+      // Spring the row's position toward its target (the pointer while dragging,
+      // the final slot once dropped) so it trails and overshoots.
+      const target = d.dropping ? (d.overIdx - d.fromIdx) * d.pitch : (d.pointerY - d.startY);
+      d.vel += (target - d.pos) * _SPRING_K;
+      d.vel *= _SPRING_DAMP;
+      d.pos += d.vel;
+      if (d.dropping) d.settle *= 0.86; // ease the lean/lift/squash out as it lands
+      const row = _rows()[d.fromIdx];
+      if (row) row.style.transform = _springTransform(d);
+      d.raf = requestAnimationFrame(tick);
+    };
+    dragRef.current.raf = requestAnimationFrame(tick);
+  }
+
+  function onDragMove(e) {
+    const d = dragRef.current;
+    if (!d || d.dropping) return;
+    d.pointerY = e.clientY; // the spring loop chases this
+    const rows = _rows();
+    const dy = e.clientY - d.startY;
+    const over = Math.max(0, Math.min(rows.length - 1, d.fromIdx + Math.round(dy / d.pitch)));
+    if (over !== d.overIdx) { d.overIdx = over; haptic(8); } // subtle tick crossing each slot
+    // Slide the other rows to open a gap where the dragged row will land.
+    rows.forEach((row, i) => {
+      if (i === d.fromIdx) return;
+      let shift = 0;
+      if (over > d.fromIdx && i > d.fromIdx && i <= over) shift = -d.pitch;
+      else if (over < d.fromIdx && i >= over && i < d.fromIdx) shift = d.pitch;
+      row.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  }
+
+  function onDragEnd(e) {
+    const d = dragRef.current;
+    if (!d || d.dropping) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    haptic(12);
+    const SETTLE_MS = 380;
+    // Hand the row off to the spring: it keeps running (via the rAF loop) but now
+    // targets the final slot, easing the lean/lift out as it overshoots and settles.
+    d.dropping = true;
+    d.settle = 1;
+    setTimeout(() => {
+      if (d.raf) cancelAnimationFrame(d.raf);
+      dragRef.current = null;
+      // By now the row is visually in its slot; clear the temporary transforms in
+      // one non-animated step and commit the new order, so nothing jumps.
+      for (const row of _rows()) { row.style.transition = 'none'; row.style.transform = ''; row.style.zIndex = ''; }
+      setDragId(null);
+      if (d.fromIdx !== d.overIdx) {
+        setLists((prev) => {
+          if (!prev) return prev;
+          const next = prev.slice();
+          const [moved] = next.splice(d.fromIdx, 1);
+          next.splice(d.overIdx, 0, moved);
+          reorderLists(next.map((l) => l.id)).then(notify).catch((err) => { setError(err.message); reload(); });
+          return next;
+        });
+      }
+      requestAnimationFrame(() => { for (const row of _rows()) row.style.transition = ''; });
+    }, SETTLE_MS);
+  }
+
   return (
-    <div className="sched-panel">
+    <div className="sched-panel" ref={rowsRef}>
       <div className="sched-topbar">
         <h2 style={{ margin: 0 }}>Lists</h2>
       </div>
       <p className="muted" style={{ marginTop: 0 }}>
-        Group your devices your own way. Each list shows as a filter chip on the dashboard.
+        Group your devices your own way. Each list shows as a filter chip on the
+        dashboard. Drag the handle to reorder them.
       </p>
       {error && <div className="error banner">{error}</div>}
 
@@ -3151,12 +3259,22 @@ function ListsManager({ onChange }) {
       ) : lists.length === 0 ? (
         <p className="muted">No lists yet. Create one above.</p>
       ) : (
-        lists.map((l) => {
+        lists.map((l, idx) => {
           const count = (l.entities || []).length;
           const editing = editingId === l.id;
           return (
-            <div key={l.id} className="card list-row">
+            <div key={l.id} data-list-id={l.id} className={`card list-row${dragId === l.id ? ' dragging' : ''}`}>
               <div className="list-head">
+                <button
+                  className="ghost icon-only list-drag"
+                  type="button"
+                  aria-label="Drag to reorder"
+                  title="Drag to reorder"
+                  onPointerDown={(e) => onDragStart(e, l.id, idx)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragEnd}
+                  onPointerCancel={onDragEnd}
+                >⠿</button>
                 <input
                   className="list-name-input list-name-edit"
                   value={l.name}

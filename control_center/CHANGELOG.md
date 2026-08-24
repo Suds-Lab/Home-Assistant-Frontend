@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.16
+- You can now arrange your lists in any order. Open Lists from the account menu
+  and drag the handle on each one to reposition it (works with a mouse or by
+  touch); the order you set is the order the filter chips appear in on the
+  dashboard. (Lists are no longer forced into alphabetical order.) The row you
+  grab lifts and trails your finger with a springy, jelly-like weight, leaning
+  and stretching as it moves while the others glide out of the way, then it
+  settles into place when you let go, with a light haptic tap on pickup, each
+  time it crosses another row, and on drop.
+
 ## 2.9.15
 - The schedule editor and week preview now start the week on Sunday (Sun through
   Sat) instead of Monday. This is purely a display change: the days each schedule

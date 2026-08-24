@@ -2235,6 +2235,28 @@ img.install-icon {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* Drag-to-reorder handle. touch-action:none so dragging from the handle moves
+   the row instead of scrolling the page on touch. */
+.list-drag {
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.list-drag:active { cursor: grabbing; }
+/* Rows slide smoothly as one is dragged past them (the dragged row itself has
+   transition:none set inline so it tracks the pointer 1:1). */
+/* Springy overshoot so the rows sliding aside feel jelly-like, not mechanical. */
+.list-row { transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
+.list-row.dragging {
+  background: var(--card-active);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  position: relative;
+  cursor: grabbing;
+}
 .list-head .list-name-edit {
   flex: 1;
   min-width: 140px;
