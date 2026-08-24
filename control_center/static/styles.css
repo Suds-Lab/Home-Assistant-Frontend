@@ -2290,10 +2290,27 @@ img.install-icon {
      block just below it to cover any overshoot gap. */
   box-shadow: 0 100px 0 var(--card);
 }
+
+/* ...and reverse on the way out (quick, no overshoot) so closing is animated too. */
+@keyframes cc-pop-out { to { opacity: 0; transform: translateY(-6px) scale(0.94); } }
+@keyframes cc-modal-out { to { opacity: 0; transform: scale(0.92); } }
+@keyframes cc-sheet-out { to { transform: translateY(100%); } }
+@keyframes cc-overlay-out { to { opacity: 0; } }
+.account-menu.closing, .sched-smenu.closing { animation: cc-pop-out 0.15s ease forwards; }
+.modal.closing { animation: cc-modal-out 0.16s ease forwards; }
+.modal-overlay.closing, .sched-overlay.closing { animation: cc-overlay-out 0.16s ease forwards; }
+.sched-sheet.closing { animation: cc-sheet-out 0.24s cubic-bezier(0.4, 0, 1, 1) forwards; }
+
+/* The on/off knob overshoots slightly as it slides, so switches feel springy. */
+.switch .knob { transition: left 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
 @media (prefers-reduced-motion: reduce) {
   .account-menu, .sched-smenu, .chips-menu, .modal,
-  .modal-overlay, .sched-overlay, .sched-sheet { animation: none; }
+  .modal-overlay, .sched-overlay, .sched-sheet,
+  .account-menu.closing, .sched-smenu.closing, .modal.closing,
+  .modal-overlay.closing, .sched-overlay.closing, .sched-sheet.closing { animation: none; }
   .sched-sheet { box-shadow: none; }
+  .switch .knob { transition: left 0.15s ease; }
 }
 .list-head .list-name-edit {
   flex: 1;

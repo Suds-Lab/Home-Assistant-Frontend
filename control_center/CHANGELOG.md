@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.18
+- More of that springy feel throughout. Menus, dialogs and the schedule editor
+  now animate **closed** too (not just open), so dismissing them feels as smooth
+  as opening them. On/off switches give their knob a little bounce as it slides,
+  and the theme and view buttons in the header pop when tapped.
+- A wrong **password change** now pushes back: the dialog shakes and the phone
+  gives a firmer, longer buzz, so a rejected attempt is unmistakable. (All of it
+  still honours your device's "reduce motion" setting.)
+
 ## 2.9.17
 - Menus, dialogs and pop-ups now spring open with the same jelly-like motion as
   the list drag, instead of just appearing. The account menu and search dropdowns
