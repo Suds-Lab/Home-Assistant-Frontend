@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.15
+- The schedule editor and week preview now start the week on Sunday (Sun through
+  Sat) instead of Monday. This is purely a display change: the days each schedule
+  runs on are stored the same way as before, so your existing schedules keep
+  firing on exactly the same days, no matter which version created them.
+
 ## 2.9.14
 - Schedules now stand down when a person takes over. If someone changes a
   thermostat (in Home Assistant directly, or through Control Center) after a

@@ -472,9 +472,10 @@ The **Schedules** panel lets each user:
    at the bottom.
 2. Pick target thermostats as chips - tap a chip's **x** to remove it, or tap
    **+ AC** to open a searchable multi-select for adding more.
-3. Add **events** - each event fires at a specific time on selected days (with
-   Weekdays / Weekends / Every day presets) and sets a mode (off, cool, heat,
-   auto, dry, fan), temperature, and optional fan speed. The temperature slider
+3. Add **events** - each event fires at a specific time on selected days (the
+   day picker and week preview start on Sunday), with Weekdays / Weekends /
+   Every day presets, and sets a mode (off, cool, heat, auto, dry, fan),
+   temperature, and optional fan speed. The temperature slider
    range, step, and unit (C or F) are read automatically from the HA entity's
    own configuration, so °F setpoints work correctly without any extra setup.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
