@@ -123,6 +123,13 @@ function haptic(ms = 10) {
     /* ignore */
   }
 }
+
+// A light tap the moment a surface (menu, dialog, sheet) first opens. Call it at
+// the top of a component that mounts when it opens.
+function useOpenHaptic(ms = 8) {
+  React.useEffect(() => { haptic(ms); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 let _hapticsBound = false;
 function bindHaptics() {
   if (_hapticsBound || typeof document === 'undefined') return;
@@ -1190,6 +1197,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
 
 // Quick edit dialog for a device: rename + reassign area (writes to HA).
 function DeviceEditDialog({ device, areas, onClose, onSave }) {
+  useOpenHaptic();
   const [name, setName] = useState(device.name || '');
   const [areaId, setAreaId] = useState(device.area_id || '');
   const [busy, setBusy] = useState(false);
@@ -1275,6 +1283,7 @@ function joinNatural(items) {
 
 // Self-service "Change password" dialog (local accounts only).
 function ChangePasswordDialog({ rules, onClose }) {
+  useOpenHaptic();
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -1573,6 +1582,7 @@ function MdiIcon({ icon, size = 22, className = '' }) {
 
 // Create a new area or rename an existing one (and pick a floor when creating).
 function AreaEditDialog({ area, floors, onClose, onSave }) {
+  useOpenHaptic();
   const isNew = !area.area_id;
   const [name, setName] = useState(area.name || '');
   const [floorId, setFloorId] = useState(area.floor_id || '');
@@ -1897,7 +1907,7 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
     <div className="account" ref={ref}>
       <button
         className="account-btn"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen((o) => { if (!o) haptic(8); return !o; })}
         aria-haspopup="menu"
         aria-expanded={open}
         title={name || 'Account'}
@@ -2104,7 +2114,7 @@ function SchedSearchableMenu({
 
   return (
     <div className="sched-smenu-wrap" ref={wrapRef}>
-      {React.cloneElement(trigger, { onClick: () => setOpen((o) => !o), 'aria-expanded': open })}
+      {React.cloneElement(trigger, { onClick: () => setOpen((o) => { if (!o) haptic(8); return !o; }), 'aria-expanded': open })}
       {open && (
         <div className="sched-smenu">
           <div className="sched-smenu-search">
@@ -2219,6 +2229,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
 function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit }) {
+  useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
   const step = tStep ?? 0.5;
