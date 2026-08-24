@@ -2017,6 +2017,12 @@ function daySegments(entries, dayIdx, tMin, tMax) {
 }
 
 const DAY_SHORT = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+// Days are STORED as 0=Mon..6=Sun (matches Python's weekday() the backend uses),
+// and that never changes - so existing schedules keep firing on the right days
+// regardless of which version created them. WEEK_ORDER only changes how the week
+// is DISPLAYED: Sunday first, then Mon..Sat. It maps a display slot to its stored
+// index, so every toggle/letter/row still reads and writes the correct day.
+const WEEK_ORDER = [6, 0, 1, 2, 3, 4, 5];
 const MODE_ABBR = { off: '-', cool: '❄', heat: '▲', auto: '⇅', dry: '∼', fan: '≈' };
 
 /* Format a stored "HH:MM" (always 24h internally) for display, following the
@@ -2154,11 +2160,11 @@ function SchedWeekStrip({ entries, tMin, tMax }) {
         ))}
       </div>
       <div className="sched-strip">
-        {DAY_LABELS.map((label, di) => {
+        {WEEK_ORDER.map((di) => {
           const segs = daySegments(entries, di, tMin, tMax);
           return (
             <div key={di} className="sched-strip-row">
-              <span className="sched-strip-day">{label}</span>
+              <span className="sched-strip-day">{DAY_LABELS[di]}</span>
               <div className="sched-strip-bar">
                 {segs.map((seg, si) => (
                   <div
@@ -2198,8 +2204,8 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
           <span className="sched-entry-mode-label">{MODE_LABELS[entry.mode] || entry.mode}{tempStr}</span>
         </div>
         <div className="sched-entry-days">
-          {DAY_SHORT.map((d, i) => (
-            <span key={i} style={{ opacity: entry.days.includes(i) ? 1 : 0.2 }}>{d}</span>
+          {WEEK_ORDER.map((i) => (
+            <span key={i} style={{ opacity: entry.days.includes(i) ? 1 : 0.2 }}>{DAY_SHORT[i]}</span>
           ))}
         </div>
       </div>
@@ -2264,9 +2270,9 @@ function SchedEntryEditor({ entry, onSave, onCancel, onDelete, schedName, affect
       <div className="sched-field-group">
         <span className="sched-field-label">Days</span>
         <div className="sched-day-btn-row">
-          {DAY_SHORT.map((d, i) => (
+          {WEEK_ORDER.map((i) => (
             <button key={i} type="button" className={`sched-day-toggle${days.has(i) ? ' on' : ''}`}
-              onClick={() => toggleDay(i)}>{d}</button>
+              onClick={() => toggleDay(i)}>{DAY_SHORT[i]}</button>
           ))}
         </div>
         <div className="sched-presets">
