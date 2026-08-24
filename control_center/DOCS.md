@@ -491,8 +491,20 @@ on the first command, and quietly revert. For about 10 minutes after an event
 fires, the scheduler keeps checking that the thermostat's live mode and
 temperature match what the schedule set, and re-sends the command (at most once
 every couple of minutes) if they don't. A change that didn't take fixes itself.
-The window is short on purpose, so it won't override a manual change you make
-later.
+
+If a **person** changes the thermostat during that window (in Home Assistant, or
+through Control Center), the schedule stops re-applying to that device until its
+next event, so it never fights a real person. Only a change with no one behind it
+(a device quietly bouncing back on its own) keeps getting re-applied.
+
+**Diagnostics:** if you need to check whether schedules are firing, the add-on
+log (Supervisor > Control Center > Log) records the details. Lines tagged
+`[sched]` show each event as it fires (with the device's state before and after,
+and how long the command took), plus failures, offline devices, drift re-applies,
+disabled schedules, and a warning whenever the loop skipped one or more minutes
+(so events in that window did not fire). Lines tagged `[device]` show thermostat
+mode and setpoint changes, so you can confirm a scheduled change actually took
+and spot any that bounced back.
 
 ## Lists
 

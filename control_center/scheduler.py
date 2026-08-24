@@ -42,10 +42,43 @@ _VERIFY_RETRY_SECS = 120    # re-send at most every ~2 min per target
 _VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
 
 
+def _log(msg):
+    """One timestamped diagnostics line in the add-on log, prefixed [sched] so it
+    is easy to grep. flush=True so lines appear promptly, not buffered."""
+    print(f"[sched {datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
+
+
+# A person changing a thermostat (directly in Home Assistant, or via Control
+# Center) should win: we stop enforcing the schedule on that device until its
+# next event. `_manual` records the time of the last human change per target.
+# `_own_cmd` records our own sends, so a change WE caused (which HA may attribute
+# to our token's user) is never mistaken for a human override. A change with no
+# human behind it (a device bouncing back) is a "mystery" and still gets
+# re-applied.
+_manual = {}    # target -> ts of last human change
+_own_cmd = {}   # target -> ts of our last send
+_OWN_CMD_GRACE = 10  # sec; a HA change within this of our send is ours, not a person's
+
+
+def note_user_change(target, who=None):
+    """Record that a person changed this target. Called from the HA event loop
+    (for user-driven state changes) and from the Control Center control route."""
+    _manual[target] = time.time()
+    _log(f"user change on {target}" + (f" by {who}" if who else "") + " - will not fight it")
+
+
+def was_recently_commanded(target):
+    """True if the scheduler itself sent to this target moments ago, so the
+    resulting HA state change must not be counted as a human override."""
+    return time.time() - _own_cmd.get(target, 0) < _OWN_CMD_GRACE
+
+
 def _send_climate(target, mode, temp, fan):
     """Issue the HA climate service calls for one target. Shared by the initial
     fire and the verification re-send so they behave identically."""
     from ha import call_service, split_instance_entity
+
+    _own_cmd[target] = time.time()  # so the resulting HA change isn't read as a person's
 
     # Targets are stored namespaced for remote entities (e.g. "garage:climate.ac").
     # Split so the command routes to the owning instance; without this the call
@@ -64,18 +97,41 @@ def _send_climate(target, mode, temp, fan):
 
 
 def _fire_event(sched, entry, target):
+    from core import STATE_CACHE
     mode = entry.get("mode", "heat")
     temp = entry.get("temp")
     fan = entry.get("fan")
+    name = sched.get("name") or "Schedule"
 
-    _send_climate(target, mode, temp, fan)
+    # Snapshot the device before we touch it, so the log shows what actually
+    # changed (and whether the device was even reachable).
+    before = STATE_CACHE.get(target) or {}
+    b_state = before.get("state")
+    b_temp = (before.get("attributes") or {}).get("temperature")
+    offline = b_state in _OFFLINE_STATES
+    want = "off" if mode == "off" else _MODE_TO_HVAC.get(mode, mode)
+    detail = want
+    if mode != "off" and temp is not None:
+        detail += f" {temp}°"
+    if mode != "off" and fan:
+        detail += f" fan={fan}"
+    was = "offline" if offline else (f"{b_state}" + (f" {b_temp}°" if b_temp is not None else ""))
+    _log(f"FIRE '{name}' [{entry.get('time')}] -> {target}: set {detail} (was {was})")
 
-    # The service calls above succeeded (or we'd have raised). Record it in the
-    # activity log - but only if the thermostat is actually online, so a schedule
-    # firing at an offline device doesn't show up as if its owner changed it.
-    from core import STATE_CACHE
-    state = (STATE_CACHE.get(target) or {}).get("state")
-    if state not in _OFFLINE_STATES:
+    t0 = time.time()
+    try:
+        _send_climate(target, mode, temp, fan)
+    except Exception as exc:  # noqa: BLE001
+        _log(f"  FAILED to send to {target} after {int((time.time() - t0) * 1000)}ms: {exc}")
+        return  # don't watch a send that never went out
+    _log(f"  sent to {target} in {int((time.time() - t0) * 1000)}ms")
+
+    # Record in the activity log only if the thermostat is actually online, so a
+    # schedule firing at an offline device doesn't show up as if its owner acted.
+    if offline:
+        _log(f"  {target} was {b_state}; command was still sent but may not arrive "
+             f"(not recorded in the activity log)")
+    else:
         _log_scheduled(sched, entry, target)
 
     # Watch this target for a short window and re-send if the thermostat drifts
@@ -84,9 +140,10 @@ def _fire_event(sched, entry, target):
     now = time.time()
     _pending[target] = {
         "mode": mode, "temp": temp, "fan": fan,
-        "sched_id": sched.get("id"), "name": sched.get("name") or "Schedule",
+        "sched_id": sched.get("id"), "name": name,
         "owner": sched.get("owner"), "first_ts": now, "last_try": now,
     }
+    _log(f"  confirming {target} for up to {_VERIFY_WINDOW_SECS // 60} min")
 
 
 def _log_scheduled(sched, entry, target):
@@ -155,55 +212,107 @@ def _verify_pending(schedules):
     Drops entries once the window closes or their schedule is gone/disabled."""
     if not _pending:
         return
+    from core import STATE_CACHE
     now = time.time()
     enabled_ids = {s.get("id") for s in schedules if s.get("enabled", True)}
     for target in list(_pending.keys()):
         p = _pending[target]
-        if now - p["first_ts"] > _VERIFY_WINDOW_SECS or p["sched_id"] not in enabled_ids:
-            _pending.pop(target, None)  # window closed, or schedule disabled/removed
+        if now - p["first_ts"] > _VERIFY_WINDOW_SECS:
+            _pending.pop(target, None)
+            _log(f"done confirming {target} ('{p['name']}') - window ended")
+            continue
+        if p["sched_id"] not in enabled_ids:
+            _pending.pop(target, None)
+            _log(f"stopped confirming {target} ('{p['name']}') - schedule disabled or removed")
             continue
         m = _matches_desired(target, p["mode"], p["temp"])
         if m is None or m:
             continue  # offline (can't tell) or already correct - leave it watching
+        # Drifted. If a PERSON moved it (in HA or via Control Center) after we
+        # fired, stand down - they win until the next event. A drift with no
+        # human behind it (a device bouncing back) is a mystery we keep enforcing.
+        ov = _manual.get(target)
+        if ov is not None and ov >= p["first_ts"]:
+            _pending.pop(target, None)
+            _log(f"backing off {target} ('{p['name']}') - a person changed it; "
+                 f"schedule resumes at its next event")
+            continue
         if now - p["last_try"] < _VERIFY_RETRY_SECS:
-            continue  # drifted, but re-sent too recently - wait
+            continue  # drifted (mystery), but re-sent too recently - wait
         p["last_try"] = now
+        st = STATE_CACHE.get(target) or {}
+        cur = st.get("state")
+        cur_t = (st.get("attributes") or {}).get("temperature")
+        want = "off" if p["mode"] == "off" else _MODE_TO_HVAC.get(p["mode"], p["mode"])
+        want_t = "" if (p["mode"] == "off" or p["temp"] is None) else f" {p['temp']}°"
+        have = f"{cur}" + (f" {cur_t}°" if cur_t is not None else "")
+        _log(f"DRIFT {target} ('{p['name']}'): want {want}{want_t}, have {have} - re-applying")
         try:
             _send_climate(target, p["mode"], p["temp"], p["fan"])
-            print(f"[scheduler] re-applying {p['name']} on {target} (drifted from schedule)")
         except Exception as exc:  # noqa: BLE001
-            print(f"[scheduler] error re-applying on {target}: {exc}")
+            _log(f"  re-apply FAILED on {target}: {exc}")
 
 
 def _scheduler_loop():
     from store import load_schedules
+    _log("scheduler started (checks every 30s)")
     last_hhmm = None
+    last_minute = None    # the minute we last evaluated, to spot skipped minutes
+    last_beat_hour = None  # so the "alive" heartbeat prints once per hour
     while True:
         try:
             now = datetime.now()
             hhmm = now.strftime("%H:%M")
             dow = now.weekday()  # 0=Mon..6=Sun, matching data shape
             schedules = load_schedules()
-            # Only fire once per minute even if we wake up multiple times in it
+            # Only evaluate once per minute even if we wake up multiple times in it
             if hhmm != last_hhmm:
+                this_minute = now.replace(second=0, microsecond=0)
+                # If the loop didn't run for a whole minute (blocked by a slow
+                # command, or the add-on was down), those minutes were never
+                # evaluated - so any events in them did NOT fire. Call it out.
+                if last_minute is not None:
+                    gap = round((this_minute - last_minute).total_seconds() / 60)
+                    if gap > 1:
+                        _log(f"WARNING: {gap - 1} minute(s) not checked between "
+                             f"{last_minute:%H:%M} and {hhmm} (loop blocked or add-on was "
+                             f"down); any events scheduled in that window did NOT fire")
+                last_minute = this_minute
                 last_hhmm = hhmm
+
+                due = []
                 for sched in schedules:
-                    if not sched.get("enabled", True):
-                        continue
                     for entry in sched.get("entries", []):
-                        if entry.get("time") != hhmm:
-                            continue
-                        if dow not in entry.get("days", []):
-                            continue
-                        for target in sched.get("targets", []):
+                        if entry.get("time") == hhmm and dow in entry.get("days", []):
+                            if sched.get("enabled", True):
+                                due.append((sched, entry))
+                            else:
+                                _log(f"{hhmm}: SKIP '{sched.get('name') or 'Schedule'}' - schedule is disabled")
+
+                if due:
+                    total = sum(len(s.get("targets", [])) for s, _ in due)
+                    _log(f"{hhmm} {now:%a}: {len(due)} event(s) due across {total} target(s)")
+                    for sched, entry in due:
+                        targets = sched.get("targets", [])
+                        if not targets:
+                            _log(f"  '{sched.get('name') or 'Schedule'}' has no targets - nothing to do")
+                        for target in targets:
                             try:
                                 _fire_event(sched, entry, target)
                             except Exception as exc:  # noqa: BLE001
-                                print(f"[scheduler] error firing {entry.get('id')} on {target}: {exc}")
+                                _log(f"  unexpected error firing on {target}: {exc}")
+
+                # Hourly heartbeat so the log confirms the scheduler is alive even
+                # on quiet days.
+                if now.minute == 0 and last_beat_hour != now.hour:
+                    last_beat_hour = now.hour
+                    enabled = sum(1 for s in schedules if s.get("enabled", True))
+                    _log(f"alive - {enabled}/{len(schedules)} schedule(s) enabled, "
+                         f"{len(_pending)} awaiting confirmation")
             # Every tick: re-apply any recently-fired target that didn't take.
             _verify_pending(schedules)
         except Exception as exc:  # noqa: BLE001
-            print(f"[scheduler] loop error: {exc}")
+            _log(f"loop error: {exc}")
         time.sleep(30)
 
 

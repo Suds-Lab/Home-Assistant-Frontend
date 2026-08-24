@@ -242,6 +242,13 @@ def control():
     if service not in ALLOWED_SERVICES.get(domain, set()):
         raise ApiError(f"Service '{service}' is not allowed for {domain} entities", 400)
     call_service(domain, service, real_entity_id, data, instance_id=instance_id)
+    # A person manually controlling a thermostat here should win over an active
+    # schedule: tell the scheduler to stop enforcing on it until its next event.
+    # (This covers the case HA can't attribute to a user, e.g. via the supervisor
+    # token.) The scheduler's own commands don't go through this route.
+    if domain == "climate":
+        import scheduler
+        scheduler.note_user_change(entity_id, who=user.get("username"))
     _log_action(user, domain, service, entity_id, data)
     return jsonify(ok=True)
 
