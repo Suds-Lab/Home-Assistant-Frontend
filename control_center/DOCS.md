@@ -431,7 +431,8 @@ instantly (and shows the last-seen state offline).
   `localhost`). Over plain `http://<ip>:8099` Android won't offer install, though
   iOS "Add to Home Screen" still gives a full-screen shortcut.
 - Taps give subtle **haptic feedback** on phones that support it (iOS and
-  Android).
+  Android). Menus, dialogs and sheets also **spring open** with a matching tap.
+  All of this respects your device's "reduce motion" setting.
 
 > Changing the **App icon** after people have installed the PWA won't update an
 > icon that's already on a home screen, because iOS (and some Android launchers)

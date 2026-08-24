@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.17
+- Menus, dialogs and pop-ups now spring open with the same jelly-like motion as
+  the list drag, instead of just appearing. The account menu and search dropdowns
+  pop out from their edge, dialogs zoom in with a gentle bounce, and the schedule
+  editor slides up from the bottom, each with a light haptic tap as it opens. It
+  all honours your device's "reduce motion" setting, in which case things simply
+  appear as before.
+
 ## 2.9.16
 - You can now arrange your lists in any order. Open Lists from the account menu
   and drag the handle on each one to reposition it (works with a mouse or by

@@ -2257,6 +2257,44 @@ img.install-icon {
   position: relative;
   cursor: grabbing;
 }
+
+/* ---- Jelly entrances: menus, popups, dialogs and sheets spring into view,
+   sharing the same overshoot curve as the drag reorder above. ---- */
+@keyframes cc-pop-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes cc-modal-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cc-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes cc-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.account-menu, .sched-smenu, .chips-menu {
+  animation: cc-pop-in 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top center;
+}
+.account-menu { transform-origin: top right; }
+.modal { animation: cc-modal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-overlay, .sched-overlay { animation: cc-overlay-in 0.18s ease; }
+.sched-sheet {
+  animation: cc-sheet-in 0.4s cubic-bezier(0.2, 1.3, 0.35, 1);
+  /* The sheet is anchored to the bottom, so a spring that overshoots would lift it
+     off the edge and reveal a sliver of the backdrop; this paints a card-coloured
+     block just below it to cover any overshoot gap. */
+  box-shadow: 0 100px 0 var(--card);
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-menu, .sched-smenu, .chips-menu, .modal,
+  .modal-overlay, .sched-overlay, .sched-sheet { animation: none; }
+  .sched-sheet { box-shadow: none; }
+}
 .list-head .list-name-edit {
   flex: 1;
   min-width: 140px;
