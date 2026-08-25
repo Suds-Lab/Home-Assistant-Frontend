@@ -202,6 +202,41 @@ function useDismiss(onClose, ms = 160) {
   return { closing, close };
 }
 
+// Animate a region open and closed (grid-template-rows 0fr<->1fr, i.e. its own
+// content height). Content is unmounted while closed and stays mounted through
+// the close animation. Doesn't animate on first render (so already-open regions
+// don't all grow in on load). A timeout drives the phases, so it still opens and
+// closes correctly even where grid-row animation isn't supported. `allowOverflow`
+// lets an open region show overflowing children (e.g. a search dropdown).
+function Collapsible({ open, allowOverflow = false, children }) {
+  const [mounted, setMounted] = React.useState(open);
+  const [phase, setPhase] = React.useState(open ? 'open' : 'closed'); // closed|opening|open|closing
+  const first = React.useRef(true);
+  React.useEffect(() => {
+    if (first.current) { first.current = false; return undefined; }
+    if (open) {
+      setMounted(true);
+      setPhase('opening');
+      const t = setTimeout(() => setPhase('open'), 320);
+      return () => clearTimeout(t);
+    }
+    setPhase('closing');
+    const t = setTimeout(() => { setPhase('closed'); setMounted(false); }, 300);
+    return () => clearTimeout(t);
+  }, [open]);
+  if (!mounted) return null;
+  const cls =
+    'collapsible' +
+    (phase === 'opening' ? ' opening' : '') +
+    (phase === 'closing' ? ' closing' : '') +
+    (phase === 'open' && allowOverflow ? ' free' : '');
+  return (
+    <div className={cls}>
+      <div className="collapsible-inner">{children}</div>
+    </div>
+  );
+}
+
 let _hapticsBound = false;
 function bindHaptics() {
   if (_hapticsBound || typeof document === 'undefined') return;
@@ -2182,6 +2217,19 @@ function SchedSearchableMenu({
     if (open && inputRef.current) { inputRef.current.focus(); setHi(-1); }
   }, [open]);
 
+  // While open inside a scrollable dialog/sheet, let the dropdown overflow that
+  // container instead of being clipped and hidden behind its scroll. Restored on
+  // close. (The picker is reused from the roomy schedule sheet, so in a short
+  // modal it can extend past the bottom.)
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const clip = wrapRef.current && wrapRef.current.closest('.modal, .sched-sheet');
+    if (!clip) return undefined;
+    const prev = clip.style.overflow;
+    clip.style.overflow = 'visible';
+    return () => { clip.style.overflow = prev; };
+  }, [open]);
+
   const filtered = (items || []).filter(
     (it) => !q.trim() || it.label.toLowerCase().includes(q.trim().toLowerCase())
   );
@@ -3399,7 +3447,7 @@ function ListsManager({ onChange }) {
                 </button>
                 <button className="ghost danger" type="button" onClick={() => remove(l.id)}>Delete</button>
               </div>
-              {editing && (
+              <Collapsible open={editing} allowOverflow>
                 <div className="list-assign">
                   <EntityChips
                     entities={devices}
@@ -3408,7 +3456,7 @@ function ListsManager({ onChange }) {
                     placeholder="Add a device to this list…"
                   />
                 </div>
-              )}
+              </Collapsible>
             </div>
           );
         })
@@ -3468,6 +3516,10 @@ function Dashboard({
     managerGetDevices().then(setMgrData).catch(() => {});
   }
   const [compact, setCompact] = useState(localStorage.getItem(COMPACT_KEY) === '1');
+  // True only during a compact<->comfortable switch, so the size-morph transitions
+  // apply just for that moment and never interfere with the usual interactions.
+  const [morphing, setMorphing] = useState(false);
+  const morphTimer = useRef(null);
   const [groupBy, setGroupBy] = useState(localStorage.getItem(GROUPBY_KEY) || 'type');
   // Per-user lists (tags). The active selection lives in `groupBy`, which holds
   // 'type' / 'area' / 'floor' OR a list id - a list is an alternative to those.
@@ -3489,6 +3541,9 @@ function Dashboard({
   });
 
   function toggleCompact() {
+    setMorphing(true); // turn on the size transitions just for this switch
+    clearTimeout(morphTimer.current);
+    morphTimer.current = setTimeout(() => setMorphing(false), 520);
     setCompact((c) => {
       const next = !c;
       localStorage.setItem(COMPACT_KEY, next ? '1' : '0');
@@ -3767,7 +3822,7 @@ function Dashboard({
   };
 
   return (
-    <div className={`dashboard${compact ? ' compact' : ''}`}>
+    <div className={`dashboard${compact ? ' compact' : ''}${morphing ? ' morphing' : ''}`}>
       <header className="topbar">
         <div>
           <h1><BrandIcon icon={appIcon} image={appImage} /> {title}</h1>
@@ -3809,7 +3864,7 @@ function Dashboard({
         <ChangePasswordDialog rules={passwordRules} onClose={() => setShowPw(false)} />
       )}
 
-      {view === 'schedules' ? (
+      <div className="view-swap" key={view}>{view === 'schedules' ? (
         <SchedulerPanel />
       ) : view === 'organize' ? (
         <Organize />
@@ -3832,7 +3887,7 @@ function Dashboard({
           <button
             type="button"
             className={`seg ${!activeList && mode === 'type' ? 'on' : ''}`}
-            onClick={() => chooseGroupBy('type')}
+            onClick={(e) => { tapPop(e.currentTarget); chooseGroupBy('type'); }}
           >
             Type
           </button>
@@ -3840,7 +3895,7 @@ function Dashboard({
             <button
               type="button"
               className={`seg ${!activeList && mode === 'area' ? 'on' : ''}`}
-              onClick={() => chooseGroupBy('area')}
+              onClick={(e) => { tapPop(e.currentTarget); chooseGroupBy('area'); }}
             >
               Area
             </button>
@@ -3849,7 +3904,7 @@ function Dashboard({
             <button
               type="button"
               className={`seg ${!activeList && mode === 'floor' ? 'on' : ''}`}
-              onClick={() => chooseGroupBy('floor')}
+              onClick={(e) => { tapPop(e.currentTarget); chooseGroupBy('floor'); }}
             >
               Floor
             </button>
@@ -3859,7 +3914,7 @@ function Dashboard({
               key={l.id}
               type="button"
               className={`seg ${groupBy === l.id ? 'on' : ''}`}
-              onClick={() => chooseGroupBy(l.id)}
+              onClick={(e) => { tapPop(e.currentTarget); chooseGroupBy(l.id); }}
             >
               {l.name}
             </button>
@@ -3913,8 +3968,8 @@ function Dashboard({
                   {groupLabelOf(key)}
                 </h2>
               )}
-              {open &&
-                (mode === 'floor' ? (
+              <Collapsible open={open} allowOverflow>
+                {mode === 'floor' ? (
                   subgroupByArea(groups[key]).map(([area, list]) => {
                     const akey = `${key}::${area}`;
                     const aopen = openAreas.has(akey);
@@ -3933,7 +3988,7 @@ function Dashboard({
                           <span>{area}</span>
                           <span className="section-count muted">{list.length}</span>
                         </button>
-                        {aopen && (
+                        <Collapsible open={aopen} allowOverflow>
                           <div className="grid">
                             {list.map((d) => (
                               <DeviceCard
@@ -3945,7 +4000,7 @@ function Dashboard({
                               />
                             ))}
                           </div>
-                        )}
+                        </Collapsible>
                       </div>
                     );
                   })
@@ -3961,13 +4016,14 @@ function Dashboard({
                       />
                     ))}
                   </div>
-                ))}
+                )}
+              </Collapsible>
             </section>
           );
         })
       )}
       </>
-      )}
+      )}</div>
       {editDevice && (
         <DeviceEditDialog
           device={editDevice}
