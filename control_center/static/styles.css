@@ -760,20 +760,18 @@ section h2 {
   margin: 12px 2px 6px;
 }
 
-/* Subtle entrance when a group/area's devices appear. */
-section .grid {
-  animation: fade-in 0.2s ease;
+/* Each top-level view (Dashboard, Lists, Organize, Schedules) springs in on nav.
+   (Device cards no longer rise individually: sections now animate their own
+   height open/closed via <Collapsible>, so a per-card rise on top read as
+   motion-on-motion.) */
+@keyframes cc-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
 }
+.view-swap { animation: cc-rise 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .view-swap { animation: none; }
 }
 
 .grid {
@@ -841,6 +839,43 @@ section .grid {
 }
 .compact .switch.on .knob {
   left: 21px;
+}
+
+/* Springy morph when switching between comfortable and compact view: the cards
+   and their controls resize with an overshoot instead of snapping. Scoped to
+   `.morphing` (added only for the ~half-second of the switch) and marked
+   important so it wins over each element's own transition just for that moment,
+   without touching normal interactions the rest of the time. */
+.dashboard.morphing .grid,
+.dashboard.morphing section,
+.dashboard.morphing section h2,
+.dashboard.morphing .card,
+.dashboard.morphing .device-sub,
+.dashboard.morphing .slider,
+.dashboard.morphing .temp-control,
+.dashboard.morphing .temp-control button,
+.dashboard.morphing .temp-value,
+.dashboard.morphing .mode-row,
+.dashboard.morphing .mode,
+.dashboard.morphing .switch,
+.dashboard.morphing .switch .knob {
+  transition:
+    padding 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    gap 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    min-width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    min-height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    font-size 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    margin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard.morphing .grid, .dashboard.morphing section, .dashboard.morphing section h2,
+  .dashboard.morphing .card, .dashboard.morphing .device-sub, .dashboard.morphing .slider,
+  .dashboard.morphing .temp-control, .dashboard.morphing .temp-control button,
+  .dashboard.morphing .temp-value, .dashboard.morphing .mode-row, .dashboard.morphing .mode,
+  .dashboard.morphing .switch, .dashboard.morphing .switch .knob { transition: none !important; }
 }
 
 .device {
@@ -2250,11 +2285,15 @@ img.install-icon {
 /* Rows slide smoothly as one is dragged past them (the dragged row itself has
    transition:none set inline so it tracks the pointer 1:1). */
 /* Springy overshoot so the rows sliding aside feel jelly-like, not mechanical. */
-.list-row { transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1); will-change: transform; }
+/* No `will-change` here: it would make every row its own stacking context and
+   trap an open device-search dropdown behind the rows below it. It's only needed
+   while actually dragging, so it lives on `.dragging`. */
+.list-row { transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .list-row.dragging {
   background: var(--card-active);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   position: relative;
+  will-change: transform;
   cursor: grabbing;
 }
 
@@ -2327,7 +2366,23 @@ img.install-icon {
   white-space: nowrap;
 }
 .list-assign {
-  margin-top: 12px;
+  padding-top: 12px;
+}
+
+/* Reusable open/close height animation (the <Collapsible> component). The wrapper
+   animates its row track 0fr <-> content height; the inner clips during the
+   grow/shrink, and an open region can opt into overflow:visible (`.free`) so a
+   child dropdown can escape. */
+@keyframes cc-expand-in { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+@keyframes cc-expand-out { from { grid-template-rows: 1fr; } to { grid-template-rows: 0fr; } }
+.collapsible { display: grid; grid-template-rows: 1fr; }
+.collapsible.opening { animation: cc-expand-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.collapsible.closing { animation: cc-expand-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.collapsible > .collapsible-inner { overflow: hidden; min-height: 0; }
+.collapsible.free > .collapsible-inner { overflow: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .collapsible.opening, .collapsible.closing { animation: none; }
+  .collapsible > .collapsible-inner { overflow: visible; }
 }
 
 .seg {

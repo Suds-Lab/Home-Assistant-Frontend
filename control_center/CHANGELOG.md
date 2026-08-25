@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.20
+- Switching between **comfortable and compact view** now animates: the cards and
+  their controls springily resize instead of snapping.
+- **Expanding and collapsing** now animates smoothly, both ways. Dashboard
+  sections (and areas within a floor) slide open and closed, and so does the
+  **Edit devices** panel on the Lists page. Moving between the dashboard, Lists,
+  Organize and Schedules springs in too.
+- Fixed the **device search on the Lists page** appearing *behind* the lists
+  below it while adding devices.
+- Fixed the **area/floor picker in the edit dialogs** getting cut off and hidden
+  behind a scroll; it now shows in full over the dialog.
+
 ## 2.9.19
 - Fixed a real problem with **changing your password**: entering the wrong
   current password used to silently log you out instead of telling you it was
