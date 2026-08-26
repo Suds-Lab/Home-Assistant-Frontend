@@ -2355,7 +2355,9 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
           <span className="sched-entry-mode-label">{MODE_LABELS[entry.mode] || entry.mode}{tempStr}</span>
         </div>
         <div className="sched-entry-days">
-          {WEEK_ORDER.map((i) => (
+          {entry.days.length === 0 ? (
+            <span className="sched-entry-everyday">Every day</span>
+          ) : WEEK_ORDER.map((i) => (
             <span key={i} style={{ opacity: entry.days.includes(i) ? 1 : 0.2 }}>{DAY_SHORT[i]}</span>
           ))}
         </div>
@@ -2368,7 +2370,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2395,8 +2397,8 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
   };
 
   function handleSave() {
-    if (!daysArr.length) return;
-    onSave({ id: entry?.id, time, days: daysArr, mode, temp: showTemp ? temp : null, fan: fan || null });
+    if (!hideDays && !daysArr.length) return;
+    onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode, temp: showTemp ? temp : null, fan: fan || null });
   }
 
   return (
@@ -2404,7 +2406,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
       <div className="sched-sheet-topbar">
         <button className="ghost" onClick={onCancel} type="button">Cancel</button>
         <h3 className="sched-sheet-title">{entry?.id ? 'Edit event' : 'Add event'}</h3>
-        <button className="btn-primary" onClick={handleSave} disabled={!daysArr.length} type="button">Save</button>
+        <button className="btn-primary" onClick={handleSave} disabled={!hideDays && !daysArr.length} type="button">Save</button>
       </div>
 
       {schedName && (
@@ -2419,20 +2421,22 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         <input type="time" className="sched-time-input" value={time} onChange={(e) => setTime(e.target.value)} />
       </div>
 
-      <div className="sched-field-group">
-        <span className="sched-field-label">Days</span>
-        <div className="sched-day-btn-row">
-          {WEEK_ORDER.map((i) => (
-            <button key={i} type="button" className={`sched-day-toggle${days.has(i) ? ' on' : ''}`}
-              onClick={() => toggleDay(i)}>{DAY_SHORT[i]}</button>
-          ))}
+      {!hideDays && (
+        <div className="sched-field-group">
+          <span className="sched-field-label">Days</span>
+          <div className="sched-day-btn-row">
+            {WEEK_ORDER.map((i) => (
+              <button key={i} type="button" className={`sched-day-toggle${days.has(i) ? ' on' : ''}`}
+                onClick={() => toggleDay(i)}>{DAY_SHORT[i]}</button>
+            ))}
+          </div>
+          <div className="sched-presets">
+            <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4]))}>Weekdays</button>
+            <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([5,6]))}>Weekend</button>
+            <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4,5,6]))}>Every day</button>
+          </div>
         </div>
-        <div className="sched-presets">
-          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4]))}>Weekdays</button>
-          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([5,6]))}>Weekend</button>
-          <button type="button" className="ghost sched-preset-btn" onClick={() => setDays(new Set([0,1,2,3,4,5,6]))}>Every day</button>
-        </div>
-      </div>
+      )}
 
       <div className="sched-field-group">
         <span className="sched-field-label">Mode</span>
@@ -2480,7 +2484,14 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 }
 
 /* SchedMyView: my schedules list + editor (schedule state lifted to SchedulerPanel) */
-function SchedMyView({ entities, schedules, setSchedules }) {
+function SchedMyView({ entities, schedules, setSchedules, override = false }) {
+  const noun = override ? 'override' : 'schedule';
+  const Noun = override ? 'Override' : 'Schedule';
+  const todayStr = React.useMemo(() => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }, []);
   const [selId, setSelId] = React.useState(null);
   const [editEntry, setEditEntry] = React.useState(null);
   const [sheetClosing, setSheetClosing] = React.useState(false);
@@ -2508,8 +2519,10 @@ function SchedMyView({ entities, schedules, setSchedules }) {
     try {
       const existing = (schedules || []).map((s) => s.name);
       let n = (schedules || []).length + 1;
-      while (existing.includes(`Schedule ${n}`)) n++;
-      const s = await createSchedule({ name: `Schedule ${n}`, targets: [], entries: [] });
+      while (existing.includes(`${Noun} ${n}`)) n++;
+      const fields = { name: `${Noun} ${n}`, targets: [], entries: [] };
+      if (override) { fields.type = 'override'; fields.start = todayStr; fields.end = todayStr; }
+      const s = await createSchedule(fields);
       setSchedules((prev) => [...(prev || []), s]);
       setSelId(s.id);
       setTimeout(() => {
@@ -2529,15 +2542,14 @@ function SchedMyView({ entities, schedules, setSchedules }) {
   }
 
   async function removeSched(id) {
-    if (!window.confirm('Delete this schedule?')) return;
+    if (!window.confirm(`Delete this ${noun}?`)) return;
     setBusy(true); setError('');
     try {
       await deleteSchedule(id);
-      setSchedules((prev) => {
-        const next = prev.filter((s) => s.id !== id);
-        setSelId(next.length ? next[0].id : null);
-        return next;
-      });
+      // setSchedules holds the full list; re-select within THIS view's slice.
+      setSchedules((prev) => prev.filter((s) => s.id !== id));
+      const remaining = (schedules || []).filter((s) => s.id !== id);
+      setSelId(remaining.length ? remaining[0].id : null);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -2590,7 +2602,7 @@ function SchedMyView({ entities, schedules, setSchedules }) {
             <span className="sched-status-dot" style={{
               background: sched ? (sched.enabled ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)'
             }} />
-            <span className="sched-switcher-label">{sched ? sched.name : 'No schedules yet'}</span>
+            <span className="sched-switcher-label">{sched ? sched.name : `No ${noun}s yet`}</span>
             {sched && <span className="sched-switcher-meta">{sched.entries.length} event{sched.entries.length !== 1 ? 's' : ''}</span>}
             <span className="sched-caret">&#9660;</span>
           </button>
@@ -2598,18 +2610,18 @@ function SchedMyView({ entities, schedules, setSchedules }) {
         items={schedItems}
         selectedId={selId}
         onSelect={(id) => setSelId(id)}
-        placeholder="Search schedules…"
-        emptyText="No schedules found"
+        placeholder={`Search ${noun}s…`}
+        emptyText={`No ${noun}s found`}
         footer={
           <button className="sched-menu-create" type="button" onClick={createNew} disabled={busy}>
-            + Create schedule
+            + Create {noun}
           </button>
         }
       />
 
       {!sched && (schedules || []).length === 0 && (
         <div className="sched-card">
-          <p className="muted" style={{ margin: 0 }}>No schedules yet. Use the menu above to create one.</p>
+          <p className="muted" style={{ margin: 0 }}>No {noun}s yet. Use the menu above to create one.</p>
         </div>
       )}
 
@@ -2628,8 +2640,29 @@ function SchedMyView({ entities, schedules, setSchedules }) {
             <SchedSwitch checked={sched.enabled} disabled={busy}
               onChange={(v) => patchSched(sched.id, { enabled: v })} />
             <button className="ghost" type="button" onClick={() => removeSched(sched.id)}
-              disabled={busy} title="Delete schedule">&#x1F5D1;</button>
+              disabled={busy} title={`Delete ${noun}`}>&#x1F5D1;</button>
           </div>
+
+          {override && (
+            <div className="sched-sub">
+              <span className="sched-unit-title">Active dates</span>
+              <div className="sched-date-row">
+                <label className="sched-date-field">
+                  <span>From</span>
+                  <input type="date" value={sched.start || todayStr}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v) patchSched(sched.id, { start: v, end: (sched.end && sched.end >= v) ? sched.end : v });
+                    }} />
+                </label>
+                <label className="sched-date-field">
+                  <span>To</span>
+                  <input type="date" value={sched.end || sched.start || todayStr} min={sched.start || todayStr}
+                    onChange={(e) => { const v = e.target.value; if (v) patchSched(sched.id, { end: v }); }} />
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="sched-sub">
             <span className="sched-unit-title">Thermostats</span>
@@ -2657,7 +2690,7 @@ function SchedMyView({ entities, schedules, setSchedules }) {
             )}
           </div>
 
-          {sortedEntries.length > 0 && (
+          {!override && sortedEntries.length > 0 && (
             <div className="sched-sub">
               <span className="sched-unit-title">Week preview</span>
               <SchedWeekStrip entries={sortedEntries} tMin={tInfo.tMin} tMax={tInfo.tMax} />
@@ -2665,7 +2698,10 @@ function SchedMyView({ entities, schedules, setSchedules }) {
           )}
 
           <div className="sched-sub">
-            <span className="sched-unit-title">Events</span>
+            <span className="sched-unit-title">{override ? 'Daily events' : 'Events'}</span>
+            {override && sched.enabled && sortedEntries.length === 0 && (
+              <p className="sched-clash-note">This override is on but has no events, so it does nothing and won't override your weekly schedules.</p>
+            )}
             {sortedEntries.length === 0 ? (
               <p className="muted">No events yet.</p>
             ) : (
@@ -2691,6 +2727,7 @@ function SchedMyView({ entities, schedules, setSchedules }) {
             onCancel={closeSheet}
             onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
+            hideDays={override}
           />
         </div>
       )}
@@ -2804,6 +2841,11 @@ function SchedulerPanel() {
       .catch((e) => setError(e.message));
   }, []);
 
+  // Split the one fetched list into weekly schedules and date-scoped overrides;
+  // each tab manages its own slice but writes through the shared setSchedules.
+  const weeklies = schedules ? schedules.filter((s) => s.type !== 'override') : null;
+  const overrides = schedules ? schedules.filter((s) => s.type === 'override') : null;
+
   return (
     <div className="sched-panel">
       <div className="sched-topbar">
@@ -2811,19 +2853,31 @@ function SchedulerPanel() {
       </div>
       <div className="tabs" style={{ marginBottom: 16 }}>
         <button className={`seg${view === 'mine' ? ' on' : ''}`} onClick={() => setView('mine')} type="button">My schedules</button>
+        <button className={`seg${view === 'overrides' ? ' on' : ''}`} onClick={() => setView('overrides')} type="button">Overrides</button>
         <button className={`seg${view === 'thermostat' ? ' on' : ''}`} onClick={() => setView('thermostat')} type="button">By thermostat</button>
       </div>
       {error && <div className="error banner">{error}</div>}
       {view === 'mine' ? (
-        <SchedMyView entities={entities} schedules={schedules} setSchedules={setSchedules} />
+        <SchedMyView key="weekly" entities={entities} schedules={weeklies} setSchedules={setSchedules} />
+      ) : view === 'overrides' ? (
+        <SchedMyView key="override" entities={entities} schedules={overrides} setSchedules={setSchedules} override />
       ) : (
-        <SchedByThermostat entities={entities} schedules={schedules || []} />
+        <SchedByThermostat entities={entities} schedules={weeklies || []} />
       )}
     </div>
   );
 }
 
 /* SchedAdminSchedRow: collapsible schedule row for the admin "All schedules" tab */
+// "Aug 25, 2026" for a single day, or "Aug 25 to Aug 27, 2026" for a range.
+function fmtDateRange(start, end) {
+  if (!start) return '';
+  const opts = { month: 'short', day: 'numeric', year: 'numeric' };
+  const s = new Date(`${start}T00:00:00`).toLocaleDateString(undefined, opts);
+  if (!end || end === start) return s;
+  return `${s} to ${new Date(`${end}T00:00:00`).toLocaleDateString(undefined, opts)}`;
+}
+
 function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
   const [open, setOpen] = React.useState(false);
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
@@ -2835,8 +2889,12 @@ function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
           {open ? '▾' : '▸'}
         </button>
         <div className="sched-admin-sched-main">
-          <span className="sched-admin-sched-name">{sched.name}</span>
+          <span className="sched-admin-sched-name">
+            {sched.name}
+            {sched.type === 'override' && <span className="sched-type-badge">Override</span>}
+          </span>
           <span className="sched-admin-meta">
+            {sched.type === 'override' && sched.start && `${fmtDateRange(sched.start, sched.end)} · `}
             {sched.entries.length} event{sched.entries.length !== 1 ? 's' : ''}
             {sched.targets.length > 0 && ` · ${sched.targets.length} thermostat${sched.targets.length !== 1 ? 's' : ''}`}
           </span>
@@ -3139,7 +3197,13 @@ function AdminUserSchedDetail({ user, schedules, climateEntities, perms, permBus
    its effective program merged across all users, with conflict warnings. */
 function AdminAcSchedDetail({ entity, schedules, users, perms, permBusy, togglePerm, userHasDevice }) {
   const tInfo = schedTempInfo([entity]);
-  const { targetSchedules, merged, byKey, conflictCount } = schedMergeForEntity(entity.entity_id, schedules);
+  // Overrides are date-scoped, so they don't belong in the weekly week-strip;
+  // merge weeklies only, and list any overrides targeting this thermostat apart.
+  const weeklySchedules = (schedules || []).filter((s) => s.type !== 'override');
+  const { targetSchedules, merged, byKey, conflictCount } = schedMergeForEntity(entity.entity_id, weeklySchedules);
+  const overrideScheds = (schedules || []).filter(
+    (s) => s.type === 'override' && s.enabled && (s.targets || []).includes(entity.entity_id)
+  );
   const userName = (uname) => (users || []).find((u) => u.username === uname)?.displayName || uname;
 
   const allowedCount = (users || []).filter((u) => {
@@ -3185,9 +3249,9 @@ function AdminAcSchedDetail({ entity, schedules, users, perms, permBusy, toggleP
         </div>
       )}
 
-      <div className="sched-section-label">Effective program (all users)</div>
+      <div className="sched-section-label">Weekly program (all users)</div>
       {targetSchedules.length === 0 ? (
-        <p className="muted" style={{ margin: '4px 0' }}>No active schedules target this thermostat.</p>
+        <p className="muted" style={{ margin: '4px 0' }}>No active weekly schedules target this thermostat.</p>
       ) : (
         <>
           <SchedWeekStrip entries={merged} tMin={tInfo.tMin} tMax={tInfo.tMax} />
@@ -3212,6 +3276,21 @@ function AdminAcSchedDetail({ entity, schedules, users, perms, permBusy, toggleP
               );
             })}
           </div>
+        </>
+      )}
+
+      {overrideScheds.length > 0 && (
+        <>
+          <div className="sched-section-label">Overrides</div>
+          {overrideScheds.map((s) => (
+            <div key={s.id} className="sched-override-row">
+              <span className="sched-type-badge">Override</span>
+              <span className="sched-override-name">{s.name}</span>
+              <span className="sched-override-meta">
+                {fmtDateRange(s.start, s.end)} · {userName(s.owner)} · {s.entries.length} event{s.entries.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          ))}
         </>
       )}
     </div>

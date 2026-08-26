@@ -13,6 +13,7 @@ Admin endpoints (management port only):
   DELETE     /api/admin/schedules/<id>        - delete any schedule
 """
 import uuid
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -81,6 +82,7 @@ def create_schedule():
         "enabled": True,
         "targets": [t for t in data.get("targets", []) if t in allowed],
         "entries": _validated_entries(data.get("entries", [])),
+        **_schedule_type_fields(data),
     }
     schedules = load_schedules()
     schedules.append(sched)
@@ -105,6 +107,14 @@ def update_schedule(sched_id):
         sched["targets"] = [t for t in data["targets"] if t in allowed]
     if "entries" in data:
         sched["entries"] = _validated_entries(data["entries"])
+    if any(k in data for k in ("type", "start", "end")):
+        fields = _schedule_type_fields(data, sched)
+        sched["type"] = fields["type"]
+        if fields["type"] == "override":
+            sched["start"], sched["end"] = fields["start"], fields["end"]
+        else:  # switched back to weekly: drop stale dates
+            sched.pop("start", None)
+            sched.pop("end", None)
     save_schedules(schedules)
     return jsonify(sched)
 
@@ -266,6 +276,35 @@ def _validated_entries(raw):
         }
         entries.append(entry)
     return entries
+
+
+def _validated_date(s):
+    """Normalize a 'YYYY-MM-DD' string, or None if it isn't a real date. We parse
+    (not just pattern-match) so nonsense like 2025-13-40 is rejected."""
+    if not isinstance(s, str):
+        return None
+    try:
+        return datetime.strptime(s.strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _schedule_type_fields(data, existing=None):
+    """Resolve type/start/end for a create or patch. A "weekly" schedule carries
+    no dates; an "override" needs a valid start (end defaults to start, and the
+    two are swapped if reversed). `existing` supplies fallbacks when a patch only
+    touches some of the fields. Returns the exact fields to store."""
+    existing = existing or {}
+    stype = data.get("type", existing.get("type", "weekly"))
+    if stype != "override":
+        return {"type": "weekly"}
+    start = _validated_date(data.get("start", existing.get("start")))
+    if start is None:
+        raise ApiError("An override schedule needs a valid start date.", 400)
+    end = _validated_date(data.get("end", existing.get("end"))) or start
+    if end < start:
+        start, end = end, start
+    return {"type": "override", "start": start, "end": end}
 
 
 def _find_owned(schedules, sched_id, username):

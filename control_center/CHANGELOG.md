@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.21
+- New **Overrides** (holiday / special-event schedules). In the Schedules panel's
+  **Overrides** tab you can create a schedule that runs only on a date (or a
+  From/To range) and, while active, takes over from your weekly schedules for the
+  thermostats you include. Its events apply every day in the range, so a single
+  event is an all-day hold and several events vary the temperature across the day.
+  When the dates pass, those thermostats go back to their weekly program. Turn on
+  an override mid-day and the event in effect right now applies immediately.
+- In the admin Schedules view, overrides are clearly marked: each is badged with
+  its active dates under **By user**, and listed in their own section (apart from
+  the weekly program) under **By thermostat**.
+
 ## 2.9.20
 - Switching between **comfortable and compact view** now animates: the cards and
   their controls springily resize instead of snapping.
