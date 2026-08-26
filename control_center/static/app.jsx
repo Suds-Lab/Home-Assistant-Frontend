@@ -2370,7 +2370,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanModes = [] }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanModes = [], fanMixed = false }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2478,6 +2478,11 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
                 onClick={() => setFan(f)}>{f}</button>
             ))}
           </div>
+          {fanMixed && (
+            <span className="sched-fan-note">
+              These thermostats use different fan speeds; each unit applies a speed only if it has it.
+            </span>
+          )}
         </div>
       )}
 
@@ -2519,15 +2524,18 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
   const tInfo = schedTempInfo(entities);
 
-  // Fan speeds to offer in the editor: only the modes EVERY targeted thermostat
-  // supports (their intersection), so a schedule can't set a fan a device rejects
-  // (which knocked some units off). Empty -> the editor hides the fan row.
-  const fanModes = React.useMemo(() => {
-    const targets = sched?.targets || [];
-    if (!targets.length) return [];
-    const lists = targets.map((t) =>
+  // Each thermostat reports its OWN fan_modes (numeric, %, or named - whatever the
+  // integration uses). Offer the UNION across the targets so any supported speed is
+  // pickable; the scheduler only ever sends a speed to a unit that actually lists
+  // it, so a mismatched value is simply skipped there (never knocks a unit off).
+  // `mixed` = the targets don't all share one fan vocabulary (or some have none).
+  const fanInfo = React.useMemo(() => {
+    const lists = (sched?.targets || []).map((t) =>
       ((entities || []).find((e) => e.entity_id === t)?.attributes?.fan_modes) || []);
-    return lists.reduce((acc, l) => acc.filter((x) => l.includes(x)), lists[0] || []);
+    const withFan = lists.filter((l) => l.length);
+    const modes = [...new Set(withFan.flat())];
+    const vocab = new Set(withFan.map((l) => l.join('|')));
+    return { modes, mixed: modes.length > 0 && (vocab.size > 1 || withFan.length < lists.length) };
   }, [sched, entities]);
 
   async function createNew() {
@@ -2745,7 +2753,8 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
             onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
             hideDays={override}
-            fanModes={fanModes}
+            fanModes={fanInfo.modes}
+            fanMixed={fanInfo.mixed}
           />
         </div>
       )}

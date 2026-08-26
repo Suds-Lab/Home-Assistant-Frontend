@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.23
+- Follow-up to the fan fix for **mixed fleets**. When a schedule targets several
+  thermostats that use different fan-speed names (some report `low/medium/high`,
+  others `25%/50%/100%`, `silent/quiet/…`, or numbers), the editor now offers the
+  combined set of speeds with a note that each unit applies a speed only if it has
+  it, instead of hiding the fan row whenever the units didn't perfectly match.
+
 ## 2.9.22
 - Fixed schedules **fighting a thermostat**. The fan-speed picker used a generic
   list that ignored what the unit actually supports, so a schedule could send a
