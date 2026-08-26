@@ -3144,6 +3144,7 @@ img.install-icon {
   cursor: pointer;
 }
 .sched-fan-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sched-fan-note { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
 
 /* Admin user sections */
 .sched-admin-user-section { margin-bottom: 20px; }
