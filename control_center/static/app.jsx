@@ -2370,7 +2370,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanModes = [] }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2465,15 +2465,21 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         </div>
       )}
 
-      <div className="sched-field-group">
-        <span className="sched-field-label">Fan speed</span>
-        <div className="sched-fan-row">
-          {['', ...FAN_OPTIONS.slice(0, 4)].map((f) => (
-            <button key={f || '_auto'} type="button" className={`sched-fan-btn${fan === f ? ' on' : ''}`}
-              onClick={() => setFan(f)}>{f || 'Auto'}</button>
-          ))}
+      {mode !== 'off' && fanModes.length > 0 && (
+        <div className="sched-field-group">
+          <span className="sched-field-label">Fan speed</span>
+          <div className="sched-fan-row">
+            {/* "Don't set" leaves the fan alone; the rest are the modes the
+                targeted thermostat(s) actually support - never a generic guess. */}
+            <button type="button" className={`sched-fan-btn${!fan ? ' on' : ''}`}
+              onClick={() => setFan('')}>Don&rsquo;t set</button>
+            {fanModes.map((f) => (
+              <button key={f} type="button" className={`sched-fan-btn${fan === f ? ' on' : ''}`}
+                onClick={() => setFan(f)}>{f}</button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {entry?.id && onDelete && (
         <button className="sched-danger-link" type="button"
@@ -2512,6 +2518,17 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
   const sched = schedules ? schedules.find((s) => s.id === selId) || null : null;
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
   const tInfo = schedTempInfo(entities);
+
+  // Fan speeds to offer in the editor: only the modes EVERY targeted thermostat
+  // supports (their intersection), so a schedule can't set a fan a device rejects
+  // (which knocked some units off). Empty -> the editor hides the fan row.
+  const fanModes = React.useMemo(() => {
+    const targets = sched?.targets || [];
+    if (!targets.length) return [];
+    const lists = targets.map((t) =>
+      ((entities || []).find((e) => e.entity_id === t)?.attributes?.fan_modes) || []);
+    return lists.reduce((acc, l) => acc.filter((x) => l.includes(x)), lists[0] || []);
+  }, [sched, entities]);
 
   async function createNew() {
     setBusy(true);
@@ -2728,6 +2745,7 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
             onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
             hideDays={override}
+            fanModes={fanModes}
           />
         </div>
       )}

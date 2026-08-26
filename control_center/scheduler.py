@@ -40,12 +40,26 @@ _pending = {}  # target -> {mode, temp, fan, sched_id, name, owner, first_ts, la
 _VERIFY_WINDOW_SECS = 600   # keep verifying for ~10 min after a fire
 _VERIFY_RETRY_SECS = 120    # re-send at most every ~2 min per target
 _VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
+_VERIFY_MAX_TRIES = 2       # give up after this many re-applies that didn't stick
+                            # (a real bounce-back heals in 1; more means we're
+                            #  fighting the device, so stand down instead of flapping)
+
+
+# ANSI colors for the add-on log (Supervisor's log viewer renders them).
+_C_RESET, _C_RED, _C_AMBER, _C_CYAN = "\x1b[0m", "\x1b[31m", "\x1b[33m", "\x1b[36m"
 
 
 def _log(msg):
     """One timestamped diagnostics line in the add-on log, prefixed [sched] so it
-    is easy to grep. flush=True so lines appear promptly, not buffered."""
-    print(f"[sched {datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
+    is easy to grep, and coloured by severity. flush=True so lines appear promptly."""
+    ts = f"{datetime.now():%Y-%m-%d %H:%M:%S}"
+    low = msg.lower()
+    if any(k in low for k in ("fail", "error", "giving up", "could not", "couldn't")):
+        print(f"{_C_RED}[sched {ts}] {msg}{_C_RESET}", flush=True)          # error: whole line red
+    elif any(k in low for k in ("warning", "skip", "drift", "backing off", "stopped", "stand down")):
+        print(f"{_C_AMBER}[sched {ts}] {msg}{_C_RESET}", flush=True)        # warning: whole line amber
+    else:
+        print(f"{_C_CYAN}[sched {ts}]{_C_RESET} {msg}", flush=True)         # info: cyan tag
 
 
 # A person changing a thermostat (directly in Home Assistant, or via Control
@@ -93,7 +107,15 @@ def _send_climate(target, mode, temp, fan):
         if temp is not None:
             call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
         if fan:
-            call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
+            # Only set the fan if the device actually lists this mode. Sending a
+            # fan mode a thermostat doesn't support can make some units drop to
+            # OFF, which then reads as drift and gets re-applied - a flap loop.
+            from core import STATE_CACHE
+            supported = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
+            if fan in supported:
+                call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
+            else:
+                _log(f"  skip fan '{fan}' on {target} - not one of its fan modes {supported or '(none)'}")
 
 
 def _fire_event(sched, entry, target):
@@ -141,7 +163,7 @@ def _fire_event(sched, entry, target):
     _pending[target] = {
         "mode": mode, "temp": temp, "fan": fan,
         "sched_id": sched.get("id"), "name": name,
-        "owner": sched.get("owner"), "first_ts": now, "last_try": now,
+        "owner": sched.get("owner"), "first_ts": now, "last_try": now, "tries": 0,
     }
     _log(f"  confirming {target} for up to {_VERIFY_WINDOW_SECS // 60} min")
 
@@ -185,6 +207,35 @@ def _log_scheduled(sched, entry, target):
         "verb": verb,
         "source": "schedule",
         "schedule": sched.get("name") or "Schedule",
+    })
+
+
+def _log_giveup(p, target):
+    """Activity-feed line when the scheduler stops fighting a device that keeps
+    reverting, so the owner sees it in the app without reading the add-on log."""
+    from store import _append_activity, load_users
+    from core import STATE_CACHE
+
+    owner = p.get("owner")
+    display = next(
+        (u.get("displayName") or u.get("username")
+         for u in load_users() if u.get("username") == owner),
+        owner,
+    ) or "A user"
+    attrs = (STATE_CACHE.get(target) or {}).get("attributes") or {}
+    entity_name = attrs.get("friendly_name") or target.split(":", 1)[-1]
+    want = "Off" if p["mode"] == "off" else _MODE_DISPLAY.get(p["mode"], p["mode"])
+    _append_activity({
+        "ts": time.time(),
+        "username": owner,
+        "name": display,
+        "entity_id": target,
+        "entity": entity_name,
+        "domain": "climate",
+        "service": "schedule",
+        "verb": f"could not be held at {want} (it kept reverting)",
+        "source": "schedule",
+        "schedule": p.get("name") or "Schedule",
     })
 
 
@@ -246,14 +297,25 @@ def _verify_pending(schedules, override_targets=None):
             continue
         if now - p["last_try"] < _VERIFY_RETRY_SECS:
             continue  # drifted (mystery), but re-sent too recently - wait
+        # Already re-applied the max number of times and it STILL drifted: we're
+        # fighting the device (e.g. it rejects a command and drops to off). Stand
+        # down instead of flapping, and tell the owner in the activity feed.
+        if p.get("tries", 0) >= _VERIFY_MAX_TRIES:
+            _pending.pop(target, None)
+            _log(f"giving up on {target} ('{p['name']}') after {p['tries']} re-applies - "
+                 f"it keeps reverting; standing down until the next event")
+            _log_giveup(p, target)
+            continue
         p["last_try"] = now
+        p["tries"] = p.get("tries", 0) + 1
         st = STATE_CACHE.get(target) or {}
         cur = st.get("state")
         cur_t = (st.get("attributes") or {}).get("temperature")
         want = "off" if p["mode"] == "off" else _MODE_TO_HVAC.get(p["mode"], p["mode"])
         want_t = "" if (p["mode"] == "off" or p["temp"] is None) else f" {p['temp']}°"
         have = f"{cur}" + (f" {cur_t}°" if cur_t is not None else "")
-        _log(f"DRIFT {target} ('{p['name']}'): want {want}{want_t}, have {have} - re-applying")
+        _log(f"DRIFT {target} ('{p['name']}'): want {want}{want_t}, have {have} - "
+             f"re-applying (try {p['tries']}/{_VERIFY_MAX_TRIES})")
         try:
             _send_climate(target, p["mode"], p["temp"], p["fan"])
         except Exception as exc:  # noqa: BLE001

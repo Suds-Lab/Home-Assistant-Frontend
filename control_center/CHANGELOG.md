@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.9.22
+- Fixed schedules **fighting a thermostat**. The fan-speed picker used a generic
+  list that ignored what the unit actually supports, so a schedule could send a
+  fan mode the AC rejected, and some units dropped to **off**, which the self-check
+  then kept re-applying every couple of minutes. Now the picker only offers the
+  fan speeds the targeted thermostat(s) actually support (and hides the row when
+  a device has no fan control), the scheduler never sends an unsupported fan, and
+  if a device keeps reverting the scheduler **stands down after two tries** instead
+  of flapping. When it stands down it now says so in your **Activity** feed.
+- **Cleaner add-on logs.** A remote instance that's offline (e.g. a Cloudflare
+  530 / error 1033) no longer floods the log with a wall of headers every five
+  seconds; it's summarized to one line, then quieted until it changes or
+  recovers, with a "recovered" line when it comes back. Log lines are now
+  colour-coded by severity.
+
 ## 2.9.21
 - New **Overrides** (holiday / special-event schedules). In the Schedules panel's
   **Overrides** tab you can create a schedule that runs only on a date (or a

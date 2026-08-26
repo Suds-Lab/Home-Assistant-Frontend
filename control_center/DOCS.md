@@ -481,6 +481,9 @@ The **Schedules** panel lets each user:
    temperature, and optional fan speed. The temperature slider
    range, step, and unit (C or F) are read automatically from the HA entity's
    own configuration, so °F setpoints work correctly without any extra setup.
+   The fan-speed choices are the ones the targeted thermostat(s) actually
+   support (the row is hidden if a device has no fan control), so a schedule can
+   never send a fan mode the unit rejects.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.
 5. Switch to **By thermostat** to see the merged program for one unit across all
@@ -499,7 +502,9 @@ every couple of minutes) if they don't. A change that didn't take fixes itself.
 If a **person** changes the thermostat during that window (in Home Assistant, or
 through Control Center), the schedule stops re-applying to that device until its
 next event, so it never fights a real person. Only a change with no one behind it
-(a device quietly bouncing back on its own) keeps getting re-applied.
+(a device quietly bouncing back on its own) keeps getting re-applied, and even
+then only a couple of times: if a unit keeps reverting, the scheduler **stands
+down** rather than flapping, and notes it in the Activity feed.
 
 ### Overrides (holidays and special events)
 
