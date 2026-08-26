@@ -14,6 +14,7 @@ Runs two ways:
 import json
 import mimetypes
 import os
+import re
 import threading
 import time
 from queue import Empty, Queue
@@ -99,6 +100,49 @@ def _broadcast(entity_id, new_state):
             sub["q"].put(payload)
 
 
+# ANSI colors for the add-on log (Supervisor's log viewer renders them).
+_C_RESET, _C_RED, _C_AMBER, _C_GREEN, _C_DIM = "\x1b[0m", "\x1b[31m", "\x1b[33m", "\x1b[32m", "\x1b[2m"
+
+# Per-instance reconnect-failure state, so an offline remote doesn't flood the log.
+_ws_fail = {}  # label -> {"count": int, "sig": str|None, "last_log": float}
+
+
+def _log_ws_failure(label, err):
+    """Log a WebSocket failure without flooding. The raw exception can be a wall of
+    text (Cloudflare's whole header dump), so we boil it down to a status + error
+    code and log it on the first failure, then at most every 5 minutes until it
+    changes or the link recovers."""
+    s = str(err)
+    status = (s.split(" -+-+- ", 1)[0] if " -+-+- " in s else s).strip()
+    if len(status) > 120:
+        status = status[:117] + "..."
+    m = re.search(r"error code:\s*(\d+)", s)
+    cf = f" (Cloudflare {m.group(1)})" if m else ""
+    low = s.lower()
+    bot = "403" in status and "cloudflare" in low
+    down = ("530" in status) or (m and m.group(1) in ("1033", "1016"))
+    sig = status + cf
+    st = _ws_fail.setdefault(label, {"count": 0, "sig": None, "last_log": 0.0})
+    st["count"] += 1
+    now = time.time()
+    if st["sig"] == sig and now - st["last_log"] <= 300:
+        return  # same failure, logged recently - stay quiet
+    st["sig"] = sig
+    st["last_log"] = now
+    more = f" (x{st['count']})" if st["count"] > 1 else ""
+    if bot:
+        print(f"{_C_AMBER}HA WebSocket blocked by Cloudflare ({label}): the remote URL is behind "
+              f"bot protection. Use the direct local IP/port, or add a WAF bypass for "
+              f"/api/websocket. Retrying every 5s{more}.{_C_RESET}", flush=True)
+    elif down:
+        print(f"{_C_AMBER}HA WebSocket: remote '{label}' is unreachable{cf} - its origin is down or "
+              f"Cloudflare can't reach it. Retrying every 5s{more}; silenced until it changes or "
+              f"recovers.{_C_RESET}", flush=True)
+    else:
+        print(f"{_C_RED}HA WebSocket error ({label}): {status}{cf}. Retrying every 5s{more}; "
+              f"silenced until it changes or recovers.{_C_RESET}", flush=True)
+
+
 def _ws_loop(instance_id=None):
     """Maintain one HA WebSocket connection (main or a remote instance), refilling
     the state cache and fanning state_changed events to subscribers. Reconnects
@@ -158,7 +202,12 @@ def _ws_loop(instance_id=None):
             _reg_buf = {}
             if instance_id is None:
                 _CACHE_READY.set()
-            print(f"HA WebSocket connected ({label}); streaming state changes")
+            prev = _ws_fail.pop(label, {}).get("count", 0)
+            if prev:
+                print(f"{_C_GREEN}HA WebSocket recovered ({label}) after {prev} failed attempt(s); "
+                      f"streaming state changes{_C_RESET}", flush=True)
+            else:
+                print(f"HA WebSocket connected ({label}); streaming state changes", flush=True)
 
             # Keepalive: the socket timeout also governs recv() in this loop, so
             # an idle instance (no state_changed for the timeout window) would
@@ -231,23 +280,15 @@ def _ws_loop(instance_id=None):
                             if not scheduler.was_recently_commanded(fid):
                                 scheduler.note_user_change(fid, who=uid)
                                 by = " (by user)"
-                        print(f"[device {time.strftime('%Y-%m-%d %H:%M:%S')}] {fid}: {o_str} -> {n_str}{by}", flush=True)
+                        print(f"{_C_DIM}[device {time.strftime('%Y-%m-%d %H:%M:%S')}] {fid}: "
+                              f"{o_str} -> {n_str}{by}{_C_RESET}", flush=True)
                 if data.get("old_state") is None and new is not None:
                     _invalidate_registries(instance_id)
                 _broadcast(fid, new)
         except Exception as err:  # noqa: BLE001
             if instance_id is None:
                 _CACHE_READY.clear()
-            err_str = str(err)
-            if "403" in err_str and "cloudflare" in err_str.lower():
-                print(
-                    f"HA WebSocket blocked by Cloudflare ({label}). "
-                    "The remote HA URL is behind Cloudflare bot protection. "
-                    "Use the direct local IP/port (e.g. http://192.168.x.x:8123) "
-                    "or create a Cloudflare WAF bypass rule for /api/websocket."
-                )
-            else:
-                print(f"HA WebSocket error ({label}), reconnecting in 5s:", err)
+            _log_ws_failure(label, err)
             time.sleep(5)
 
 
