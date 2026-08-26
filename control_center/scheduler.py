@@ -206,7 +206,7 @@ def _matches_desired(target, mode, temp):
     return True
 
 
-def _verify_pending(schedules):
+def _verify_pending(schedules, override_targets=None):
     """For each recently-fired target still inside its verification window, re-send
     the scheduled mode/temp if the thermostat has drifted from it (rate-limited).
     Drops entries once the window closes or their schedule is gone/disabled."""
@@ -215,6 +215,8 @@ def _verify_pending(schedules):
     from core import STATE_CACHE
     now = time.time()
     enabled_ids = {s.get("id") for s in schedules if s.get("enabled", True)}
+    override_targets = override_targets or set()
+    weekly_ids = {s.get("id") for s in schedules if s.get("type") != "override"}
     for target in list(_pending.keys()):
         p = _pending[target]
         if now - p["first_ts"] > _VERIFY_WINDOW_SECS:
@@ -224,6 +226,11 @@ def _verify_pending(schedules):
         if p["sched_id"] not in enabled_ids:
             _pending.pop(target, None)
             _log(f"stopped confirming {target} ('{p['name']}') - schedule disabled or removed")
+            continue
+        # An override now governs this target: stop enforcing a stale weekly value.
+        if target in override_targets and p["sched_id"] in weekly_ids:
+            _pending.pop(target, None)
+            _log(f"stopped confirming {target} ('{p['name']}') - an override now governs it")
             continue
         m = _matches_desired(target, p["mode"], p["temp"])
         if m is None or m:
@@ -253,17 +260,103 @@ def _verify_pending(schedules):
             _log(f"  re-apply FAILED on {target}: {exc}")
 
 
+# ---------------------------------------------------------------------------
+# Override (holiday) schedules
+#
+# An override schedule (type == "override") is active only within its inclusive
+# [start, end] date window ("YYYY-MM-DD"). While active it GOVERNS its target
+# thermostats: its own time events fire every day in the window (day-of-week is
+# ignored), and every weekly schedule is suppressed for those targets. A weekly
+# schedule has no type (or type == "weekly").
+# ---------------------------------------------------------------------------
+
+# Remembers that we've already applied the "in effect now" override event for a
+# (sched_id, target, YYYY-MM-DD), so a window that opens mid-day takes effect at
+# once (not only at the next event) without re-firing every tick.
+_override_applied = {}
+
+
+def _in_window(sched, today):
+    start = sched.get("start", "")
+    return start <= today <= (sched.get("end") or start)
+
+
+def _override_active(sched, today):
+    """An override that should govern its targets today: enabled, in its date
+    window, and with at least one event. An enabled-but-empty override is inert -
+    it must NOT suppress weekly (that would silently freeze the device)."""
+    return (
+        sched.get("type") == "override"
+        and sched.get("enabled", True)
+        and bool(sched.get("entries"))
+        and _in_window(sched, today)
+    )
+
+
+def _override_covered_targets(schedules, today):
+    """Every thermostat governed by an active override today."""
+    covered = set()
+    for s in schedules:
+        if _override_active(s, today):
+            covered.update(s.get("targets", []))
+    return covered
+
+
+def compute_due(schedules, hhmm, dow, today):
+    """Pure: what should fire at this minute, and which targets an override governs
+    today. Returns (due, override_targets):
+      - due: list of (sched, entry) for ENABLED schedules whose entry.time == hhmm;
+        override entries match by date window (any day), weekly entries by day-of-week.
+      - override_targets: set of thermostats governed by an active override today.
+    The caller suppresses weekly fires for any target in override_targets."""
+    override_targets = _override_covered_targets(schedules, today)
+    due = []
+    for sched in schedules:
+        if not sched.get("enabled", True):
+            continue
+        is_ovr = sched.get("type") == "override"
+        if is_ovr and not _in_window(sched, today):
+            continue
+        for entry in sched.get("entries", []):
+            if entry.get("time") != hhmm:
+                continue
+            if not is_ovr and dow not in entry.get("days", []):
+                continue
+            due.append((sched, entry))
+    return due, override_targets
+
+
+def resolve_scheduled_fires(schedules, hhmm, dow, today):
+    """Pure: the exact (sched, entry, target) tuples to fire this minute AFTER an
+    active override wins over weekly on the thermostats it governs, plus the
+    weekly (sched, target) pairs that were SKIPPED for that reason. This is the
+    real precedence the loop applies, so a test can assert the skip on the same
+    code the scheduler runs (not a copy)."""
+    due, override_targets = compute_due(schedules, hhmm, dow, today)
+    fires, skipped = [], []
+    for sched, entry in due:
+        is_ovr = sched.get("type") == "override"
+        for target in sched.get("targets", []):
+            if not is_ovr and target in override_targets:
+                skipped.append((sched, target))
+            else:
+                fires.append((sched, entry, target))
+    return fires, skipped
+
+
 def _scheduler_loop():
     from store import load_schedules
     _log("scheduler started (checks every 30s)")
     last_hhmm = None
     last_minute = None    # the minute we last evaluated, to spot skipped minutes
     last_beat_hour = None  # so the "alive" heartbeat prints once per hour
+    last_today = None      # to reset the override catch-up log at midnight
     while True:
         try:
             now = datetime.now()
             hhmm = now.strftime("%H:%M")
             dow = now.weekday()  # 0=Mon..6=Sun, matching data shape
+            today = now.strftime("%Y-%m-%d")  # naive local date, same clock as hhmm/dow
             schedules = load_schedules()
             # Only evaluate once per minute even if we wake up multiple times in it
             if hhmm != last_hhmm:
@@ -280,27 +373,64 @@ def _scheduler_loop():
                 last_minute = this_minute
                 last_hhmm = hhmm
 
-                due = []
-                for sched in schedules:
-                    for entry in sched.get("entries", []):
-                        if entry.get("time") == hhmm and dow in entry.get("days", []):
-                            if sched.get("enabled", True):
-                                due.append((sched, entry))
-                            else:
-                                _log(f"{hhmm}: SKIP '{sched.get('name') or 'Schedule'}' - schedule is disabled")
+                # New day: forget yesterday's override catch-up markers.
+                if today != last_today:
+                    _override_applied.clear()
+                    last_today = today
 
+                due, _ = compute_due(schedules, hhmm, dow, today)  # for diagnostics below
+
+                # Keep the v2.9.14 diagnostic: note a disabled schedule that would
+                # otherwise have fired now.
+                for sched in schedules:
+                    if sched.get("enabled", True):
+                        continue
+                    is_ovr = sched.get("type") == "override"
+                    if is_ovr and not _in_window(sched, today):
+                        continue
+                    for entry in sched.get("entries", []):
+                        if entry.get("time") == hhmm and (is_ovr or dow in entry.get("days", [])):
+                            _log(f"{hhmm}: SKIP '{sched.get('name') or 'Schedule'}' - schedule is disabled")
+                            break
+
+                # Window-open catch-up: the first time we see an override active on a
+                # target today, apply the event "in effect now" (latest time <= now),
+                # so an all-day hold set mid-day takes effect at once. The exact-minute
+                # event is left to the normal fire below (avoids a double send).
+                for sched in schedules:
+                    if not _override_active(sched, today):
+                        continue
+                    past = [e for e in sched.get("entries", []) if e.get("time", "") <= hhmm]
+                    ineffect = max(past, key=lambda e: e.get("time", "")) if past else None
+                    for target in sched.get("targets", []):
+                        key = (sched.get("id"), target, today)
+                        if key in _override_applied:
+                            continue
+                        _override_applied[key] = True
+                        if ineffect is not None and ineffect.get("time") != hhmm:
+                            try:
+                                _log(f"{hhmm}: override '{sched.get('name') or 'Override'}' now in "
+                                     f"effect on {target} - applying its {ineffect.get('time')} event")
+                                _fire_event(sched, ineffect, target)
+                            except Exception as exc:  # noqa: BLE001
+                                _log(f"  override catch-up error on {target}: {exc}")
+
+                # An active override governs its targets, so weekly stands aside.
+                fires, skipped = resolve_scheduled_fires(schedules, hhmm, dow, today)
+                for sched, target in skipped:
+                    _log(f"  SKIP weekly '{sched.get('name') or 'Schedule'}' on "
+                         f"{target} - an override governs it today")
                 if due:
                     total = sum(len(s.get("targets", [])) for s, _ in due)
                     _log(f"{hhmm} {now:%a}: {len(due)} event(s) due across {total} target(s)")
-                    for sched, entry in due:
-                        targets = sched.get("targets", [])
-                        if not targets:
+                    for sched, _entry in due:
+                        if not sched.get("targets", []):
                             _log(f"  '{sched.get('name') or 'Schedule'}' has no targets - nothing to do")
-                        for target in targets:
-                            try:
-                                _fire_event(sched, entry, target)
-                            except Exception as exc:  # noqa: BLE001
-                                _log(f"  unexpected error firing on {target}: {exc}")
+                for sched, entry, target in fires:
+                    try:
+                        _fire_event(sched, entry, target)
+                    except Exception as exc:  # noqa: BLE001
+                        _log(f"  unexpected error firing on {target}: {exc}")
 
                 # Hourly heartbeat so the log confirms the scheduler is alive even
                 # on quiet days.
@@ -310,7 +440,7 @@ def _scheduler_loop():
                     _log(f"alive - {enabled}/{len(schedules)} schedule(s) enabled, "
                          f"{len(_pending)} awaiting confirmation")
             # Every tick: re-apply any recently-fired target that didn't take.
-            _verify_pending(schedules)
+            _verify_pending(schedules, _override_covered_targets(schedules, today))
         except Exception as exc:  # noqa: BLE001
             _log(f"loop error: {exc}")
         time.sleep(30)

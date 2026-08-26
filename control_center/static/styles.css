@@ -3076,6 +3076,24 @@ img.install-icon {
   font-weight: 600;
   width: 140px;
 }
+/* Override "Active dates" range pickers */
+.sched-date-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.sched-date-field { display: flex; flex-direction: column; gap: 4px; }
+.sched-date-field > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sched-date-field input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
 .sched-day-btn-row { display: flex; gap: 4px; }
 .sched-day-toggle {
   flex: 1;
@@ -3245,6 +3263,31 @@ label.sched-all-toggle input { width: auto; cursor: pointer; accent-color: var(-
   color: var(--text);
 }
 .sched-admin-meta { display: block; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+
+/* Marks a schedule as a date-scoped override in the admin views. */
+.sched-type-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.sched-admin-sched-name .sched-type-badge { margin-left: 8px; }
+.sched-override-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.sched-override-name { font-weight: 600; }
+.sched-override-meta { color: var(--muted); font-size: 0.85rem; }
 .sched-admin-trash {
   border: none;
   background: none;

@@ -501,6 +501,26 @@ through Control Center), the schedule stops re-applying to that device until its
 next event, so it never fights a real person. Only a change with no one behind it
 (a device quietly bouncing back on its own) keeps getting re-applied.
 
+### Overrides (holidays and special events)
+
+An **override** is a schedule that runs only on a set of dates and, while active,
+takes over from your weekly schedules for the thermostats you include. Use it for
+a holiday setback, a party, or any one-off. Open the **Overrides** tab in the
+Schedules panel and **Create override**, then:
+
+1. Set an **active date range** (From / To). For a single day, leave both the same.
+2. Pick the **thermostats** it applies to (same picker as weekly schedules).
+3. Add **events**. An override's events apply **every day** in the range (there is
+   no day-of-week picker), so a single event acts as an all-day hold, and several
+   events vary the temperature across the day.
+
+While an override is active, its thermostats follow only the override; every
+weekly schedule is ignored for those thermostats until the range ends, when they
+return to their weekly program. An override with no events does nothing (it won't
+take over), and you can turn one off with its switch without deleting it. If you
+turn on an override whose day has already started, the event in effect right now
+is applied immediately rather than waiting for the next one.
+
 **Diagnostics:** if you need to check whether schedules are firing, the add-on
 log (Supervisor > Control Center > Log) records the details. Lines tagged
 `[sched]` show each event as it fires (with the device's state before and after,
