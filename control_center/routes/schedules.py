@@ -267,13 +267,14 @@ def _validated_entries(raw):
         mode = e.get("mode", "heat")
         if mode not in _VALID_MODES:
             mode = "heat"
+        # Fan speed is intentionally not stored: the scheduler sets mode + temp
+        # only. Any legacy "fan" field on incoming data is dropped here.
         entry = {
             "id": e.get("id") or str(uuid.uuid4()),
             "days": [int(d) for d in e.get("days", []) if int(d) in _VALID_DAYS],
             "time": time_val,
             "mode": mode,
             "temp": float(e["temp"]) if e.get("temp") is not None else None,
-            "fan": e.get("fan") or None,
         }
         entries.append(entry)
     return entries

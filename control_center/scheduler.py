@@ -5,7 +5,6 @@ against all enabled schedules, and fires HA climate services for each matching e
 Edge-triggered: the thermostat holds whatever state the last fired event set it to
 until the next event fires.
 """
-import re
 import threading
 import time
 from datetime import datetime
@@ -27,83 +26,6 @@ _MODE_DISPLAY = {
     "auto": "Auto", "dry": "Dry", "fan": "Fan only",
 }
 
-# Thermostats disagree wildly on how they name fan speeds: some use low/medium/high,
-# some silent/quiet/full, some 25%/50%/100%, some plain 0..6, some only on/auto. So a
-# schedule stores a SEMANTIC level (auto/low/medium/high) and we translate it to each
-# target's nearest real speed at fire time. Named speeds get a slow->fast rank; anything
-# not listed here (auto/on/off/diffuse/...) is not treated as a graded speed.
-_FAN_RANK = {
-    "silent": 1, "superquiet": 1, "night": 1,
-    "quiet": 2, "eco": 2,
-    "low": 3,
-    "lowmedium": 4,
-    "medium": 5,
-    "mediumhigh": 6,
-    "high": 7,
-    "full": 8, "powerful": 8, "strong": 8,
-    "superpowerful": 9, "turbo": 9, "max": 9,
-}
-
-
-def _fan_speed_rank(mode):
-    """A comparable slow->fast number for a fan mode, or None if it isn't a graded
-    speed (auto/on/off/diffuse and friends return None). Also handles compound
-    names that pack a speed into a longer token - e.g. Ecobee's 'on_low' /
-    'auto_high' - by ranking on the speed word embedded in the name."""
-    s = str(mode).strip().lower()
-    if s in _FAN_RANK:
-        return _FAN_RANK[s]
-    m = re.match(r"^(\d+)\s*%?$", s)
-    if m:
-        return int(m.group(1))
-    ranks = [_FAN_RANK[t] for t in re.split(r"[^a-z]+", s) if t in _FAN_RANK]
-    return max(ranks) if ranks else None
-
-
-def _is_auto_mode(mode):
-    """True for a mode that lets the thermostat decide when to run the fan
-    ('auto', or a compound like 'auto_low')."""
-    return "auto" in re.split(r"[^a-z]+", str(mode).strip().lower())
-
-
-def _resolve_fan(fan, fan_modes):
-    """Translate a stored fan value into one this device actually supports.
-
-    - already one of the device's modes -> use it verbatim (exact / legacy values);
-    - 'auto' -> the device's own auto mode (incl. a compound like 'auto_low'), or 'on';
-    - 'low' / 'medium' / 'high' -> the slowest / middle / fastest graded speed it has,
-      preferring the manual ('on_*'/plain) speeds over the 'auto_*' ones;
-    Returns None (meaning: don't touch the fan) when nothing matches.
-    """
-    modes = fan_modes or []
-    if not modes:
-        return None
-    lower = {str(m).lower(): m for m in modes}
-    if fan in modes:
-        return fan
-    lv = str(fan).strip().lower()
-    if lv == "auto":
-        for cand in ("auto", "on"):
-            if cand in lower:
-                return lower[cand]
-        # Compound autos (auto_low/auto_high): pick the gentlest one.
-        autos = sorted((m for m in modes if _is_auto_mode(m)),
-                       key=lambda m: (_fan_speed_rank(m) is None, _fan_speed_rank(m) or 0))
-        return autos[0] if autos else None
-    if lv in ("low", "medium", "high"):
-        ranked = [(m, _fan_speed_rank(m)) for m in modes if _fan_speed_rank(m) is not None]
-        # A speed pick means "run the fan at this speed", so prefer the manual
-        # variants; fall back to auto-flavoured speeds only if that's all there is.
-        manual = [t for t in ranked if not _is_auto_mode(t[0])]
-        pool = sorted(manual or ranked, key=lambda t: t[1])
-        graded = [m for m, _ in pool]
-        if not graded:
-            # A device whose only "fan" is on/auto: any requested speed just means "on".
-            return lower.get("on")
-        idx = {"low": 0, "medium": (len(graded) - 1) // 2, "high": len(graded) - 1}[lv]
-        return graded[idx]
-    return None
-
 # States that mean the thermostat isn't actually reachable, so a fired event
 # changes nothing and must not be logged as if the owner acted on it.
 _OFFLINE_STATES = (None, "unavailable", "unknown")
@@ -114,7 +36,7 @@ _OFFLINE_STATES = (None, "unavailable", "unknown")
 # drifts from what the schedule set. The window is deliberately short so we heal a
 # bounce-back (which happens within minutes) without fighting a later MANUAL
 # override. Touched only by the single scheduler thread, so no lock is needed.
-_pending = {}  # target -> {mode, temp, fan, sched_id, name, owner, first_ts, last_try}
+_pending = {}  # target -> {mode, temp, sched_id, name, owner, first_ts, last_try}
 _VERIFY_WINDOW_SECS = 600   # keep verifying for ~10 min after a fire
 _VERIFY_RETRY_SECS = 120    # re-send at most every ~2 min per target
 _VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
@@ -165,9 +87,13 @@ def was_recently_commanded(target):
     return time.time() - _own_cmd.get(target, 0) < _OWN_CMD_GRACE
 
 
-def _send_climate(target, mode, temp, fan):
+def _send_climate(target, mode, temp):
     """Issue the HA climate service calls for one target. Shared by the initial
-    fire and the verification re-send so they behave identically."""
+    fire and the verification re-send so they behave identically.
+
+    Schedules set mode + temperature only - never fan speed. Sending a fan mode a
+    thermostat didn't accept was knocking some units off, which the verify loop
+    then read as drift and re-applied (a flap loop), so fan is not touched here."""
     from ha import call_service, split_instance_entity
 
     _own_cmd[target] = time.time()  # so the resulting HA change isn't read as a person's
@@ -184,25 +110,12 @@ def _send_climate(target, mode, temp, fan):
         call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
         if temp is not None:
             call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
-        if fan:
-            # A schedule stores a semantic level (auto/low/medium/high); map it to
-            # this device's own nearest speed. Sending a fan mode a thermostat
-            # doesn't support can make some units drop to OFF, which then reads as
-            # drift and gets re-applied - a flap loop - so if nothing matches, skip.
-            from core import STATE_CACHE
-            supported = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
-            resolved = _resolve_fan(fan, supported)
-            if resolved is not None:
-                call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
-            else:
-                _log(f"  skip fan '{fan}' on {target} - no matching speed in {supported or '(none)'}")
 
 
 def _fire_event(sched, entry, target):
     from core import STATE_CACHE
     mode = entry.get("mode", "heat")
     temp = entry.get("temp")
-    fan = entry.get("fan")
     name = sched.get("name") or "Schedule"
 
     # Snapshot the device before we touch it, so the log shows what actually
@@ -215,14 +128,12 @@ def _fire_event(sched, entry, target):
     detail = want
     if mode != "off" and temp is not None:
         detail += f" {temp}°"
-    if mode != "off" and fan:
-        detail += f" fan={fan}"
     was = "offline" if offline else (f"{b_state}" + (f" {b_temp}°" if b_temp is not None else ""))
     _log(f"FIRE '{name}' [{entry.get('time')}] -> {target}: set {detail} (was {was})")
 
     t0 = time.time()
     try:
-        _send_climate(target, mode, temp, fan)
+        _send_climate(target, mode, temp)
     except Exception as exc:  # noqa: BLE001
         _log(f"  FAILED to send to {target} after {int((time.time() - t0) * 1000)}ms: {exc}")
         return  # don't watch a send that never went out
@@ -241,7 +152,7 @@ def _fire_event(sched, entry, target):
     # overwrites the prior entry - the latest event wins.
     now = time.time()
     _pending[target] = {
-        "mode": mode, "temp": temp, "fan": fan,
+        "mode": mode, "temp": temp,
         "sched_id": sched.get("id"), "name": name,
         "owner": sched.get("owner"), "first_ts": now, "last_try": now, "tries": 0,
     }
@@ -397,7 +308,7 @@ def _verify_pending(schedules, override_targets=None):
         _log(f"DRIFT {target} ('{p['name']}'): want {want}{want_t}, have {have} - "
              f"re-applying (try {p['tries']}/{_VERIFY_MAX_TRIES})")
         try:
-            _send_climate(target, p["mode"], p["temp"], p["fan"])
+            _send_climate(target, p["mode"], p["temp"])
         except Exception as exc:  # noqa: BLE001
             _log(f"  re-apply FAILED on {target}: {exc}")
 

@@ -478,20 +478,13 @@ The **Schedules** panel lets each user:
    **+ AC** to open a searchable multi-select for adding more.
 3. Add **events** - each event fires at a specific time on selected days (the
    day picker and week preview start on Sunday), with Weekdays / Weekends /
-   Every day presets, and sets a mode (off, cool, heat, auto, dry, fan),
-   temperature, and optional fan speed. The temperature slider
-   range and step are read from the thermostat, and the unit (C or F) is Home
-   Assistant's own configured unit - schedules are always set and shown in that
-   unit, and HA converts the setpoint to each thermostat's native unit when the
-   event fires, so a mixed fleet needs no manual conversion.
-   Fan speed is a single simple choice - **Auto, Low, Medium, or High** - and
-   each thermostat is set to its own nearest matching speed when the event fires
-   (Low = its slowest speed, High = its fastest, Medium = the middle one, Auto =
-   its automatic mode). This works even when a schedule targets several units
-   that name their speeds differently (`silent/full`, `25%/100%`, plain numbers,
-   or compound names like an Ecobee's `on_low`/`auto_high`). The row is hidden
-   when no target has fan control, and a unit with no matching
-   speed is left untouched, so a schedule can never send a fan mode it rejects.
+   Every day presets, and sets a mode (off, cool, heat, auto, dry, fan) and a
+   temperature. The temperature slider range and step are read from the
+   thermostat, and the unit (C or F) is Home Assistant's own configured unit -
+   schedules are always set and shown in that unit, and HA converts the setpoint
+   to each thermostat's native unit when the event fires, so a mixed fleet needs
+   no manual conversion. Schedules control mode and temperature only; fan speed
+   is left to the thermostat.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.
 5. Switch to **By thermostat** to see the merged program for one unit across all
