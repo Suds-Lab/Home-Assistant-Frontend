@@ -486,8 +486,9 @@ The **Schedules** panel lets each user:
    each thermostat is set to its own nearest matching speed when the event fires
    (Low = its slowest speed, High = its fastest, Medium = the middle one, Auto =
    its automatic mode). This works even when a schedule targets several units
-   that name their speeds differently (`silent/full`, `25%/100%`, plain numbers).
-   The row is hidden when no target has fan control, and a unit with no matching
+   that name their speeds differently (`silent/full`, `25%/100%`, plain numbers,
+   or compound names like an Ecobee's `on_low`/`auto_high`). The row is hidden
+   when no target has fan control, and a unit with no matching
    speed is left untouched, so a schedule can never send a fan mode it rejects.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.

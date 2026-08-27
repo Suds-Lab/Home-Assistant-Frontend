@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.26
+- **Fan mapping now handles compound speed names** like an Ecobee's
+  `on_low` / `on_high` / `auto_low` / `auto_high`. Previously the semantic fan
+  levels couldn't match those, so the fan pick was silently ignored on such
+  units. Now a speed (Low/Medium/High) maps to the matching `on_*` speed (run
+  the fan at that speed) and Auto maps to an `auto_*` mode (let the thermostat
+  decide), reading the speed word out of the compound name.
+
 ## 2.9.25
 - **Respect hidden entities from Home Assistant.** A device you've marked
   **Hidden** in HA no longer shows up in Control Center's list, matching how HA
