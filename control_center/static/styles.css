@@ -2033,6 +2033,14 @@ img.install-icon {
   opacity: 0.8;
 }
 
+/* "+ Add" affordance in a pill row: an outlined pill, not a filled selection. */
+.chip-add {
+  background: transparent;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+}
+.chip-add .sm-caret { font-size: 0.7rem; opacity: 1; }
+
 .add-specific {
   margin-bottom: 14px;
 }
@@ -2721,6 +2729,8 @@ img.install-icon {
   box-shadow: 0 6px 28px rgba(0,0,0,0.28);
   overflow: hidden;
 }
+/* Flip to right-aligned when a left-anchored menu would run off the screen. */
+.sched-smenu.align-right { left: auto; right: 0; }
 .sched-smenu-search {
   display: flex;
   align-items: center;

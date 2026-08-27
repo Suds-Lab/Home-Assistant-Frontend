@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.27
+- **Consistent checkbox picker for lists and schedules.** Choosing devices for a
+  list, or thermostats for a schedule, now uses the same compact tick menu the
+  Activity log uses for its device filter: the chosen items stay as removable
+  pills and a **+ Add** button opens a searchable list you check more from (it
+  stays open so you can tick several at once). The scheduler's single-add picker
+  becomes multi-select.
+- The searchable dropdown now keeps itself on-screen: it right-aligns when a
+  left-anchored menu would run off the right edge, and re-checks as the trigger
+  moves (for example when adding a pill wraps the row and shifts "+ Add"), so it
+  never hangs off either edge.
+
 ## 2.9.26
 - **Fan mapping now handles compound speed names** like an Ecobee's
   `on_low` / `on_high` / `auto_low` / `auto_high`. Previously the semantic fan
