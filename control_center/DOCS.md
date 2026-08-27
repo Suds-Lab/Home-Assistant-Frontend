@@ -2,7 +2,8 @@
 
 A per-user device dashboard. Each person sees and controls **only the devices
 assigned to them**: lights, switches, fans, climate, covers, locks, media
-players and more.
+players and more. Entities you have **hidden or disabled in Home Assistant**
+are left out automatically, just as HA keeps them off its own dashboards.
 
 There are two interfaces:
 

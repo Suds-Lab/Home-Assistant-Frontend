@@ -43,6 +43,21 @@ def devices():
             _reg_cache[instance_id] = ha_registries_cached(instance_id=instance_id)
         return _reg_cache[instance_id]
 
+    _supp_cache = {}
+
+    def _suppressed(instance_id):
+        """Entity ids the user has hidden (or disabled) in Home Assistant. HA drops
+        DISABLED entities from its state machine, so those don't reach us anyway;
+        HIDDEN ones still carry state, so we honour the flag here and leave them off
+        the dashboard - matching how HA hides them from its own auto dashboards."""
+        if instance_id not in _supp_cache:
+            reg = _reg(instance_id)
+            _supp_cache[instance_id] = {
+                e["entity_id"] for e in reg.get("entities", [])
+                if e.get("hidden_by") or e.get("disabled_by")
+            }
+        return _supp_cache[instance_id]
+
     from config import REMOTE_INSTANCES
     _inst_names = {r["id"]: r["name"] for r in REMOTE_INSTANCES}
 
@@ -52,6 +67,8 @@ def devices():
             continue
         instance_id = s.get("_instance")  # None = main
         real_id = full_id.split(":", 1)[1] if instance_id else full_id
+        if real_id in _suppressed(instance_id):
+            continue
         reg = _reg(instance_id)
         locate = _location_lookup(reg)
         ent_dev = {e["entity_id"]: e.get("device_id") for e in reg.get("entities", [])}

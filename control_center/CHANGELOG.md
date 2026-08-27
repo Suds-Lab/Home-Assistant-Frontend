@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.25
+- **Respect hidden entities from Home Assistant.** A device you've marked
+  **Hidden** in HA no longer shows up in Control Center's list, matching how HA
+  keeps hidden entities off its own auto-generated dashboards. (Entities you
+  **Disable** in HA were already absent, because HA drops them from its live
+  state entirely; this adds the hidden ones, which HA still reports a state for.
+  Disabled entities are filtered too, as a belt-and-suspenders measure.)
+
 ## 2.9.24
 - **Smarter fan speed for schedules.** Instead of listing every raw speed name
   that the targeted thermostats report (`silent`, `25%`, `mediumHigh`, `4`, and
