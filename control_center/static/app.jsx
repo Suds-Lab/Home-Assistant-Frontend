@@ -887,6 +887,11 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
         );
       case 'climate': {
         const isOff = state === 'off';
+        // Unreachable thermostat: HA drops its attributes, so the target state
+        // falls back to a made-up 22. Show a dash and lock the controls instead,
+        // like an off unit. (Scoped to the state, not a null setpoint, so an
+        // online unit in a range mode isn't wrongly blanked.)
+        const isOffline = state === 'unavailable' || state === 'unknown';
         const min = a.min_temp ?? 16;
         const max = a.max_temp ?? 30;
         const step = a.target_temp_step ?? 0.5;
@@ -940,10 +945,10 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
           <button
             type="button"
             className="temp-btn"
-            disabled={isOff}
+            disabled={isOff || isOffline}
             aria-label={aria}
             onPointerDown={(e) => {
-              if (isOff) return;
+              if (isOff || isOffline) return;
               e.preventDefault();
               startHold(delta);
             }}
@@ -952,7 +957,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
             onPointerCancel={endHold}
             // Keyboard activation fires click with detail 0 (no pointer events).
             onClick={(e) => {
-              if (e.detail === 0 && !isOff) {
+              if (e.detail === 0 && !isOff && !isOffline) {
                 bump(delta);
                 commitTemp();
               }
@@ -1004,7 +1009,7 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
             )}
             <div className="temp-control">
               {tempBtn(-step, '−', 'Decrease temperature')}
-              <span className="temp-value">{isOff ? '-' : `${target}°`}</span>
+              <span className="temp-value">{isOff || isOffline ? '-' : `${target}°`}</span>
               {tempBtn(step, '+', 'Increase temperature')}
             </div>
             <div className="mode-row">
@@ -2081,13 +2086,15 @@ const TEMP_MIN = 16;
 const TEMP_MAX = 30;
 
 /* Derive temp range/unit from the list of schedule entities (same as climate cards). */
-function schedTempInfo(entities) {
+function schedTempInfo(entities, haUnit) {
   const a = (entities && entities[0] && entities[0].attributes) || {};
   const tMin = a.min_temp ?? TEMP_MIN;
   const tMax = a.max_temp ?? TEMP_MAX;
   const tStep = a.target_temp_step ?? 0.5;
-  // HA provides temperature_unit on climate entities; fall back to inferring from range.
-  const tUnit = a.temperature_unit || (tMin > 40 ? '°F' : '°C');
+  // Schedules are always in HA's configured unit (HA reports min/max/setpoints in
+  // that unit and converts to each device's own unit when the command fires). Use
+  // it when known; otherwise fall back to the entity attribute or a range guess.
+  const tUnit = haUnit || a.temperature_unit || (tMin > 40 ? '°F' : '°C');
   return { tMin, tMax, tStep, tUnit };
 }
 
@@ -2516,7 +2523,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 }
 
 /* SchedMyView: my schedules list + editor (schedule state lifted to SchedulerPanel) */
-function SchedMyView({ entities, schedules, setSchedules, override = false }) {
+function SchedMyView({ entities, schedules, setSchedules, override = false, haUnit }) {
   const noun = override ? 'override' : 'schedule';
   const Noun = override ? 'Override' : 'Schedule';
   const todayStr = React.useMemo(() => {
@@ -2543,7 +2550,7 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
 
   const sched = schedules ? schedules.find((s) => s.id === selId) || null : null;
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
-  const tInfo = schedTempInfo(entities);
+  const tInfo = schedTempInfo(entities, haUnit);
 
   // Thermostats report OWN fan_modes in incompatible vocabularies (numeric, %, or
   // named). Rather than expose that mess, the editor offers ONE semantic level
@@ -2794,7 +2801,7 @@ function schedMergeForEntity(entityId, schedules) {
   return { targetSchedules, merged, byKey, conflictCount };
 }
 
-function SchedByThermostat({ entities, schedules }) {
+function SchedByThermostat({ entities, schedules, haUnit }) {
   const [selEntityId, setSelEntityId] = React.useState((entities[0] || {}).entity_id || '');
 
   if (!entities.length) {
@@ -2806,7 +2813,7 @@ function SchedByThermostat({ entities, schedules }) {
   }
 
   const selEntity = entities.find((e) => e.entity_id === selEntityId) || entities[0];
-  const tInfo = schedTempInfo([selEntity]);
+  const tInfo = schedTempInfo([selEntity], haUnit);
   const { targetSchedules, merged, byKey, conflictCount } = schedMergeForEntity(selEntity.entity_id, schedules);
 
   const entItems = entities.map((e) => ({ id: e.entity_id, label: e.name }));
@@ -2863,6 +2870,7 @@ function SchedByThermostat({ entities, schedules }) {
 function SchedulerPanel() {
   const [view, setView] = React.useState('mine');
   const [entities, setEntities] = React.useState([]);
+  const [haUnit, setHaUnit] = React.useState(null);
   const [schedules, setSchedules] = React.useState(null);
   const [error, setError] = React.useState('');
 
@@ -2870,6 +2878,7 @@ function SchedulerPanel() {
     Promise.all([getScheduleEntities(), getMySchedules()])
       .then(([entData, scheds]) => {
         setEntities(entData.entities || []);
+        setHaUnit(entData.unit || null);
         setSchedules(scheds);
       })
       .catch((e) => setError(e.message));
@@ -2892,11 +2901,11 @@ function SchedulerPanel() {
       </div>
       {error && <div className="error banner">{error}</div>}
       {view === 'mine' ? (
-        <SchedMyView key="weekly" entities={entities} schedules={weeklies} setSchedules={setSchedules} />
+        <SchedMyView key="weekly" entities={entities} schedules={weeklies} setSchedules={setSchedules} haUnit={haUnit} />
       ) : view === 'overrides' ? (
-        <SchedMyView key="override" entities={entities} schedules={overrides} setSchedules={setSchedules} override />
+        <SchedMyView key="override" entities={entities} schedules={overrides} setSchedules={setSchedules} haUnit={haUnit} override />
       ) : (
-        <SchedByThermostat entities={entities} schedules={weeklies || []} />
+        <SchedByThermostat entities={entities} schedules={weeklies || []} haUnit={haUnit} />
       )}
     </div>
   );

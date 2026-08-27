@@ -480,8 +480,10 @@ The **Schedules** panel lets each user:
    day picker and week preview start on Sunday), with Weekdays / Weekends /
    Every day presets, and sets a mode (off, cool, heat, auto, dry, fan),
    temperature, and optional fan speed. The temperature slider
-   range, step, and unit (C or F) are read automatically from the HA entity's
-   own configuration, so °F setpoints work correctly without any extra setup.
+   range and step are read from the thermostat, and the unit (C or F) is Home
+   Assistant's own configured unit - schedules are always set and shown in that
+   unit, and HA converts the setpoint to each thermostat's native unit when the
+   event fires, so a mixed fleet needs no manual conversion.
    Fan speed is a single simple choice - **Auto, Low, Medium, or High** - and
    each thermostat is set to its own nearest matching speed when the event fires
    (Low = its slowest speed, High = its fastest, Medium = the middle one, Auto =

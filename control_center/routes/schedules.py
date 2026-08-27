@@ -157,7 +157,8 @@ def get_schedule_entities():
             "state": state.get("state", "unknown"),
             "attributes": state.get("attributes") or {},
         })
-    return jsonify({"entities": entities})
+    from ha import ha_temperature_unit
+    return jsonify({"entities": entities, "unit": ha_temperature_unit()})
 
 
 # ---------------------------------------------------------------------------
