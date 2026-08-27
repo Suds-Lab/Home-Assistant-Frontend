@@ -2198,8 +2198,11 @@ function SchedSearchableMenu({
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const [hi, setHi] = React.useState(-1);
+  const [alignRight, setAlignRight] = React.useState(false);
   const wrapRef = React.useRef(null);
   const inputRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+  const menuMounted = usePresence(open);
 
   React.useEffect(() => {
     if (!open) return;
@@ -2212,6 +2215,26 @@ function SchedSearchableMenu({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  // Keep the menu on-screen: if a left-anchored menu would spill past the right
+  // edge (the trigger sits far right), right-align it instead. The decision uses
+  // the trigger's own left + the menu width, so it never depends on the current
+  // alignment and can't oscillate. We re-measure on every render while open (no
+  // deps) plus on resize, because the trigger can MOVE while the menu is open -
+  // e.g. adding a pill wraps the row and shifts "+ Add" to the next line - and a
+  // stale right-anchor would then hang off the opposite edge.
+  React.useLayoutEffect(() => {
+    if (!open || !menuMounted || !menuRef.current || !wrapRef.current) return undefined;
+    const measure = () => {
+      if (!menuRef.current || !wrapRef.current) return;
+      const wrapLeft = wrapRef.current.getBoundingClientRect().left;
+      const menuW = menuRef.current.offsetWidth;
+      setAlignRight(wrapLeft + menuW > window.innerWidth - 8);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
 
   React.useEffect(() => {
     if (open && inputRef.current) { inputRef.current.focus(); setHi(-1); }
@@ -2251,12 +2274,11 @@ function SchedSearchableMenu({
     }
   }
 
-  const menuMounted = usePresence(open);
   return (
     <div className="sched-smenu-wrap" ref={wrapRef}>
       {React.cloneElement(trigger, { onClick: () => setOpen((o) => !o), 'aria-expanded': open })}
       {menuMounted && (
-        <div className={`sched-smenu${open ? '' : ' closing'}`}>
+        <div ref={menuRef} className={`sched-smenu${open ? '' : ' closing'}${alignRight ? ' align-right' : ''}`}>
           <div className="sched-smenu-search">
             <span className="sched-smenu-search-icon">&#9906;</span>
             <input
@@ -2586,14 +2608,11 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
     await patchSched(sched.id, { entries: sched.entries.filter((e) => e.id !== entryId) });
   }
 
-  function removeTarget(eid) {
+  function toggleTarget(eid) {
     if (!sched) return;
-    patchSched(sched.id, { targets: sched.targets.filter((t) => t !== eid) });
-  }
-
-  function addTarget(eid) {
-    if (!sched || sched.targets.includes(eid)) return;
-    patchSched(sched.id, { targets: [...sched.targets, eid] });
+    patchSched(sched.id, sched.targets.includes(eid)
+      ? { targets: sched.targets.filter((t) => t !== eid) }
+      : { targets: [...sched.targets, eid] });
   }
 
   const schedItems = (schedules || []).map((s) => ({
@@ -2601,10 +2620,6 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
     label: s.name,
     sub: `${s.entries.length} event${s.entries.length !== 1 ? 's' : ''}`,
   }));
-
-  const addableEntities = (entities || []).filter(
-    (en) => !sched || !sched.targets.includes(en.entity_id)
-  );
 
   const sortedEntries = sched ? [...sched.entries].sort((a, b) => a.time.localeCompare(b.time)) : [];
 
@@ -2692,18 +2707,18 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
                   <span key={eid} className="sched-chip">
                     {entityName(eid)}
                     <button className="sched-chip-x" type="button"
-                      onClick={() => removeTarget(eid)} aria-label={`Remove ${entityName(eid)}`}>&#215;</button>
+                      onClick={() => toggleTarget(eid)} aria-label={`Remove ${entityName(eid)}`}>&#215;</button>
                   </span>
                 ))}
-                {addableEntities.length > 0 && (
-                  <SchedSearchableMenu
-                    trigger={<button className="sched-chip sched-chip-add" type="button">+ AC</button>}
-                    items={addableEntities.map((en) => ({ id: en.entity_id, label: en.name }))}
-                    onSelect={(id) => addTarget(id)}
-                    placeholder="Search…"
-                    emptyText="All added"
-                  />
-                )}
+                <SchedSearchableMenu
+                  multi
+                  trigger={<button className="sched-chip sched-chip-add" type="button">+ AC</button>}
+                  items={entities.map((en) => ({ id: en.entity_id, label: en.name }))}
+                  selectedIds={new Set(sched.targets || [])}
+                  onToggle={toggleTarget}
+                  placeholder="Search…"
+                  emptyText="No climate devices"
+                />
               </div>
             )}
           </div>
@@ -3547,12 +3562,31 @@ function ListsManager({ onChange }) {
               </div>
               <Collapsible open={editing} allowOverflow>
                 <div className="list-assign">
-                  <EntityChips
-                    entities={devices}
-                    selected={new Set(l.entities || [])}
-                    onToggle={(eid) => toggleDevice(l.id, eid)}
-                    placeholder="Add a device to this list…"
-                  />
+                  <div className="chips-box">
+                    {(l.entities || []).map((eid) => {
+                      const d = devices.find((x) => x.entity_id === eid);
+                      return (
+                        <button type="button" key={eid} className="chip"
+                          onClick={() => toggleDevice(l.id, eid)}
+                          aria-label={`Remove ${d ? d.name : eid}`}>
+                          {d ? d.name : eid} <span aria-hidden="true">✕</span>
+                        </button>
+                      );
+                    })}
+                    <SchedSearchableMenu
+                      multi
+                      trigger={
+                        <button type="button" className="chip chip-add" aria-label="Add devices to this list">
+                          + Add <span className="sm-caret">▾</span>
+                        </button>
+                      }
+                      items={devices.map((d) => ({ id: d.entity_id, label: d.name }))}
+                      selectedIds={new Set(l.entities || [])}
+                      onToggle={(eid) => toggleDevice(l.id, eid)}
+                      placeholder="Search devices…"
+                      emptyText="No devices match"
+                    />
+                  </div>
                 </div>
               </Collapsible>
             </div>
