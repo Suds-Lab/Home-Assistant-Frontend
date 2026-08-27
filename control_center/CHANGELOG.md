@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.24
+- **Smarter fan speed for schedules.** Instead of listing every raw speed name
+  that the targeted thermostats report (`silent`, `25%`, `mediumHigh`, `4`, and
+  so on), the event editor now offers one simple choice: **Auto, Low, Medium, or
+  High**. When the schedule fires, each thermostat is set to its own nearest
+  matching speed, so a single pick works even across a mixed fleet: **Low** picks
+  the slowest speed a unit has, **High** the fastest, **Medium** the middle one,
+  and **Auto** its automatic mode. A unit with no matching speed is simply left
+  alone. Schedules saved with a specific speed before this change keep working.
+
 ## 2.9.23
 - Follow-up to the fan fix for **mixed fleets**. When a schedule targets several
   thermostats that use different fan-speed names (some report `low/medium/high`,

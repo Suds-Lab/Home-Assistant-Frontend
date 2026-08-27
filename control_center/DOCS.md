@@ -481,9 +481,13 @@ The **Schedules** panel lets each user:
    temperature, and optional fan speed. The temperature slider
    range, step, and unit (C or F) are read automatically from the HA entity's
    own configuration, so °F setpoints work correctly without any extra setup.
-   The fan-speed choices are the ones the targeted thermostat(s) actually
-   support (the row is hidden if a device has no fan control), so a schedule can
-   never send a fan mode the unit rejects.
+   Fan speed is a single simple choice - **Auto, Low, Medium, or High** - and
+   each thermostat is set to its own nearest matching speed when the event fires
+   (Low = its slowest speed, High = its fastest, Medium = the middle one, Auto =
+   its automatic mode). This works even when a schedule targets several units
+   that name their speeds differently (`silent/full`, `25%/100%`, plain numbers).
+   The row is hidden when no target has fan control, and a unit with no matching
+   speed is left untouched, so a schedule can never send a fan mode it rejects.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.
 5. Switch to **By thermostat** to see the merged program for one unit across all
