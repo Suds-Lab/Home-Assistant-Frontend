@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.29
+- **Schedules no longer control fan speed.** Sending a fan mode was knocking some
+  thermostats off, which the self-verify loop then read as drift and re-applied -
+  a flap that got worse as recent versions mapped fan speeds onto more units.
+  Schedules now set **mode and temperature only**; fan is left to the thermostat.
+  The fan picker is removed from the event editor, the scheduler never calls
+  `set_fan_mode`, and any leftover `fan` values are stripped from stored
+  schedules automatically on load. (The self-verify re-apply, with its 2-try
+  give-up, and per-user/override scheduling are unchanged.)
+
 ## 2.9.28
 - **Schedules now use Home Assistant's configured temperature unit** for every
   user, instead of guessing from a thermostat's min temperature. The old guess

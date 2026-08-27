@@ -238,6 +238,20 @@ def load_schedules():
         data = json.loads(SCHEDULES_FILE.read_text())
         if not isinstance(data, list):
             return []
+        # One-time cleanup: fan speed is no longer part of schedules. Strip any
+        # legacy "fan" field left on entries, and rewrite the file if we removed
+        # any so the stored data stays clean (idempotent - only rewrites once).
+        changed = False
+        for sched in data:
+            for entry in (sched.get("entries") or []):
+                if "fan" in entry:
+                    del entry["fan"]
+                    changed = True
+        if changed:
+            try:
+                save_schedules(data)
+            except OSError:
+                pass
         data.sort(key=lambda s: (s.get("name") or "").lower())  # alphabetical for display
         return data
     except (OSError, ValueError):
