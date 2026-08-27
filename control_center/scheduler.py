@@ -5,6 +5,7 @@ against all enabled schedules, and fires HA climate services for each matching e
 Edge-triggered: the thermostat holds whatever state the last fired event set it to
 until the next event fires.
 """
+import re
 import threading
 import time
 from datetime import datetime
@@ -25,6 +26,66 @@ _MODE_DISPLAY = {
     "off": "Off", "cool": "Cool", "heat": "Heat",
     "auto": "Auto", "dry": "Dry", "fan": "Fan only",
 }
+
+# Thermostats disagree wildly on how they name fan speeds: some use low/medium/high,
+# some silent/quiet/full, some 25%/50%/100%, some plain 0..6, some only on/auto. So a
+# schedule stores a SEMANTIC level (auto/low/medium/high) and we translate it to each
+# target's nearest real speed at fire time. Named speeds get a slow->fast rank; anything
+# not listed here (auto/on/off/diffuse/...) is not treated as a graded speed.
+_FAN_RANK = {
+    "silent": 1, "superquiet": 1, "night": 1,
+    "quiet": 2, "eco": 2,
+    "low": 3,
+    "lowmedium": 4,
+    "medium": 5,
+    "mediumhigh": 6,
+    "high": 7,
+    "full": 8, "powerful": 8, "strong": 8,
+    "superpowerful": 9, "turbo": 9, "max": 9,
+}
+
+
+def _fan_speed_rank(mode):
+    """A comparable slow->fast number for a fan mode, or None if it isn't a graded
+    speed (auto/on/off/diffuse and friends return None)."""
+    s = str(mode).strip().lower()
+    if s in _FAN_RANK:
+        return _FAN_RANK[s]
+    m = re.match(r"^(\d+)\s*%?$", s)
+    return int(m.group(1)) if m else None
+
+
+def _resolve_fan(fan, fan_modes):
+    """Translate a stored fan value into one this device actually supports.
+
+    - already one of the device's modes -> use it verbatim (exact / legacy values);
+    - 'auto' -> the device's own auto (or on) mode;
+    - 'low' / 'medium' / 'high' -> the slowest / middle / fastest graded speed it has;
+    Returns None (meaning: don't touch the fan) when nothing matches.
+    """
+    modes = fan_modes or []
+    if not modes:
+        return None
+    lower = {str(m).lower(): m for m in modes}
+    if fan in modes:
+        return fan
+    lv = str(fan).strip().lower()
+    if lv == "auto":
+        for cand in ("auto", "on"):
+            if cand in lower:
+                return lower[cand]
+        return None
+    if lv in ("low", "medium", "high"):
+        graded = sorted(
+            (m for m in modes if _fan_speed_rank(m) is not None),
+            key=_fan_speed_rank,
+        )
+        if not graded:
+            # A device whose only "fan" is on/auto: any requested speed just means "on".
+            return lower.get("on")
+        idx = {"low": 0, "medium": (len(graded) - 1) // 2, "high": len(graded) - 1}[lv]
+        return graded[idx]
+    return None
 
 # States that mean the thermostat isn't actually reachable, so a fired event
 # changes nothing and must not be logged as if the owner acted on it.
@@ -107,15 +168,17 @@ def _send_climate(target, mode, temp, fan):
         if temp is not None:
             call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
         if fan:
-            # Only set the fan if the device actually lists this mode. Sending a
-            # fan mode a thermostat doesn't support can make some units drop to
-            # OFF, which then reads as drift and gets re-applied - a flap loop.
+            # A schedule stores a semantic level (auto/low/medium/high); map it to
+            # this device's own nearest speed. Sending a fan mode a thermostat
+            # doesn't support can make some units drop to OFF, which then reads as
+            # drift and gets re-applied - a flap loop - so if nothing matches, skip.
             from core import STATE_CACHE
             supported = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
-            if fan in supported:
-                call_service("climate", "set_fan_mode", real_target, {"fan_mode": fan}, instance_id=instance_id)
+            resolved = _resolve_fan(fan, supported)
+            if resolved is not None:
+                call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
             else:
-                _log(f"  skip fan '{fan}' on {target} - not one of its fan modes {supported or '(none)'}")
+                _log(f"  skip fan '{fan}' on {target} - no matching speed in {supported or '(none)'}")
 
 
 def _fire_event(sched, entry, target):

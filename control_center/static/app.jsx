@@ -2370,7 +2370,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanModes = [], fanMixed = false }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, hasFan = false }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2465,24 +2465,23 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         </div>
       )}
 
-      {mode !== 'off' && fanModes.length > 0 && (
+      {mode !== 'off' && hasFan && (
         <div className="sched-field-group">
           <span className="sched-field-label">Fan speed</span>
           <div className="sched-fan-row">
-            {/* "Don't set" leaves the fan alone; the rest are the modes the
-                targeted thermostat(s) actually support - never a generic guess. */}
-            <button type="button" className={`sched-fan-btn${!fan ? ' on' : ''}`}
-              onClick={() => setFan('')}>Don&rsquo;t set</button>
-            {fanModes.map((f) => (
-              <button key={f} type="button" className={`sched-fan-btn${fan === f ? ' on' : ''}`}
-                onClick={() => setFan(f)}>{f}</button>
+            {/* One semantic level, translated to each thermostat's own nearest
+                speed at run time - so a mixed fleet (low/high, silent/full,
+                25%/50%/100%, plain numbers) all obey a single pick. */}
+            {[['', 'Don’t set'], ['auto', 'Auto'], ['low', 'Low'],
+              ['medium', 'Medium'], ['high', 'High']].map(([val, label]) => (
+              <button key={val || '_none'} type="button"
+                className={`sched-fan-btn${fan === val ? ' on' : ''}`}
+                onClick={() => setFan(val)}>{label}</button>
             ))}
           </div>
-          {fanMixed && (
-            <span className="sched-fan-note">
-              These thermostats use different fan speeds; each unit applies a speed only if it has it.
-            </span>
-          )}
+          <span className="sched-fan-note">
+            Each thermostat uses its nearest matching speed.
+          </span>
         </div>
       )}
 
@@ -2524,19 +2523,13 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
   const tInfo = schedTempInfo(entities);
 
-  // Each thermostat reports its OWN fan_modes (numeric, %, or named - whatever the
-  // integration uses). Offer the UNION across the targets so any supported speed is
-  // pickable; the scheduler only ever sends a speed to a unit that actually lists
-  // it, so a mismatched value is simply skipped there (never knocks a unit off).
-  // `mixed` = the targets don't all share one fan vocabulary (or some have none).
-  const fanInfo = React.useMemo(() => {
-    const lists = (sched?.targets || []).map((t) =>
-      ((entities || []).find((e) => e.entity_id === t)?.attributes?.fan_modes) || []);
-    const withFan = lists.filter((l) => l.length);
-    const modes = [...new Set(withFan.flat())];
-    const vocab = new Set(withFan.map((l) => l.join('|')));
-    return { modes, mixed: modes.length > 0 && (vocab.size > 1 || withFan.length < lists.length) };
-  }, [sched, entities]);
+  // Thermostats report OWN fan_modes in incompatible vocabularies (numeric, %, or
+  // named). Rather than expose that mess, the editor offers ONE semantic level
+  // (Auto/Low/Medium/High) and the scheduler maps it to each unit's nearest real
+  // speed at run time. So we only need to know whether ANY target has a fan at all.
+  const hasFan = React.useMemo(() => (sched?.targets || []).some((t) =>
+    (((entities || []).find((e) => e.entity_id === t)?.attributes?.fan_modes) || []).length > 0),
+    [sched, entities]);
 
   async function createNew() {
     setBusy(true);
@@ -2753,8 +2746,7 @@ function SchedMyView({ entities, schedules, setSchedules, override = false }) {
             onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
             hideDays={override}
-            fanModes={fanInfo.modes}
-            fanMixed={fanInfo.mixed}
+            hasFan={hasFan}
           />
         </div>
       )}
