@@ -47,20 +47,32 @@ _FAN_RANK = {
 
 def _fan_speed_rank(mode):
     """A comparable slow->fast number for a fan mode, or None if it isn't a graded
-    speed (auto/on/off/diffuse and friends return None)."""
+    speed (auto/on/off/diffuse and friends return None). Also handles compound
+    names that pack a speed into a longer token - e.g. Ecobee's 'on_low' /
+    'auto_high' - by ranking on the speed word embedded in the name."""
     s = str(mode).strip().lower()
     if s in _FAN_RANK:
         return _FAN_RANK[s]
     m = re.match(r"^(\d+)\s*%?$", s)
-    return int(m.group(1)) if m else None
+    if m:
+        return int(m.group(1))
+    ranks = [_FAN_RANK[t] for t in re.split(r"[^a-z]+", s) if t in _FAN_RANK]
+    return max(ranks) if ranks else None
+
+
+def _is_auto_mode(mode):
+    """True for a mode that lets the thermostat decide when to run the fan
+    ('auto', or a compound like 'auto_low')."""
+    return "auto" in re.split(r"[^a-z]+", str(mode).strip().lower())
 
 
 def _resolve_fan(fan, fan_modes):
     """Translate a stored fan value into one this device actually supports.
 
     - already one of the device's modes -> use it verbatim (exact / legacy values);
-    - 'auto' -> the device's own auto (or on) mode;
-    - 'low' / 'medium' / 'high' -> the slowest / middle / fastest graded speed it has;
+    - 'auto' -> the device's own auto mode (incl. a compound like 'auto_low'), or 'on';
+    - 'low' / 'medium' / 'high' -> the slowest / middle / fastest graded speed it has,
+      preferring the manual ('on_*'/plain) speeds over the 'auto_*' ones;
     Returns None (meaning: don't touch the fan) when nothing matches.
     """
     modes = fan_modes or []
@@ -74,12 +86,17 @@ def _resolve_fan(fan, fan_modes):
         for cand in ("auto", "on"):
             if cand in lower:
                 return lower[cand]
-        return None
+        # Compound autos (auto_low/auto_high): pick the gentlest one.
+        autos = sorted((m for m in modes if _is_auto_mode(m)),
+                       key=lambda m: (_fan_speed_rank(m) is None, _fan_speed_rank(m) or 0))
+        return autos[0] if autos else None
     if lv in ("low", "medium", "high"):
-        graded = sorted(
-            (m for m in modes if _fan_speed_rank(m) is not None),
-            key=_fan_speed_rank,
-        )
+        ranked = [(m, _fan_speed_rank(m)) for m in modes if _fan_speed_rank(m) is not None]
+        # A speed pick means "run the fan at this speed", so prefer the manual
+        # variants; fall back to auto-flavoured speeds only if that's all there is.
+        manual = [t for t in ranked if not _is_auto_mode(t[0])]
+        pool = sorted(manual or ranked, key=lambda t: t[1])
+        graded = [m for m, _ in pool]
         if not graded:
             # A device whose only "fan" is on/auto: any requested speed just means "on".
             return lower.get("on")
