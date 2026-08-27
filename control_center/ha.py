@@ -81,6 +81,31 @@ def ha_request(path, method="GET", payload=None, *, instance_id=None):
     return res.json() if res.text else None
 
 
+_HA_TEMP_UNIT = None
+
+
+def ha_temperature_unit():
+    """Home Assistant's configured temperature unit ('°C' or '°F'), cached.
+
+    Schedules are always set and displayed in this unit; HA itself converts the
+    setpoint to each thermostat's own native unit when the command is sent, so a
+    mixed fleet needs no conversion on our side. Falls back to '°C' and doesn't
+    cache a failed lookup, so it retries next call."""
+    global _HA_TEMP_UNIT
+    if _HA_TEMP_UNIT:
+        return _HA_TEMP_UNIT
+    if os.environ.get("MOCK_HA"):
+        _HA_TEMP_UNIT = os.environ.get("MOCK_TEMP_UNIT", "°C")
+        return _HA_TEMP_UNIT
+    try:
+        cfg = ha_request("/api/config") or {}
+        unit = (cfg.get("unit_system") or {}).get("temperature")
+    except Exception:  # noqa: BLE001
+        return "°C"
+    _HA_TEMP_UNIT = unit if unit in ("°C", "°F") else "°C"
+    return _HA_TEMP_UNIT
+
+
 def call_service(domain, service, entity_id, extra=None, *, instance_id=None):
     if os.environ.get("MOCK_HA"):
         print(f"[mock_ha] call_service {domain}.{service} {entity_id} {extra}")

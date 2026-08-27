@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.9.28
+- **Schedules now use Home Assistant's configured temperature unit** for every
+  user, instead of guessing from a thermostat's min temperature. The old guess
+  read the *first* granted thermostat and inferred °C/°F from its range, so some
+  users saw °C when their fleet was really °F (or vice versa). Now the backend
+  reads HA's unit system once and the schedule editor always shows that unit; HA
+  itself converts each setpoint to the thermostat's native unit when the event
+  fires.
+- **Offline thermostats no longer show a phantom 22° setpoint.** An unreachable
+  climate device (HA state `unavailable`) dropped its attributes, so the card
+  fell back to a made-up 22. It now shows a dash and locks the +/- controls,
+  like an off unit.
+
 ## 2.9.27
 - **Consistent checkbox picker for lists and schedules.** Choosing devices for a
   list, or thermostats for a schedule, now uses the same compact tick menu the
