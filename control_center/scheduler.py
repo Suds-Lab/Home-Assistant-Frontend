@@ -5,6 +5,7 @@ against all enabled schedules, and fires HA climate services for each matching e
 Edge-triggered: the thermostat holds whatever state the last fired event set it to
 until the next event fires.
 """
+import re
 import threading
 import time
 from datetime import datetime
@@ -87,13 +88,89 @@ def was_recently_commanded(target):
     return time.time() - _own_cmd.get(target, 0) < _OWN_CMD_GRACE
 
 
-def _send_climate(target, mode, temp):
-    """Issue the HA climate service calls for one target. Shared by the initial
-    fire and the verification re-send so they behave identically.
+# --- Fan speed: conservative, exact-match only ------------------------------
+# A schedule stores a GENERIC level (auto/low/medium/high). We only ever send it
+# to a unit whose LIVE fan_modes contains that exact word (case-insensitive) - so
+# 'auto' matches a literal 'auto', never 'auto_low'/'fan_auto', and 'low' never
+# matches 'on_low'/'25%'/'0'. Any doubt and we leave the fan alone. This fleet
+# has ~12 different fan vocabularies; guessing across them is what knocked units
+# off, so we refuse to guess.
+def _exact_fan(fan, target):
+    """The device's own fan mode that EXACTLY equals the requested level
+    (case-insensitive), or None when there is no single unambiguous match."""
+    from core import STATE_CACHE
+    modes = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
+    want = str(fan).strip().lower()
+    matches = [m for m in modes if str(m).strip().lower() == want]
+    return matches[0] if len(matches) == 1 else None
 
-    Schedules set mode + temperature only - never fan speed. Sending a fan mode a
-    thermostat didn't accept was knocking some units off, which the verify loop
-    then read as drift and re-applied (a flap loop), so fan is not touched here."""
+
+# --- Failure reporting: a red add-on-log line + one HA notification per unit --
+_notified = set()  # targets we currently have a failure notification up for
+
+
+def _notif_id(target):
+    return "cc_sched_fail_" + re.sub(r"[^a-zA-Z0-9_]", "_", target)
+
+
+def _entity_disabled(target):
+    """Best-effort: True if HA's entity registry marks this entity disabled."""
+    try:
+        from ha import ha_registries_cached
+        inst = target.split(":", 1)[0] if ":" in target else None
+        real = target.split(":", 1)[1] if ":" in target else target
+        reg = ha_registries_cached(instance_id=inst) or {}
+        return any(e.get("entity_id") == real and e.get("disabled_by")
+                   for e in reg.get("entities", []))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _fire_failure_reason(target, b_state):
+    """Why a fire can't land right now, as a short phrase (None if reachable)."""
+    if _entity_disabled(target):
+        return "disabled in Home Assistant"
+    if b_state is None:
+        return "offline (no live state in Home Assistant)"
+    if b_state == "unavailable":
+        return "unavailable"
+    if b_state == "unknown":
+        return "state unknown"
+    return None
+
+
+def _report_failure(sched_name, target, reason):
+    """One concise red add-on-log line plus a persistent notification in HA, so a
+    unit that didn't get its scheduled setting is visible in both places."""
+    from core import STATE_CACHE
+    from ha import create_notification
+    name = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("friendly_name") \
+        or target.split(":", 1)[-1]
+    _log(f"FAILED: '{sched_name}' could not set {target} - {reason}")
+    create_notification(
+        _notif_id(target),
+        f"Schedule couldn't set {name}",
+        f"**{sched_name}** could not set **{name}** (`{target}`): {reason}.",
+    )
+    _notified.add(target)
+
+
+def _clear_failure(target):
+    """Dismiss a unit's failure notification once it has been set successfully."""
+    if target in _notified:
+        from ha import dismiss_notification
+        dismiss_notification(_notif_id(target))
+        _notified.discard(target)
+
+
+def _send_climate(target, mode, temp, fan=None):
+    """Issue the HA climate service calls for one target. Shared by the initial
+    fire and the verification re-send.
+
+    `fan` is passed ONLY on the initial fire, never on a verify re-apply, so a
+    finicky fan can't be re-hammered into a flap. It is sent only when it exactly
+    matches one of the unit's live fan_modes (see _exact_fan); otherwise the fan
+    is left untouched."""
     from ha import call_service, split_instance_entity
 
     _own_cmd[target] = time.time()  # so the resulting HA change isn't read as a person's
@@ -105,17 +182,25 @@ def _send_climate(target, mode, temp):
 
     if mode == "off":
         call_service("climate", "turn_off", real_target, instance_id=instance_id)
-    else:
-        hvac_mode = _MODE_TO_HVAC.get(mode, mode)
-        call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
-        if temp is not None:
-            call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
+        return
+
+    hvac_mode = _MODE_TO_HVAC.get(mode, mode)
+    call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
+    if temp is not None:
+        call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
+    if fan:
+        resolved = _exact_fan(fan, target)
+        if resolved is not None:
+            call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
+        else:
+            _log(f"  fan '{fan}' left alone on {target} - no exact match in its fan modes")
 
 
 def _fire_event(sched, entry, target):
     from core import STATE_CACHE
     mode = entry.get("mode", "heat")
     temp = entry.get("temp")
+    fan = entry.get("fan")
     name = sched.get("name") or "Schedule"
 
     # Snapshot the device before we touch it, so the log shows what actually
@@ -128,23 +213,31 @@ def _fire_event(sched, entry, target):
     detail = want
     if mode != "off" and temp is not None:
         detail += f" {temp}°"
+    if mode != "off" and fan:
+        detail += f" fan~{fan}"
     was = "offline" if offline else (f"{b_state}" + (f" {b_temp}°" if b_temp is not None else ""))
     _log(f"FIRE '{name}' [{entry.get('time')}] -> {target}: set {detail} (was {was})")
 
     t0 = time.time()
     try:
-        _send_climate(target, mode, temp)
+        _send_climate(target, mode, temp, fan)
     except Exception as exc:  # noqa: BLE001
         _log(f"  FAILED to send to {target} after {int((time.time() - t0) * 1000)}ms: {exc}")
+        _report_failure(name, target, f"send error: {exc}")
         return  # don't watch a send that never went out
     _log(f"  sent to {target} in {int((time.time() - t0) * 1000)}ms")
 
     # Record in the activity log only if the thermostat is actually online, so a
     # schedule firing at an offline device doesn't show up as if its owner acted.
+    # An offline fire is a failure the owner should see; an online one clears any
+    # standing failure for that unit.
     if offline:
+        reason = _fire_failure_reason(target, b_state) or "unavailable"
         _log(f"  {target} was {b_state}; command was still sent but may not arrive "
              f"(not recorded in the activity log)")
+        _report_failure(name, target, reason)
     else:
+        _clear_failure(target)
         _log_scheduled(sched, entry, target)
 
     # Watch this target for a short window and re-send if the thermostat drifts
@@ -275,8 +368,11 @@ def _verify_pending(schedules, override_targets=None):
             _log(f"stopped confirming {target} ('{p['name']}') - an override now governs it")
             continue
         m = _matches_desired(target, p["mode"], p["temp"])
-        if m is None or m:
-            continue  # offline (can't tell) or already correct - leave it watching
+        if m:
+            _clear_failure(target)  # it took (perhaps after a retry) - drop any failure note
+            continue
+        if m is None:
+            continue  # offline (can't tell) - leave it watching
         # Drifted. If a PERSON moved it (in HA or via Control Center) after we
         # fired, stand down - they win until the next event. A drift with no
         # human behind it (a device bouncing back) is a mystery we keep enforcing.
@@ -296,6 +392,8 @@ def _verify_pending(schedules, override_targets=None):
             _log(f"giving up on {target} ('{p['name']}') after {p['tries']} re-applies - "
                  f"it keeps reverting; standing down until the next event")
             _log_giveup(p, target)
+            _report_failure(p.get("name") or "Schedule", target,
+                            "didn't respond (kept reverting after retries)")
             continue
         p["last_try"] = now
         p["tries"] = p.get("tries", 0) + 1
