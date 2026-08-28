@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.9.30
+- **Fan speed is back in schedules - the safe way.** You pick a generic level
+  (Auto / Low / Medium / High) and at fire time the scheduler only sends it to a
+  thermostat whose own fan speeds contain that **exact** word (case-insensitive).
+  No guessing: `auto` is never treated as `auto_low`/`fan_auto`, `low` is never
+  `on_low`/`25%`/`0`. Anything ambiguous is left untouched. It's sent **once**,
+  on the event, and never re-applied by the self-verify loop - so a finicky fan
+  can't be re-hammered into the flap that removing it in 2.9.29 fixed.
+- **Schedule-failure logging + Home Assistant notification.** When an event can't
+  set a unit - offline, unavailable, disabled, or it keeps reverting - the add-on
+  log gets one concise red line and HA raises a persistent notification naming
+  the unit and the reason. The notification clears automatically once the unit is
+  set successfully.
+
 ## 2.9.29
 - **Schedules no longer control fan speed.** Sending a fan mode was knocking some
   thermostats off, which the self-verify loop then read as drift and re-applied -

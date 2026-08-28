@@ -106,6 +106,34 @@ def ha_temperature_unit():
     return _HA_TEMP_UNIT
 
 
+def create_notification(notification_id, title, message):
+    """Best-effort persistent_notification.create on the MAIN instance, so a
+    schedule failure surfaces in Home Assistant's UI. Never raises - a failed
+    notification must not break the scheduler. A stable notification_id means a
+    later create with the same id updates that notification instead of piling up."""
+    if os.environ.get("MOCK_HA"):
+        print(f"[mock_ha] persistent_notification.create {notification_id}: {title} - {message}")
+        return
+    try:
+        ha_request("/api/services/persistent_notification/create", "POST",
+                   {"notification_id": notification_id, "title": title, "message": message})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def dismiss_notification(notification_id):
+    """Best-effort persistent_notification.dismiss (clears a prior failure note
+    once the unit recovers). Never raises."""
+    if os.environ.get("MOCK_HA"):
+        print(f"[mock_ha] persistent_notification.dismiss {notification_id}")
+        return
+    try:
+        ha_request("/api/services/persistent_notification/dismiss", "POST",
+                   {"notification_id": notification_id})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def call_service(domain, service, entity_id, extra=None, *, instance_id=None):
     if os.environ.get("MOCK_HA"):
         print(f"[mock_ha] call_service {domain}.{service} {entity_id} {extra}")

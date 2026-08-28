@@ -2410,6 +2410,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
   const [days, setDays] = React.useState(new Set(entry?.days || [0, 1, 2, 3, 4]));
   const [mode, setMode] = React.useState(entry?.mode || 'heat');
   const [temp, setTemp] = React.useState(defaultTemp);
+  const [fan, setFan] = React.useState(entry?.fan || '');
 
   const toggleDay = (d) => setDays((prev) => {
     const next = new Set(prev);
@@ -2426,7 +2427,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 
   function handleSave() {
     if (!hideDays && !daysArr.length) return;
-    onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode, temp: showTemp ? temp : null });
+    onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode, temp: showTemp ? temp : null, fan: fan || null });
   }
 
   return (
@@ -2493,6 +2494,22 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         </div>
       )}
 
+      {mode !== 'off' && (
+        <div className="sched-field-group">
+          <span className="sched-field-label">Fan speed</span>
+          <div className="sched-fan-row">
+            {[['', 'Don’t set'], ['auto', 'Auto'], ['low', 'Low'],
+              ['medium', 'Medium'], ['high', 'High']].map(([val, label]) => (
+              <button key={val || '_none'} type="button"
+                className={`sched-fan-btn${fan === val ? ' on' : ''}`}
+                onClick={() => setFan(val)}>{label}</button>
+            ))}
+          </div>
+          <span className="sched-fan-note">
+            Applied only to thermostats that have this exact speed; others are left as they are.
+          </span>
+        </div>
+      )}
 
       {entry?.id && onDelete && (
         <button className="sched-danger-link" type="button"

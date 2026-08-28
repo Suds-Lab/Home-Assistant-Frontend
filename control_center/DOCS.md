@@ -483,8 +483,12 @@ The **Schedules** panel lets each user:
    thermostat, and the unit (C or F) is Home Assistant's own configured unit -
    schedules are always set and shown in that unit, and HA converts the setpoint
    to each thermostat's native unit when the event fires, so a mixed fleet needs
-   no manual conversion. Schedules control mode and temperature only; fan speed
-   is left to the thermostat.
+   no manual conversion. You can also set an optional **fan speed** - a generic
+   **Auto / Low / Medium / High**. To stay safe across a mixed fleet, the
+   scheduler only sends a fan mode to a thermostat whose own fan speeds contain
+   that **exact** word (so `Auto` is applied to a unit that literally lists
+   `auto`, never `auto_low`; a unit whose speeds are numbers or percentages is
+   left alone). It is set once, on the event, and never re-sent.
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.
 5. Switch to **By thermostat** to see the merged program for one unit across all
@@ -492,7 +496,10 @@ The **Schedules** panel lets each user:
 
 Events are edge-triggered: a thermostat holds whatever state the last fired
 event set until the next event fires. The scheduler checks for events every
-30 seconds.
+30 seconds. If an event can't set a unit - it's offline, unavailable, disabled,
+or keeps reverting - the add-on log gets a concise line and Home Assistant shows
+a **notification** naming the unit and the reason; the notification clears once
+the unit is set successfully.
 
 **Self-verifying:** some thermostats (e.g. Honeywell) don't always apply a change
 on the first command, and quietly revert. For about 10 minutes after an event
