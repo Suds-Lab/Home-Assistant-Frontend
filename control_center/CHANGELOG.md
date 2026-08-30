@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.31
+- **Searchable dropdowns (device/thermostat pickers) never fall off screen.**
+  Instead of flipping between left- and right-aligned - which on a narrow phone
+  could push a wide menu off the opposite edge - the menu now clamps its
+  horizontal position to the viewport: anchored under its trigger, shifted left
+  just enough to fit when it would overrun the right edge, and never past the
+  left edge. It re-checks continuously while open, so it stays on screen even
+  when the trigger moves - e.g. adding a chip pushes "+ Add" sideways.
+
 ## 2.9.30
 - **Fan speed is back in schedules - the safe way.** You pick a generic level
   (Auto / Low / Medium / High) and at fire time the scheduler only sends it to a
