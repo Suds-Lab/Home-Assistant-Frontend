@@ -2205,7 +2205,6 @@ function SchedSearchableMenu({
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const [hi, setHi] = React.useState(-1);
-  const [alignRight, setAlignRight] = React.useState(false);
   const wrapRef = React.useRef(null);
   const inputRef = React.useRef(null);
   const menuRef = React.useRef(null);
@@ -2223,24 +2222,32 @@ function SchedSearchableMenu({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Keep the menu on-screen: if a left-anchored menu would spill past the right
-  // edge (the trigger sits far right), right-align it instead. The decision uses
-  // the trigger's own left + the menu width, so it never depends on the current
-  // alignment and can't oscillate. We re-measure on every render while open (no
-  // deps) plus on resize, because the trigger can MOVE while the menu is open -
-  // e.g. adding a pill wraps the row and shifts "+ Add" to the next line - and a
-  // stale right-anchor would then hang off the opposite edge.
+  // Keep the menu on-screen by CLAMPING its horizontal position to the viewport,
+  // rather than picking a side. Anchored under the trigger's left edge normally;
+  // if that would spill past the right edge it shifts left just enough to fit,
+  // and never past the left edge either (so on a narrow phone a wide menu can't
+  // hang off either side). Runs on an rAF loop while open so it tracks ANY layout
+  // change - resize, scroll, or the trigger MOVING when a pill is added and wraps
+  // the row - without depending on React re-renders (which proved unreliable for
+  // the pill case). The offset is set relative to the wrap the menu lives in.
   React.useLayoutEffect(() => {
-    if (!open || !menuMounted || !menuRef.current || !wrapRef.current) return undefined;
-    const measure = () => {
-      if (!menuRef.current || !wrapRef.current) return;
-      const wrapLeft = wrapRef.current.getBoundingClientRect().left;
-      const menuW = menuRef.current.offsetWidth;
-      setAlignRight(wrapLeft + menuW > window.innerWidth - 8);
+    if (!open || !menuMounted) return undefined;
+    let raf = 0;
+    const clamp = () => {
+      const menu = menuRef.current, wrap = wrapRef.current;
+      if (menu && wrap) {
+        const M = 8; // min gap from either screen edge
+        const wrapLeft = wrap.getBoundingClientRect().left;
+        const menuW = menu.offsetWidth;
+        let left = Math.min(wrapLeft, window.innerWidth - M - menuW);
+        if (left < M) left = M;
+        menu.style.left = `${Math.round(left - wrapLeft)}px`; // offset within the wrap
+        menu.style.right = 'auto';
+      }
+      raf = requestAnimationFrame(clamp);
     };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    clamp();
+    return () => cancelAnimationFrame(raf);
   });
 
   React.useEffect(() => {
@@ -2285,7 +2292,7 @@ function SchedSearchableMenu({
     <div className="sched-smenu-wrap" ref={wrapRef}>
       {React.cloneElement(trigger, { onClick: () => setOpen((o) => !o), 'aria-expanded': open })}
       {menuMounted && (
-        <div ref={menuRef} className={`sched-smenu${open ? '' : ' closing'}${alignRight ? ' align-right' : ''}`}>
+        <div ref={menuRef} className={`sched-smenu${open ? '' : ' closing'}`}>
           <div className="sched-smenu-search">
             <span className="sched-smenu-search-icon">&#9906;</span>
             <input

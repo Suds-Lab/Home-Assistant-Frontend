@@ -2729,8 +2729,6 @@ img.install-icon {
   box-shadow: 0 6px 28px rgba(0,0,0,0.28);
   overflow: hidden;
 }
-/* Flip to right-aligned when a left-anchored menu would run off the screen. */
-.sched-smenu.align-right { left: auto; right: 0; }
 .sched-smenu-search {
   display: flex;
   align-items: center;
