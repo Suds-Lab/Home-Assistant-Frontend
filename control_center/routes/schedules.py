@@ -267,18 +267,36 @@ def _validated_entries(raw):
         mode = e.get("mode", "heat")
         if mode not in _VALID_MODES:
             mode = "heat"
-        # Fan is a generic level (auto/low/medium/high); the scheduler only sends
-        # it to a unit whose live fan_modes contains that exact word.
         entry = {
             "id": e.get("id") or str(uuid.uuid4()),
             "days": [int(d) for d in e.get("days", []) if int(d) in _VALID_DAYS],
             "time": time_val,
             "mode": mode,
             "temp": float(e["temp"]) if e.get("temp") is not None else None,
-            "fan": e.get("fan") or None,
+            "fan": _validated_fan(e.get("fan")),
         }
         entries.append(entry)
     return entries
+
+
+def _validated_fan(raw):
+    """Fan is per-vocabulary: a list of {modes: [str...], fan: str} groups, where
+    the scheduler sends each thermostat its group's value (matched by exact
+    fan_modes). A legacy single string (auto/low/medium/high) is still accepted.
+    Anything else, or empty, stores as None."""
+    if isinstance(raw, str):
+        return raw or None
+    if isinstance(raw, list):
+        groups = []
+        for g in raw:
+            if not isinstance(g, dict):
+                continue
+            modes = [str(m) for m in (g.get("modes") or [])]
+            val = g.get("fan")
+            if modes and val is not None and str(val) != "":
+                groups.append({"modes": modes, "fan": str(val)})
+        return groups or None
+    return None
 
 
 def _validated_date(s):

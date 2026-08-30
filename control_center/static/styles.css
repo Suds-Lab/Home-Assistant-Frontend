@@ -3141,17 +3141,9 @@ img.install-icon {
 }
 .sched-temp-row input[type=range] { flex: 1; }
 .sched-range-ends { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
-.sched-fan-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.sched-fan-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--input-bg);
-  color: var(--text);
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-.sched-fan-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sched-fan-group { margin-top: 8px; }
+.sched-fan-group + .sched-fan-group { border-top: 1px solid var(--border); padding-top: 8px; }
+.sched-fan-group-label { display: block; margin-bottom: 4px; font-size: 0.78rem; }
 .sched-fan-note { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
 
 /* Admin user sections */

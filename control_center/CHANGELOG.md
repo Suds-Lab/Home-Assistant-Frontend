@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.32
+- **Schedule fan speed now covers every thermostat, per fan type.** Instead of one
+  generic Auto/Low/Medium/High, the event editor groups the schedule's thermostats
+  by their fan vocabulary and shows one control per type - the same slider (for
+  graded speeds) and buttons the device card uses. Each thermostat gets the speed
+  picked for its own type, so numeric (0-6), percentage (25-100%), and named
+  fleets are all reachable. Values come straight from each unit's real fan modes,
+  so the exact-match-at-fire safety is kept and a unit is never sent a speed it
+  does not have. Units are matched to their group by the set of fan modes (order-
+  and encoding-independent), and schedules saved with the old single level keep
+  working.
+
 ## 2.9.31
 - **Searchable dropdowns (device/thermostat pickers) never fall off screen.**
   Instead of flipping between left- and right-aligned - which on a narrow phone

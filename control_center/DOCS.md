@@ -483,12 +483,14 @@ The **Schedules** panel lets each user:
    thermostat, and the unit (C or F) is Home Assistant's own configured unit -
    schedules are always set and shown in that unit, and HA converts the setpoint
    to each thermostat's native unit when the event fires, so a mixed fleet needs
-   no manual conversion. You can also set an optional **fan speed** - a generic
-   **Auto / Low / Medium / High**. To stay safe across a mixed fleet, the
-   scheduler only sends a fan mode to a thermostat whose own fan speeds contain
-   that **exact** word (so `Auto` is applied to a unit that literally lists
-   `auto`, never `auto_low`; a unit whose speeds are numbers or percentages is
-   left alone). It is set once, on the event, and never re-sent.
+   no manual conversion. You can also set an optional **fan speed**. When a
+   schedule targets thermostats with different fan controls, the editor groups
+   them by fan type and shows one control per type (the same slider and buttons as
+   the device card), so numeric, percentage, and named-speed units are all
+   reachable - each thermostat gets the speed picked for its own type. The offered
+   values come straight from each unit's real fan modes, so a unit is only ever
+   sent a speed it actually has; anything left unset is untouched. Fan is set once,
+   on the event, and never re-sent. (Schedules saved before this keep working.)
 4. See a **week preview strip** with hour-axis labels (0, 6, 12, 18, 24) and
    colour coding by mode/setpoint.
 5. Switch to **By thermostat** to see the merged program for one unit across all
