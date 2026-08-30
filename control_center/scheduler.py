@@ -88,21 +88,48 @@ def was_recently_commanded(target):
     return time.time() - _own_cmd.get(target, 0) < _OWN_CMD_GRACE
 
 
-# --- Fan speed: conservative, exact-match only ------------------------------
-# A schedule stores a GENERIC level (auto/low/medium/high). We only ever send it
-# to a unit whose LIVE fan_modes contains that exact word (case-insensitive) - so
-# 'auto' matches a literal 'auto', never 'auto_low'/'fan_auto', and 'low' never
-# matches 'on_low'/'25%'/'0'. Any doubt and we leave the fan alone. This fleet
-# has ~12 different fan vocabularies; guessing across them is what knocked units
-# off, so we refuse to guess.
+# --- Fan speed: per-vocabulary, exact values only ---------------------------
+# A schedule event stores fan as a LIST of vocabulary groups:
+#   [{"modes": [...that unit's real fan_modes...], "fan": "<a value from them>"}]
+# Each targeted thermostat is matched to its group by SET EQUALITY of its LIVE
+# fan_modes to the group's stored modes (order- and encoding-independent, so it is
+# correct for any characters - no cross-language sort/signature to get wrong), and
+# gets that group's chosen value. Because the value came from a real unit's own
+# fan_modes, it is always something that unit supports; a unit in no group is left
+# alone. Legacy schedules stored a single generic string (auto/low/medium/high);
+# those still resolve via _exact_fan below.
 def _exact_fan(fan, target):
     """The device's own fan mode that EXACTLY equals the requested level
-    (case-insensitive), or None when there is no single unambiguous match."""
+    (case-insensitive), or None when there is no single unambiguous match. Used
+    for LEGACY string fan values only."""
     from core import STATE_CACHE
     modes = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
     want = str(fan).strip().lower()
     matches = [m for m in modes if str(m).strip().lower() == want]
     return matches[0] if len(matches) == 1 else None
+
+
+def _resolve_fan(fan, target):
+    """The fan mode to send to `target` for this event, or None to leave the fan
+    alone. `fan` is a list of {modes, fan} vocabulary groups (new shape), a single
+    generic string (legacy), or falsy."""
+    if not fan:
+        return None
+    if isinstance(fan, str):
+        return _exact_fan(fan, target)
+    from core import STATE_CACHE
+    modes = ((STATE_CACHE.get(target) or {}).get("attributes") or {}).get("fan_modes") or []
+    live = set(str(m) for m in modes)
+    if not live:
+        return None
+    for grp in fan:
+        if not isinstance(grp, dict):
+            continue
+        if set(str(m) for m in (grp.get("modes") or [])) == live:
+            want = grp.get("fan")
+            # Belt-and-braces: only send a value the unit actually has right now.
+            return want if want is not None and str(want) in live else None
+    return None
 
 
 # --- Failure reporting: a red add-on-log line + one HA notification per unit --
@@ -189,11 +216,11 @@ def _send_climate(target, mode, temp, fan=None):
     if temp is not None:
         call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
     if fan:
-        resolved = _exact_fan(fan, target)
+        resolved = _resolve_fan(fan, target)
         if resolved is not None:
             call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
         else:
-            _log(f"  fan '{fan}' left alone on {target} - no exact match in its fan modes")
+            _log(f"  fan left alone on {target} - none of its fan modes matched the schedule")
 
 
 def _fire_event(sched, entry, target):
@@ -214,7 +241,9 @@ def _fire_event(sched, entry, target):
     if mode != "off" and temp is not None:
         detail += f" {temp}°"
     if mode != "off" and fan:
-        detail += f" fan~{fan}"
+        shown = _resolve_fan(fan, target)  # what this specific unit will get, if anything
+        if shown is not None:
+            detail += f" fan~{shown}"
     was = "offline" if offline else (f"{b_state}" + (f" {b_temp}°" if b_temp is not None else ""))
     _log(f"FIRE '{name}' [{entry.get('time')}] -> {target}: set {detail} (was {was})")
 

@@ -640,6 +640,88 @@ const fanKey = (m) => String(m).toLowerCase().replace(/[\s_-]/g, '');
 // steps - treat those as an ordered ladder too.
 const isNumericMode = (m) => /^-?\d+(?:\.\d+)?$/.test(String(m).trim());
 
+// Two fan_modes lists describe the same vocabulary iff they hold the same set of
+// values (order/encoding independent) - the JS side of the fire-time match.
+const sameModeSet = (a, b) => {
+  const A = new Set((a || []).map(String));
+  const B = new Set((b || []).map(String));
+  return A.size === B.size && [...A].every((m) => B.has(m));
+};
+
+// Reusable climate fan control: a slider over graded speeds (>=3 rungs, named or
+// numeric) plus buttons for the rest (auto/on/diffuse). Presentational only, so it
+// works both on the live device card and in the schedule editor. `onChange(mode,
+// committed)` fires on drag (committed=false, for live display) and on release or
+// a button (committed=true, the value to apply). With `allowClear`, a "Don't set"
+// button reports null.
+function FanControl({ fanModes, value, onChange, disabled = false, allowClear = false }) {
+  const visible = (fanModes || []).filter((m) => !FAN_HIDE.has(fanKey(m)));
+  if (!visible.length) return null;
+  const numeric = visible.filter(isNumericMode);
+  let speeds;
+  let specials;
+  if (numeric.length >= 3) {
+    speeds = [...numeric].sort((x, y) => parseFloat(x) - parseFloat(y));
+    specials = visible.filter((m) => !isNumericMode(m));
+  } else {
+    speeds = visible
+      .filter((m) => fanKey(m) in FAN_SPEED_RANK)
+      .sort((x, y) => FAN_SPEED_RANK[fanKey(x)] - FAN_SPEED_RANK[fanKey(y)]);
+    specials = visible.filter((m) => !(fanKey(m) in FAN_SPEED_RANK));
+  }
+  const asSlider = speeds.length >= 3;
+  const unset = value == null || value === '';
+  const idx = Math.max(0, speeds.indexOf(value));
+  const clearBtn = allowClear ? (
+    <button type="button" className={`mode ${unset ? 'selected' : ''}`}
+      onClick={() => onChange(null, true)} disabled={disabled}>Don&rsquo;t set</button>
+  ) : null;
+  return (
+    <div className="fan-modes">
+      {asSlider ? (
+        <>
+          <label className="slider fan-slider">
+            Fan: {unset ? 'Not set' : prettyMode(value)}
+            <input
+              type="range"
+              min="0"
+              max={speeds.length - 1}
+              step="1"
+              value={idx}
+              style={{ '--fill': `${(idx / Math.max(1, speeds.length - 1)) * 100}%` }}
+              disabled={disabled}
+              aria-label="Fan speed"
+              onChange={(e) => { onChange(speeds[Number(e.target.value)], false); haptic(8); }}
+              onMouseUp={(e) => onChange(speeds[Number(e.target.value)], true)}
+              onTouchEnd={(e) => onChange(speeds[Number(e.target.value)], true)}
+            />
+          </label>
+          {(specials.length > 0 || clearBtn) && (
+            <div className="mode-row">
+              {specials.map((fm) => (
+                <button key={fm} type="button" className={`mode ${value === fm ? 'selected' : ''}`}
+                  onClick={() => onChange(fm, true)} disabled={disabled}>{prettyMode(fm)}</button>
+              ))}
+              {clearBtn}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="muted">Fan</span>
+          <div className="mode-row">
+            {visible.map((fm) => (
+              <button key={fm} type="button" className={`mode ${value === fm ? 'selected' : ''}`}
+                onClick={() => onChange(fm, true)} disabled={disabled}>{prettyMode(fm)}</button>
+            ))}
+            {clearBtn}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // States that should highlight a card as "active".
 const ACTIVE_STATES = new Set([
   'on', 'open', 'playing', 'home', 'cleaning', 'unlocked',
@@ -966,32 +1048,6 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
             {label}
           </button>
         );
-        // Fan modes: hide "night"; if the rest form an ordered speed ladder
-        // (low..high) render a slider that reports the equivalent named mode to
-        // HA, and keep any non-speed modes (e.g. "auto") as buttons.
-        const fanModesVisible = (a.fan_modes || []).filter((m) => !FAN_HIDE.has(fanKey(m)));
-        const numericFan = fanModesVisible.filter(isNumericMode);
-        let fanSpeeds;
-        let fanSpecials;
-        if (numericFan.length >= 3) {
-          // Numeric speed list ("1".."5"): order by value; keep any non-numeric
-          // modes (e.g. "auto") as buttons.
-          fanSpeeds = [...numericFan].sort((x, y) => parseFloat(x) - parseFloat(y));
-          fanSpecials = fanModesVisible.filter((m) => !isNumericMode(m));
-        } else {
-          // Named ladder (low..high); non-ladder modes (auto, etc.) as buttons.
-          fanSpeeds = fanModesVisible
-            .filter((m) => fanKey(m) in FAN_SPEED_RANK)
-            .sort((x, y) => FAN_SPEED_RANK[fanKey(x)] - FAN_SPEED_RANK[fanKey(y)]);
-          fanSpecials = fanModesVisible.filter((m) => !(fanKey(m) in FAN_SPEED_RANK));
-        }
-        const fanAsSlider = fanSpeeds.length >= 3;
-        const fanIdx = Math.max(0, fanSpeeds.indexOf(fanMode));
-        const commitFan = (fm) => {
-          setFanMode(fm);
-          fanFreeze.current = Date.now() + 1500;
-          control(device.entity_id, 'set_fan_mode', { fan_mode: fm }).then(onChange).catch((err) => onError?.(err.message));
-        };
         // Build the readout as one string so the separator/spacing don't depend
         // on CSS (a stale cached stylesheet was rendering the two spans joined).
         const readout = [
@@ -1024,63 +1080,20 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
                 </button>
               ))}
             </div>
-            {fanModesVisible.length > 0 && !isOff && (
-              <div className="fan-modes">
-                {fanAsSlider ? (
-                  <>
-                    <label className="slider fan-slider">
-                      Fan: {prettyMode(fanMode)}
-                      <input
-                        type="range"
-                        min="0"
-                        max={fanSpeeds.length - 1}
-                        step="1"
-                        value={fanIdx}
-                        style={{ '--fill': `${(fanIdx / Math.max(1, fanSpeeds.length - 1)) * 100}%` }}
-                        disabled={busy}
-                        aria-label="Fan speed"
-                        onChange={(e) => {
-                          setFanMode(fanSpeeds[Number(e.target.value)]);
-                          fanFreeze.current = Date.now() + 1500; // don't let a push bounce the drag
-                          haptic(8);
-                        }}
-                        onMouseUp={(e) => commitFan(fanSpeeds[Number(e.target.value)])}
-                        onTouchEnd={(e) => commitFan(fanSpeeds[Number(e.target.value)])}
-                      />
-                    </label>
-                    {fanSpecials.length > 0 && (
-                      <div className="mode-row">
-                        {fanSpecials.map((fm) => (
-                          <button
-                            key={fm}
-                            className={`mode ${fanMode === fm ? 'selected' : ''}`}
-                            onClick={() => setFan(fm)}
-                            disabled={busy}
-                          >
-                            {prettyMode(fm)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="muted">Fan</span>
-                    <div className="mode-row">
-                      {fanModesVisible.map((fm) => (
-                        <button
-                          key={fm}
-                          className={`mode ${fanMode === fm ? 'selected' : ''}`}
-                          onClick={() => setFan(fm)}
-                          disabled={busy}
-                        >
-                          {prettyMode(fm)}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+            {!isOff && (
+              <FanControl
+                fanModes={a.fan_modes}
+                value={fanMode}
+                disabled={busy}
+                onChange={(fm, committed) => {
+                  if (committed) {
+                    setFan(fm);   // optimistic + service call (existing helper)
+                  } else {
+                    setFanMode(fm);   // live display while dragging the slider
+                    fanFreeze.current = Date.now() + 1500;
+                  }
+                }}
+              />
             )}
             {(a.swing_modes || []).length > 0 && !isOff && (() => {
               const modes = a.swing_modes;
@@ -2081,7 +2094,6 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MODE_LABELS = { off: 'Off', cool: 'Cool', heat: 'Heat', auto: 'Auto', dry: 'Dry', fan: 'Fan only' };
-const FAN_OPTIONS = ['auto', 'low', 'medium', 'high', 'diffuse', 'focus'];
 const TEMP_MIN = 16;
 const TEMP_MAX = 30;
 
@@ -2406,7 +2418,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanGroups = [] }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2417,7 +2429,26 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
   const [days, setDays] = React.useState(new Set(entry?.days || [0, 1, 2, 3, 4]));
   const [mode, setMode] = React.useState(entry?.mode || 'heat');
   const [temp, setTemp] = React.useState(defaultTemp);
-  const [fan, setFan] = React.useState(entry?.fan || '');
+  // Per-vocabulary fan choice, keyed by the group's local key. Seeded from the
+  // stored entry: a list -> match each current group by set-equality; a legacy
+  // string -> seed each group whose vocab contains that value.
+  const [fanChoices, setFanChoices] = React.useState(() => {
+    const out = {};
+    const raw = entry?.fan;
+    if (Array.isArray(raw)) {
+      for (const g of fanGroups) {
+        const hit = raw.find((sg) => sameModeSet(sg?.modes, g.modes));
+        if (hit && hit.fan != null) out[g.key] = hit.fan;
+      }
+    } else if (typeof raw === 'string' && raw) {
+      const want = raw.toLowerCase();
+      for (const g of fanGroups) {
+        const m = g.modes.find((x) => String(x).toLowerCase() === want);
+        if (m != null) out[g.key] = m;
+      }
+    }
+    return out;
+  });
 
   const toggleDay = (d) => setDays((prev) => {
     const next = new Set(prev);
@@ -2434,7 +2465,11 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 
   function handleSave() {
     if (!hideDays && !daysArr.length) return;
-    onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode, temp: showTemp ? temp : null, fan: fan || null });
+    const fanList = fanGroups
+      .filter((g) => fanChoices[g.key])
+      .map((g) => ({ modes: g.modes, fan: fanChoices[g.key] }));
+    onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode,
+             temp: showTemp ? temp : null, fan: fanList.length ? fanList : null });
   }
 
   return (
@@ -2501,19 +2536,31 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         </div>
       )}
 
-      {mode !== 'off' && (
+      {mode !== 'off' && fanGroups.length > 0 && (
         <div className="sched-field-group">
           <span className="sched-field-label">Fan speed</span>
-          <div className="sched-fan-row">
-            {[['', 'Don’t set'], ['auto', 'Auto'], ['low', 'Low'],
-              ['medium', 'Medium'], ['high', 'High']].map(([val, label]) => (
-              <button key={val || '_none'} type="button"
-                className={`sched-fan-btn${fan === val ? ' on' : ''}`}
-                onClick={() => setFan(val)}>{label}</button>
-            ))}
-          </div>
+          {fanGroups.map((g) => (
+            <div key={g.key} className="sched-fan-group">
+              {fanGroups.length > 1 && (
+                <span className="muted sched-fan-group-label">
+                  {g.names.slice(0, 2).join(', ')}
+                  {g.names.length > 2 ? ` +${g.names.length - 2} more` : ''}
+                </span>
+              )}
+              <FanControl
+                fanModes={g.modes}
+                value={fanChoices[g.key] ?? null}
+                allowClear
+                onChange={(fm) => setFanChoices((prev) => {
+                  const next = { ...prev };
+                  if (fm == null) delete next[g.key]; else next[g.key] = fm;
+                  return next;
+                })}
+              />
+            </div>
+          ))}
           <span className="sched-fan-note">
-            Applied only to thermostats that have this exact speed; others are left as they are.
+            Each thermostat gets the speed picked for its own fan type; the rest are left as they are.
           </span>
         </div>
       )}
@@ -2555,6 +2602,24 @@ function SchedMyView({ entities, schedules, setSchedules, override = false, haUn
   const sched = schedules ? schedules.find((s) => s.id === selId) || null : null;
   const entityName = (id) => (entities || []).find((e) => e.entity_id === id)?.name || id;
   const tInfo = schedTempInfo(entities, haUnit);
+
+  // Group the targeted thermostats by their fan vocabulary, so the event editor
+  // can show one FanControl per distinct set of fan speeds. The `key` is a
+  // JS-LOCAL bucket id only (never sent to the backend); we store the raw `modes`
+  // array and match units to a group by set-equality at fire time. Only
+  // fan-capable targets are grouped.
+  const fanGroups = React.useMemo(() => {
+    const byId = new Map((entities || []).map((e) => [e.entity_id, e]));
+    const groups = new Map();
+    for (const tid of (sched?.targets || [])) {
+      const modes = byId.get(tid)?.attributes?.fan_modes || [];
+      if (!modes.filter((m) => !FAN_HIDE.has(fanKey(m))).length) continue;
+      const key = [...modes].map(String).sort().join('');
+      if (!groups.has(key)) groups.set(key, { key, modes, names: [] });
+      groups.get(key).names.push(byId.get(tid)?.name || tid);
+    }
+    return [...groups.values()];
+  }, [sched?.targets, entities]);
 
   async function createNew() {
     setBusy(true);
@@ -2764,6 +2829,7 @@ function SchedMyView({ entities, schedules, setSchedules, override = false, haUn
             onDelete={editEntry.id ? () => { deleteEntry(editEntry.id); closeSheet(); } : null}
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
             hideDays={override}
+            fanGroups={fanGroups}
           />
         </div>
       )}
