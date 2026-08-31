@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.34
+- **Compact view: climate cards now keep both mode and fan, as dropdowns.**
+  Previously compact dropped the fan section entirely and kept mode as a full
+  button row. Now a compact climate card shows a small **Mode** dropdown and a
+  **Fan** dropdown instead, so you can still change fan speed without leaving
+  compact - and the card stays small. Regular (comfortable) view is unchanged
+  (mode buttons + fan slider). The schedule editor keeps the full fan control in
+  both views.
+
 ## 2.9.33
 - **Fix: schedule fan controls were invisible in Compact view.** Compact view
   hides the fan section on dashboard cards (`.compact .fan-modes`), and since the

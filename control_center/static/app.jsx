@@ -1068,7 +1068,9 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
               <span className="temp-value">{isOff || isOffline ? '-' : `${target}°`}</span>
               {tempBtn(step, '+', 'Increase temperature')}
             </div>
-            <div className="mode-row">
+            {/* Mode + fan as button rows / slider in regular view; Compact view
+                (CSS) hides these and shows the dropdowns below to save space. */}
+            <div className="mode-row card-modes">
               {(a.hvac_modes || []).map((mode) => (
                 <button
                   key={mode}
@@ -1080,6 +1082,17 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
                 </button>
               ))}
             </div>
+            {(a.hvac_modes || []).length > 0 && (
+              <label className="card-dd card-mode-dd">
+                <span className="muted">Mode</span>
+                <select value={state} disabled={busy}
+                  onChange={(e) => act('set_hvac_mode', { hvac_mode: e.target.value }, e.target.value)}>
+                  {(a.hvac_modes || []).map((mode) => (
+                    <option key={mode} value={mode}>{humanize(mode)}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             {!isOff && (
               <FanControl
                 fanModes={a.fan_modes}
@@ -1095,6 +1108,23 @@ function DeviceCard({ device, onChange, onEdit, onError }) {
                 }}
               />
             )}
+            {!isOff && (() => {
+              const fanVisible = (a.fan_modes || []).filter((m) => !FAN_HIDE.has(fanKey(m)));
+              if (!fanVisible.length) return null;
+              const known = fanVisible.includes(fanMode);
+              return (
+                <label className="card-dd card-fan-dd">
+                  <span className="muted">Fan</span>
+                  <select value={known ? fanMode : ''} disabled={busy}
+                    onChange={(e) => setFan(e.target.value)}>
+                    {!known && <option value="" disabled>Not set</option>}
+                    {fanVisible.map((fm) => (
+                      <option key={fm} value={fm}>{prettyMode(fm)}</option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })()}
             {(a.swing_modes || []).length > 0 && !isOff && (() => {
               const modes = a.swing_modes;
               // Classify each swing mode into the axes it drives, tolerating
