@@ -3145,6 +3145,10 @@ img.install-icon {
 .sched-fan-group + .sched-fan-group { border-top: 1px solid var(--border); padding-top: 8px; }
 .sched-fan-group-label { display: block; margin-bottom: 4px; font-size: 0.78rem; }
 .sched-fan-note { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
+/* Compact view hides `.fan-modes` on the dashboard cards to shrink them; the
+   schedule editor reuses the same control, so un-hide it here (higher specificity
+   than `.compact .fan-modes`) - the editor is never meant to be compacted. */
+.compact .sched-fan-group .fan-modes { display: block; }
 
 /* Admin user sections */
 .sched-admin-user-section { margin-bottom: 20px; }
