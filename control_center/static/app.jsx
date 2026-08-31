@@ -2124,19 +2124,27 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MODE_LABELS = { off: 'Off', cool: 'Cool', heat: 'Heat', auto: 'Auto', dry: 'Dry', fan: 'Fan only' };
-const TEMP_MIN = 16;
+const TEMP_MIN = 16;      // °C fallback bounds, used only when no device reports its own
 const TEMP_MAX = 30;
+const TEMP_MIN_F = 60;    // °F fallback bounds (~16-30 °C) so an °F install never shows
+const TEMP_MAX_F = 86;    // Celsius numbers under a Fahrenheit label (and vice versa)
 
 /* Derive temp range/unit from the list of schedule entities (same as climate cards). */
 function schedTempInfo(entities, haUnit) {
-  const a = (entities && entities[0] && entities[0].attributes) || {};
-  const tMin = a.min_temp ?? TEMP_MIN;
-  const tMax = a.max_temp ?? TEMP_MAX;
-  const tStep = a.target_temp_step ?? 0.5;
-  // Schedules are always in HA's configured unit (HA reports min/max/setpoints in
-  // that unit and converts to each device's own unit when the command fires). Use
-  // it when known; otherwise fall back to the entity attribute or a range guess.
-  const tUnit = haUnit || a.temperature_unit || (tMin > 40 ? '°F' : '°C');
+  const list = entities || [];
+  // Prefer a device that actually reports bounds; an offline one (no min/max)
+  // shouldn't drag the whole view onto the fallback numbers.
+  const src = list.find((e) => e && e.attributes && e.attributes.min_temp != null) || list[0] || {};
+  const a = src.attributes || {};
+  // HA's configured unit is authoritative for the label (HA reports min/max/setpoints
+  // in that unit and converts to each device's own unit when the command fires); only
+  // guess from a reported range when it's unknown. Resolve it BEFORE the fallback
+  // bounds so those can be chosen in the SAME unit as the label.
+  const tUnit = haUnit || a.temperature_unit || ((a.min_temp ?? 0) > 40 ? '°F' : '°C');
+  const isF = tUnit === '°F';
+  const tMin = a.min_temp ?? (isF ? TEMP_MIN_F : TEMP_MIN);
+  const tMax = a.max_temp ?? (isF ? TEMP_MAX_F : TEMP_MAX);
+  const tStep = a.target_temp_step ?? (isF ? 1 : 0.5);
   return { tMin, tMax, tStep, tUnit };
 }
 

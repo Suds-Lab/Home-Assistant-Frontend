@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.9.36
+- **Fix: schedule temperatures showed an °F label with Celsius numbers.** In a
+  Fahrenheit install, if the thermostat used to size the slider was offline (so it
+  reported no min/max), the schedule editor fell back to hardcoded Celsius bounds
+  (16 to 30) but still labeled them °F, so the slider read "16°F to 30°F" and the
+  setpoint sat off the end of the track. The fallback range now matches the label's
+  unit (about 60 to 86 in °F), and the view now sizes itself from the first
+  thermostat that actually reports its range instead of blindly the first one, so a
+  single offline unit no longer throws the whole editor onto fallback numbers.
+
 ## 2.9.35
 - **Schedules only send what actually changed.** When an event fires (and on every
   self-verifying re-apply), the scheduler now compares the unit's live state first
