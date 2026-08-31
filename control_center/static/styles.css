@@ -823,12 +823,38 @@ section h2 {
   font-size: 0.74rem;
   min-height: 28px;
 }
-/* Compact: drop the bulky fan-speed and swing sections from climate cards so
-   they shrink to roughly a light's size (temperature + mode stay). Switch off
-   compact for the full set of controls. */
+/* Compact: on climate cards, swap the bulky mode button-row and fan slider for
+   space-saving dropdowns (regular view keeps the full controls). The fan slider
+   (.fan-modes) is hidden and replaced by the .card-fan-dd dropdown; the mode
+   button-row (.card-modes) by the .card-mode-dd dropdown. */
 .compact .fan-modes {
   display: none;
 }
+.card-dd {                 /* mode/fan dropdown wrapper - hidden in regular view */
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.card-dd > .muted {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 0 0 auto;
+}
+.card-dd select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.compact .card-modes { display: none; }
+.compact .card-mode-dd,
+.compact .card-fan-dd { display: flex; }
 .compact .switch {
   width: 40px;
   height: 22px;
