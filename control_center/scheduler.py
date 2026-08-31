@@ -194,11 +194,20 @@ def _send_climate(target, mode, temp, fan=None):
     """Issue the HA climate service calls for one target. Shared by the initial
     fire and the verification re-send.
 
+    Only the commands that actually CHANGE something are sent: if the unit is
+    already at the target temp (or fan), that command is skipped. Some units
+    (e.g. certain Midea ACs) bounce straight back to off when they get a
+    set_temperature/set_fan_mode right after set_hvac_mode while still waking up;
+    sending only what differs makes CC's command match the single manual command
+    that those units accept and hold. Skipping never sends a different value, only
+    fewer, so it can't misfire.
+
     `fan` is passed ONLY on the initial fire, never on a verify re-apply, so a
     finicky fan can't be re-hammered into a flap. It is sent only when it exactly
     matches one of the unit's live fan_modes (see _exact_fan); otherwise the fan
     is left untouched."""
     from ha import call_service, split_instance_entity
+    from core import STATE_CACHE
 
     _own_cmd[target] = time.time()  # so the resulting HA change isn't read as a person's
 
@@ -211,16 +220,23 @@ def _send_climate(target, mode, temp, fan=None):
         call_service("climate", "turn_off", real_target, instance_id=instance_id)
         return
 
+    cur = STATE_CACHE.get(target) or {}
+    cur_state = cur.get("state")
+    cur_attrs = cur.get("attributes") or {}
+
     hvac_mode = _MODE_TO_HVAC.get(mode, mode)
-    call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
-    if temp is not None:
+    # Send the mode whenever the unit isn't already in it (the normal fire/refire
+    # case: the unit is off or drifted). If it's already in the mode we leave it.
+    if cur_state != hvac_mode:
+        call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
+    if temp is not None and not _temp_matches(cur_attrs.get("temperature"), temp):
         call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
     if fan:
         resolved = _resolve_fan(fan, target)
-        if resolved is not None:
-            call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
-        else:
+        if resolved is None:
             _log(f"  fan left alone on {target} - none of its fan modes matched the schedule")
+        elif str(cur_attrs.get("fan_mode")) != str(resolved):
+            call_service("climate", "set_fan_mode", real_target, {"fan_mode": resolved}, instance_id=instance_id)
 
 
 def _fire_event(sched, entry, target):
@@ -352,6 +368,18 @@ def _log_giveup(p, target):
     })
 
 
+def _temp_matches(cur_temp, want_temp):
+    """True when the unit's live setpoint already equals the target within
+    tolerance. Unknown/unparseable current temp counts as NOT matching, so we
+    send the command rather than silently skip it."""
+    if cur_temp is None:
+        return False
+    try:
+        return abs(float(cur_temp) - float(want_temp)) <= _VERIFY_TEMP_TOL
+    except (TypeError, ValueError):
+        return False
+
+
 def _matches_desired(target, mode, temp):
     """Whether the target's live state already matches the scheduled mode/temp.
     Returns None when the device is offline (can't tell), True/False otherwise."""
@@ -364,8 +392,7 @@ def _matches_desired(target, mode, temp):
     if cur != want:
         return False
     if mode != "off" and temp is not None:
-        cur_temp = (st.get("attributes") or {}).get("temperature")
-        if cur_temp is None or abs(float(cur_temp) - float(temp)) > _VERIFY_TEMP_TOL:
+        if not _temp_matches((st.get("attributes") or {}).get("temperature"), temp):
             return False
     return True
 
