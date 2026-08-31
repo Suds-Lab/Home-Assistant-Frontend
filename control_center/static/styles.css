@@ -3093,6 +3093,8 @@ img.install-icon {
   border-radius: var(--radius);
 }
 .sched-field-group { display: flex; flex-direction: column; gap: 6px; }
+/* Fan-speed row: label on the left, opt-in toggle on the right. */
+.sched-fan-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sched-field-label {
   font-size: 0.75rem;
   font-weight: 700;
