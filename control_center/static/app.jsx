@@ -335,6 +335,20 @@ const adminPatchSchedule = (id, patch) =>
 const adminDeleteSchedule = (id) =>
   request(`/admin/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+// Telegram Notifications (user-facing)
+const getTelegramStatus = () => request('/telegram/status');
+const getTelegramMessages = (channel, before) =>
+  request(`/telegram/messages?channel=${encodeURIComponent(channel)}${before ? `&before=${before}` : ''}`);
+const searchTelegram = (channel, q, before) =>
+  request(`/telegram/search?channel=${encodeURIComponent(channel)}&q=${encodeURIComponent(q)}${before ? `&before=${before}` : ''}`);
+// Telegram Notifications (admin)
+const adminGetTelegramConfig = () => request('/admin/telegram-config');
+const adminSetTelegramConfig = (cfg) =>
+  request('/admin/telegram-config', { method: 'POST', body: JSON.stringify(cfg) });
+const adminGetTelegramPerms = () => request('/admin/telegram-perms');
+const adminSetTelegramPerms = (username, channel_ids, all) =>
+  request('/admin/telegram-perms', { method: 'POST', body: JSON.stringify({ username, channel_ids, all }) });
+
 // Live pull of Home Assistant's own logbook for a range (never stored by us).
 const adminHaLogbook = (startISO, endISO, entity) => {
   const p = new URLSearchParams({ start: startISO });
@@ -2065,7 +2079,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLists, onLogout }) {
+function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLists, onTelegram, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -2111,11 +2125,224 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
               Lists
             </button>
           )}
+          {onTelegram && (
+            <button role="menuitem" onClick={() => { setOpen(false); onTelegram(); }}>
+              Telegram Notifications
+            </button>
+          )}
           <button role="menuitem" className="danger" onClick={() => { setOpen(false); onLogout(); }}>
             Log out
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Telegram Notifications (user-facing) ------------------------------------
+// Read-only viewer for the channels an admin shares with this user: pick a
+// channel, browse newest-first with "load older" paging, and search within it.
+// Backed by /api/telegram/*; part of the removable telegram feature module.
+function fmtTgTime(unixSecs) {
+  try {
+    return new Date(unixSecs * 1000).toLocaleString([], {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch (e) {
+    return '';
+  }
+}
+
+// One channel message's image. Fetched WITH the auth header and turned into a
+// blob URL, so a session token never appears in an <img src> (an <img> can't send
+// headers, and putting the token in the URL would leak it). Revoked on unmount.
+function TgImage({ channel, id }) {
+  const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    let obj = null;
+    const token = getToken();
+    fetch(new URL(`api/telegram/media?channel=${encodeURIComponent(channel)}&id=${id}`, document.baseURI), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => { if (!r.ok) throw new Error('media'); return r.blob(); })
+      .then((b) => { if (!alive) return; obj = URL.createObjectURL(b); setUrl(obj); })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; if (obj) URL.revokeObjectURL(obj); };
+  }, [channel, id]);
+  if (failed) return <div className="tg-msg-img tg-img-ph muted">image unavailable</div>;
+  if (!url) return <div className="tg-msg-img tg-img-ph muted">loading image…</div>;
+  return <img className="tg-msg-img" src={url} alt="" loading="lazy" />;
+}
+
+function TelegramPanel() {
+  const [status, setStatus] = useState(null);
+  const [channel, setChannel] = useState('');   // '' = channel list; else the open channel
+  const [messages, setMessages] = useState([]); // stored ascending (oldest first)
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [atStart, setAtStart] = useState(false); // no older messages left
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getTelegramStatus()
+      .then((d) => setStatus(d))   // start on the channel list, don't auto-open one
+      .catch((e) => setError(e.message));
+  }, []);
+
+  // (Re)load newest history whenever a channel is opened.
+  useEffect(() => {
+    if (!channel) return;
+    setSearching(false);
+    setQuery('');
+    setAtStart(false);
+    setError('');
+    setLoading(true);
+    getTelegramMessages(channel)
+      .then((d) => { const m = d.messages || []; setMessages(m); setAtStart(m.length < 30); })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [channel]);
+
+  // While reading a channel (not searching), poll for newly arrived messages.
+  useEffect(() => {
+    if (!channel || searching) return undefined;
+    const t = setInterval(() => {
+      getTelegramMessages(channel)
+        .then((d) => {
+          setMessages((prev) => {
+            if (!prev.length) return d.messages || [];
+            const known = new Set(prev.map((x) => x.id));
+            const fresh = (d.messages || []).filter((x) => !known.has(x.id));
+            return fresh.length ? [...prev, ...fresh] : prev;
+          });
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(t);
+  }, [channel, searching]);
+
+  function backToList() {
+    setChannel('');
+    setMessages([]);
+    setQuery('');
+    setSearching(false);
+    setError('');
+  }
+
+  function reloadNewest() {
+    setSearching(false);
+    setAtStart(false);
+    setError('');
+    setLoading(true);
+    getTelegramMessages(channel)
+      .then((d) => { const m = d.messages || []; setMessages(m); setAtStart(m.length < 30); })
+      .catch((er) => setError(er.message))
+      .finally(() => setLoading(false));
+  }
+
+  function submitSearch(e) {
+    if (e) e.preventDefault();
+    const q = query.trim();
+    if (!q) { reloadNewest(); return; }
+    setError('');
+    setAtStart(false);
+    setSearching(true);
+    setLoading(true);
+    searchTelegram(channel, q)
+      .then((d) => { const m = d.messages || []; setMessages(m); setAtStart(m.length < 30); })
+      .catch((er) => setError(er.message))
+      .finally(() => setLoading(false));
+  }
+
+  function loadOlder() {
+    if (!messages.length || loading) return;
+    const before = messages[0].id;
+    setLoading(true);
+    const call = searching
+      ? searchTelegram(channel, query.trim(), before)
+      : getTelegramMessages(channel, before);
+    call
+      .then((d) => {
+        const older = d.messages || [];
+        setMessages((prev) => [...older, ...prev]);
+        if (older.length < 30) setAtStart(true);
+      })
+      .catch((er) => setError(er.message))
+      .finally(() => setLoading(false));
+  }
+
+  if (!status) return <div className="sched-panel"><p className="muted">Loading…</p></div>;
+
+  const channels = status.channels || [];
+  if (!channels.length) {
+    return (
+      <div className="sched-panel">
+        <div className="sched-topbar"><h2 style={{ margin: 0 }}>Telegram Notifications</h2></div>
+        <p className="muted">No channels are shared with you.</p>
+      </div>
+    );
+  }
+
+  // --- Channel list ---
+  if (!channel) {
+    return (
+      <div className="sched-panel tg-panel">
+        <div className="sched-topbar"><h2 style={{ margin: 0 }}>Telegram Notifications</h2></div>
+        {status.mode === 'mock' && <div className="tg-note muted">{status.detail}</div>}
+        <div className="tg-chan-list">
+          {channels.map((c) => (
+            <button key={c.id} type="button" className="tg-chan-item" onClick={() => setChannel(c.id)}>
+              <span className="tg-chan-name">{c.name}</span>
+              <span className="tg-chan-caret">&#8250;</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // --- One channel's log ---
+  const openName = (channels.find((c) => c.id === channel) || {}).name || channel;
+  const shown = messages.slice().reverse(); // newest first for display
+
+  return (
+    <div className="sched-panel tg-panel">
+      <div className="sched-topbar tg-detail-bar">
+        <button type="button" className="ghost tg-back" onClick={backToList}>&#8249; Channels</button>
+        <h2 style={{ margin: 0 }}>{openName}</h2>
+      </div>
+
+      <form className="tg-search" onSubmit={submitSearch}>
+        <input type="search" value={query} placeholder="Search this channel…"
+          onChange={(e) => setQuery(e.target.value)} />
+        <button className="btn-primary" type="submit">Search</button>
+        {searching && (
+          <button type="button" className="ghost" onClick={() => { setQuery(''); reloadNewest(); }}>Clear</button>
+        )}
+      </form>
+
+      {error && <div className="error banner">{error}</div>}
+
+      <div className="tg-feed">
+        {shown.length === 0 && !loading && (
+          <p className="muted">{searching ? 'No matches.' : 'No messages.'}</p>
+        )}
+        {shown.map((m) => (
+          <div key={m.id} className="tg-msg">
+            <span className="tg-msg-time muted">{fmtTgTime(m.date)}</span>
+            {m.media && <TgImage channel={channel} id={m.id} />}
+            {m.text && <span className="tg-msg-text">{m.text}</span>}
+          </div>
+        ))}
+        {!atStart && messages.length > 0 && (
+          <button type="button" className="ghost tg-older" onClick={loadOlder} disabled={loading}>
+            {loading ? 'Loading…' : 'Load older'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -3080,6 +3307,169 @@ function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
   );
 }
 
+/* AdminTelegramView: admin config for the Telegram feature - the channel list,
+   who may see which channel (matrix), and the API credentials (write-only, used
+   by the live backend). Self-contained; remove with the rest of the module. */
+function AdminTelegramView() {
+  const [channels, setChannels] = useState(null); // editable [{id,name}]
+  const [credsSet, setCredsSet] = useState({});
+  const [creds, setCreds] = useState({ api_id: '', api_hash: '', session: '' });
+  const [perms, setPerms] = useState({});         // username -> [ids] ("*" = all)
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
+
+  function loadAll() {
+    Promise.all([adminGetTelegramConfig(), adminGetTelegramPerms(), adminGetUsers()])
+      .then(([cfg, p, u]) => {
+        setChannels(cfg.channels || []);
+        setCredsSet(cfg.creds_set || {});
+        setPerms(p || {});
+        setUsers((u && u.users) || []);
+      })
+      .catch((e) => setError(e.message));
+  }
+  useEffect(loadAll, []);
+
+  const setChan = (i, k) => (e) => setChannels((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: e.target.value } : c)));
+  const addChan = () => setChannels((cs) => [...(cs || []), { id: '', name: '' }]);
+  const rmChan = (i) => setChannels((cs) => cs.filter((_, j) => j !== i));
+
+  async function saveChannels() {
+    setStatus('Saving…');
+    try {
+      const clean = (channels || [])
+        .map((c) => ({ id: (c.id || '').trim(), name: (c.name || '').trim() }))
+        .filter((c) => c.id);
+      await adminSetTelegramConfig({ channels: clean });
+      setStatus('Saved');
+      loadAll();
+    } catch (e) { setStatus(e.message); }
+  }
+
+  async function saveCreds() {
+    setStatus('Saving…');
+    try {
+      const payload = {};
+      ['api_id', 'api_hash', 'session'].forEach((k) => { if (creds[k]) payload[k] = creds[k]; });
+      await adminSetTelegramConfig({ creds: payload });
+      setCreds({ api_id: '', api_hash: '', session: '' });
+      setStatus('Saved');
+      loadAll();
+    } catch (e) { setStatus(e.message); }
+  }
+
+  async function setUserPerm(username, ids, all) {
+    try {
+      await adminSetTelegramPerms(username, all ? [] : ids, all);
+      setPerms((p) => ({ ...p, [username]: all ? ['*'] : ids }));
+    } catch (e) { setError(e.message); }
+  }
+  function toggleChannel(username, cid, on) {
+    const cur = new Set((perms[username] || []).filter((x) => x !== '*'));
+    if (on) cur.add(cid); else cur.delete(cid);
+    setUserPerm(username, [...cur], false);
+  }
+
+  if (channels === null) return <p className="muted">Loading…</p>;
+
+  return (
+    <div>
+      {error && <div className="error banner">{error}</div>}
+
+      <div className="card editor settings-card">
+        <div className="sched-section-label">Channels</div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          The channels available to share. The id identifies the channel (later: its @username or chat id);
+          the name is what users see.
+        </p>
+        {channels.map((c, i) => (
+          <div key={i} className="tg-chan-row">
+            <input placeholder="id (e.g. logs)" value={c.id} onChange={setChan(i, 'id')} />
+            <input placeholder="Display name" value={c.name} onChange={setChan(i, 'name')} />
+            <button type="button" className="ghost" onClick={() => rmChan(i)}>Remove</button>
+          </div>
+        ))}
+        <div className="editor-actions">
+          <button className="ghost" onClick={addChan}>+ Channel</button>
+          <button className="btn-primary" onClick={saveChannels}>Save channels</button>
+          {status && <span className="muted">{status}</span>}
+        </div>
+      </div>
+
+      <div className="card editor settings-card">
+        <div className="sched-section-label">Who can see which channel</div>
+        {users.length === 0 ? (
+          <p className="muted">No users.</p>
+        ) : (
+          <div className="tg-perm-scroll">
+            <table className="tg-perm-table">
+              <thead>
+                <tr>
+                  <th></th><th>All</th>
+                  {channels.filter((c) => (c.id || '').trim()).map((c, i) => <th key={i}>{c.name || c.id}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const raw = perms[u.username] || [];
+                  const all = raw.includes('*');
+                  return (
+                    <tr key={u.username}>
+                      <td className="tg-perm-user">{u.displayName || u.username}</td>
+                      <td>
+                        <input type="checkbox" checked={all}
+                          onChange={(e) => setUserPerm(u.username, [], e.target.checked)} />
+                      </td>
+                      {channels.filter((c) => (c.id || '').trim()).map((c, i) => {
+                        const cid = c.id.trim();
+                        return (
+                          <td key={i}>
+                            <input type="checkbox" disabled={all}
+                              checked={all || raw.includes(cid)}
+                              onChange={(e) => toggleChannel(u.username, cid, e.target.checked)} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted">"All" covers every channel, including ones added later. Changes save immediately.</p>
+      </div>
+
+      <div className="card editor settings-card">
+        <div className="sched-section-label">Telegram API credentials</div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          api_id / api_hash from my.telegram.org, plus a login session string. Used by the live backend
+          (arriving next); stored write-only. Leave a field blank to keep the current value.
+        </p>
+        <label>
+          api_id {credsSet.api_id && <span className="muted">(set)</span>}
+          <input type="text" value={creds.api_id} placeholder={credsSet.api_id ? '••••••' : ''}
+            onChange={(e) => setCreds({ ...creds, api_id: e.target.value })} />
+        </label>
+        <label>
+          api_hash {credsSet.api_hash && <span className="muted">(set)</span>}
+          <input type="password" value={creds.api_hash} placeholder={credsSet.api_hash ? '••••••' : ''}
+            onChange={(e) => setCreds({ ...creds, api_hash: e.target.value })} />
+        </label>
+        <label>
+          session string {credsSet.session && <span className="muted">(set)</span>}
+          <input type="password" value={creds.session} placeholder={credsSet.session ? '••••••' : ''}
+            onChange={(e) => setCreds({ ...creds, session: e.target.value })} />
+        </label>
+        <div className="editor-actions">
+          <button className="btn-primary" onClick={saveCreds}>Save credentials</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* AdminSchedulesView: pivot (By user / By thermostat) + searchable selector + a
    focused detail card. Replaces the old stacked "Access" + "All schedules" tabs. */
 function AdminSchedulesView() {
@@ -3736,6 +4126,7 @@ function Dashboard({
   const [view, setView] = useState('none'); // 'none' (devices) | 'organize' | 'schedules' | 'lists'
   const [showPw, setShowPw] = useState(false);
   const [hasSchedPerms, setHasSchedPerms] = useState(false);
+  const [hasTelegram, setHasTelegram] = useState(false);
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -3754,6 +4145,12 @@ function Dashboard({
   useEffect(() => {
     getScheduleEntities()
       .then((d) => setHasSchedPerms((d.entities || []).length > 0))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getTelegramStatus()
+      .then((d) => setHasTelegram(!!d.available))
       .catch(() => {});
   }, []);
 
@@ -4109,6 +4506,7 @@ function Dashboard({
             onOrganize={() => setView('organize')}
             onSchedules={hasSchedPerms ? () => setView('schedules') : undefined}
             onLists={() => setView('lists')}
+            onTelegram={hasTelegram ? () => setView('telegram') : undefined}
             onLogout={onLogout}
           />
         </div>
@@ -4124,6 +4522,8 @@ function Dashboard({
         <Organize />
       ) : view === 'lists' ? (
         <ListsManager onChange={refreshLists} />
+      ) : view === 'telegram' ? (
+        <TelegramPanel />
       ) : (
       <>{/* normal dashboard */}
 
@@ -5900,6 +6300,9 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
         <button className={`seg ${tab === 'schedules' ? 'on' : ''}`} onClick={() => setTab('schedules')}>
           Schedules
         </button>
+        <button className={`seg ${tab === 'telegram' ? 'on' : ''}`} onClick={() => setTab('telegram')}>
+          Telegram
+        </button>
         <button className={`seg ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>
           Settings
         </button>
@@ -5922,6 +6325,8 @@ function Admin({ onBack, standalone, title = 'Control Center' }) {
         <ActivityLog />
       ) : tab === 'schedules' ? (
         <AdminSchedulesView />
+      ) : tab === 'telegram' ? (
+        <AdminTelegramView />
       ) : (
         <>
           <div className="tab-actions">

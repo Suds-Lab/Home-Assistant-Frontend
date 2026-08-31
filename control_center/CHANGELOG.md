@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.9.38
+- **New: Telegram Notifications (Phase 1).** A new "Telegram Notifications" item in
+  the profile menu opens a list of the Telegram channels an admin shares with the
+  user; tap one to read its log (read-only, newest-first, with "load older" paging)
+  and search within it. **Images posted to a channel are shown inline** with their
+  caption, so photo-based logs are actually usable. A new admin **Telegram** tab
+  configures which channels exist, which users may see each one (with an "all"
+  option), and holds the API credentials (write-only). This first release runs
+  against built-in sample data so the whole flow is usable now; the live connection
+  to your real channels arrives in the next release. The feature is a self-contained
+  module: with nothing configured (and no live backend yet) it stays hidden from
+  users and changes nothing else.
+
 ## 2.9.37
 - **Fan speed in schedules is now opt-in.** The event editor hides the fan control
   behind a "Fan speed" toggle: it's off by default, so a new event leaves fan

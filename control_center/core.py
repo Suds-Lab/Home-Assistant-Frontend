@@ -425,5 +425,15 @@ app.register_blueprint(_lists_bp)
 app.register_blueprint(_manager_bp)
 app.register_blueprint(_pwa_bp)
 app.register_blueprint(_schedules_bp)
+
+# Optional, self-contained Telegram Notifications feature. Guarded so a missing
+# module (or its future MTProto dependency) can never block app startup - remove
+# the telegram_feed/ package + routes/telegram.py and this stays inert.
+try:
+    from routes.telegram import bp as _telegram_bp  # noqa: E402
+    app.register_blueprint(_telegram_bp)
+except Exception as exc:  # noqa: BLE001 - optional feature must not break boot
+    print(f"[telegram] feature disabled: {exc}")
+
 from scheduler import ensure_scheduler  # noqa: E402
 ensure_scheduler()
