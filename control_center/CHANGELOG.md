@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.9.35
+- **Schedules only send what actually changed.** When an event fires (and on every
+  self-verifying re-apply), the scheduler now compares the unit's live state first
+  and issues only the climate commands that differ - it skips `set_temperature` /
+  `set_fan_mode` when the thermostat already holds that value. Some units (certain
+  Midea ACs) bounced straight back to **off** when hit with a temperature or fan
+  command right after being told to turn on, so they never held the morning start.
+  Sending only the mode change - exactly the single command those units accept
+  when a person turns them on by hand - lets the start stick. Skipping never sends
+  a different value, only fewer, so it cannot misfire; units that were working are
+  unaffected. This is what the self-verify re-apply was meant to heal, now that the
+  re-apply no longer re-triggers the bounce itself.
+
 ## 2.9.34
 - **Compact view: climate cards now keep both mode and fan, as dropdowns.**
   Previously compact dropped the fan section entirely and kept mode as a full

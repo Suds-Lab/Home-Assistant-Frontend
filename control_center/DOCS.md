@@ -503,6 +503,15 @@ or keeps reverting - the add-on log gets a concise line and Home Assistant shows
 a **notification** naming the unit and the reason; the notification clears once
 the unit is set successfully.
 
+**Only sends what changed:** when an event fires, the scheduler checks the unit's
+current state and sends only the commands that actually differ. If the thermostat
+already holds the target temperature or fan speed, those commands are skipped and
+only the mode change is sent. This matters for units (some Midea ACs) that bounce
+back to off when a temperature or fan command lands right after being told to turn
+on: sending just the mode change - the same single command they accept when turned
+on by hand - lets the start stick. Skipping only ever sends fewer commands, never
+different ones, so units that already worked are unaffected.
+
 **Self-verifying:** some thermostats (e.g. Honeywell) don't always apply a change
 on the first command, and quietly revert. For about 10 minutes after an event
 fires, the scheduler keeps checking that the thermostat's live mode and
