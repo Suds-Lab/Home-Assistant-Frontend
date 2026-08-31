@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.37
+- **Fan speed in schedules is now opt-in.** The event editor hides the fan control
+  behind a "Fan speed" toggle: it's off by default, so a new event leaves fan
+  untouched, and you only see the picker when you turn it on. Turning it off clears
+  the event's fan (it saves nothing for fan). Events that already have a fan speed
+  open with the toggle on, so existing schedules are unchanged.
+
 ## 2.9.36
 - **Fix: schedule temperatures showed an °F label with Celsius numbers.** In a
   Fahrenheit install, if the thermostat used to size the slider was offline (so it

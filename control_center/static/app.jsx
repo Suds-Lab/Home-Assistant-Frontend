@@ -2470,7 +2470,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
   // Per-vocabulary fan choice, keyed by the group's local key. Seeded from the
   // stored entry: a list -> match each current group by set-equality; a legacy
   // string -> seed each group whose vocab contains that value.
-  const [fanChoices, setFanChoices] = React.useState(() => {
+  const seedFan = () => {
     const out = {};
     const raw = entry?.fan;
     if (Array.isArray(raw)) {
@@ -2486,7 +2486,12 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
       }
     }
     return out;
-  });
+  };
+  const [fanChoices, setFanChoices] = React.useState(seedFan);
+  // Fan is opt-in: the control stays hidden until the user turns it on. It starts
+  // on only if this event already carries a fan choice, so existing schedules keep
+  // showing (and saving) their fan; a brand-new event leaves fan untouched.
+  const [fanOn, setFanOn] = React.useState(() => Object.keys(seedFan()).length > 0);
 
   const toggleDay = (d) => setDays((prev) => {
     const next = new Set(prev);
@@ -2503,9 +2508,9 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 
   function handleSave() {
     if (!hideDays && !daysArr.length) return;
-    const fanList = fanGroups
-      .filter((g) => fanChoices[g.key])
-      .map((g) => ({ modes: g.modes, fan: fanChoices[g.key] }));
+    const fanList = fanOn
+      ? fanGroups.filter((g) => fanChoices[g.key]).map((g) => ({ modes: g.modes, fan: fanChoices[g.key] }))
+      : [];
     onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode,
              temp: showTemp ? temp : null, fan: fanList.length ? fanList : null });
   }
@@ -2576,30 +2581,39 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
 
       {mode !== 'off' && fanGroups.length > 0 && (
         <div className="sched-field-group">
-          <span className="sched-field-label">Fan speed</span>
-          {fanGroups.map((g) => (
-            <div key={g.key} className="sched-fan-group">
-              {fanGroups.length > 1 && (
-                <span className="muted sched-fan-group-label">
-                  {g.names.slice(0, 2).join(', ')}
-                  {g.names.length > 2 ? ` +${g.names.length - 2} more` : ''}
-                </span>
-              )}
-              <FanControl
-                fanModes={g.modes}
-                value={fanChoices[g.key] ?? null}
-                allowClear
-                onChange={(fm) => setFanChoices((prev) => {
-                  const next = { ...prev };
-                  if (fm == null) delete next[g.key]; else next[g.key] = fm;
-                  return next;
-                })}
-              />
-            </div>
-          ))}
-          <span className="sched-fan-note">
-            Each thermostat gets the speed picked for its own fan type; the rest are left as they are.
-          </span>
+          <div className="sched-fan-header">
+            <span className="sched-field-label">Fan speed</span>
+            <Toggle on={fanOn} onClick={() => setFanOn((v) => !v)} />
+          </div>
+          {fanOn ? (
+            <>
+              {fanGroups.map((g) => (
+                <div key={g.key} className="sched-fan-group">
+                  {fanGroups.length > 1 && (
+                    <span className="muted sched-fan-group-label">
+                      {g.names.slice(0, 2).join(', ')}
+                      {g.names.length > 2 ? ` +${g.names.length - 2} more` : ''}
+                    </span>
+                  )}
+                  <FanControl
+                    fanModes={g.modes}
+                    value={fanChoices[g.key] ?? null}
+                    allowClear
+                    onChange={(fm) => setFanChoices((prev) => {
+                      const next = { ...prev };
+                      if (fm == null) delete next[g.key]; else next[g.key] = fm;
+                      return next;
+                    })}
+                  />
+                </div>
+              ))}
+              <span className="sched-fan-note">
+                Each thermostat gets the speed picked for its own fan type; the rest are left as they are.
+              </span>
+            </>
+          ) : (
+            <span className="sched-fan-note">Fan speed stays as it is when this event runs.</span>
+          )}
         </div>
       )}
 

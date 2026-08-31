@@ -485,8 +485,10 @@ The **Schedules** panel lets each user:
    - schedules are always set and shown in that unit, and HA converts the setpoint
    to each thermostat's native unit when the event fires, so a mixed fleet needs
    no manual conversion. If no thermostat reports a range, the slider falls back to
-   a sensible range in that same unit. You can also set an optional **fan speed**.
-   When a
+   a sensible range in that same unit. You can also set an optional **fan speed**,
+   which is off by default: flip the **Fan speed** toggle on to reveal the picker,
+   and leave it off (or turn it off) to leave each thermostat's fan untouched. When
+   a
    schedule targets thermostats with different fan controls, the editor groups
    them by fan type and shows one control per type (the same slider and buttons as
    the device card), so numeric, percentage, and named-speed units are all
