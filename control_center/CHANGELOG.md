@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.33
+- **Fix: schedule fan controls were invisible in Compact view.** Compact view
+  hides the fan section on dashboard cards (`.compact .fan-modes`), and since the
+  schedule editor reuses that same control, it was hidden there too - the fan
+  groups showed their labels but no slider or buttons. The editor's fan control is
+  now exempt from the compact rule.
+
 ## 2.9.32
 - **Schedule fan speed now covers every thermostat, per fan type.** Instead of one
   generic Auto/Low/Medium/High, the event editor groups the schedule's thermostats
