@@ -579,6 +579,43 @@ many). Tap a list to show **only** its devices; tap **Type** (or Area/Floor) to
 go back to all your devices. Lists are per-user - everyone manages their own, and
 one person's lists are never visible to another.
 
+## Telegram Notifications
+
+Some households use Telegram channels as a cheap, unlimited place to keep logs and
+notifications. This feature lets users **read and search** those channels from
+inside Control Center, with the admin deciding which channels exist and who may see
+each one. It is a self-contained, optional module: if it isn't configured (and
+until the live backend is enabled) it stays hidden from users and affects nothing
+else.
+
+### Admin setup
+
+Open the sidebar (Ingress) admin panel and pick the **Telegram** tab:
+
+1. **Channels** - add each channel you want to make available, giving it a short
+   **id** and a **display name**. The id identifies the channel; the name is what
+   users see.
+2. **Who can see which channel** - a grid of users by channels. Tick a channel for
+   a user, or tick **All** to give them every channel (including ones you add
+   later). Changes save immediately.
+3. **Telegram API credentials** - your `api_id` and `api_hash` from
+   [my.telegram.org](https://my.telegram.org/apps), plus a login session string.
+   These are stored **write-only** (never shown back) and are used by the live
+   connection. Leave a field blank to keep its current value.
+
+### User view
+
+Users with at least one shared channel get a **Telegram Notifications** item in
+their profile menu. It opens a **list of their channels**; tapping one shows that
+channel's log (read-only, newest-first). **Load older** pages back, **Search**
+filters within the channel, and **‹ Channels** returns to the list. **Images posted
+to a channel are shown inline** with their caption. New messages appear
+automatically while a channel is open. Users only ever see the channels an admin
+shared with them.
+
+> This first release shows built-in **sample data** so the flow is usable right
+> away; connecting to your real channels lands in a following release.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +

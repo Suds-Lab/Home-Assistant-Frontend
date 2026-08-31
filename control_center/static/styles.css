@@ -2855,6 +2855,81 @@ img.install-icon {
   margin: 0 auto;
   padding: 0 16px 48px;
 }
+/* --- Telegram Notifications panel --- */
+.tg-chan-list { display: flex; flex-direction: column; gap: 8px; }
+.tg-chan-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  text-align: left;
+}
+.tg-chan-item:hover { border-color: var(--accent); }
+.tg-chan-name { font-weight: 600; }
+.tg-chan-caret { color: var(--muted); font-size: 1.4rem; line-height: 1; }
+.tg-detail-bar { justify-content: flex-start; }
+.tg-back { margin-right: 4px; }
+.tg-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.tg-search input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+}
+.tg-note { font-size: 0.8rem; margin-bottom: 10px; }
+.tg-feed { display: flex; flex-direction: column; gap: 2px; }
+.tg-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.tg-msg-time { font-size: 0.72rem; }
+.tg-msg-text { white-space: pre-wrap; word-break: break-word; }
+.tg-msg-img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  margin: 2px 0;
+  object-fit: cover;
+}
+.tg-img-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  border: 1px dashed var(--border);
+  font-size: 0.8rem;
+}
+.tg-older { align-self: center; margin-top: 10px; }
+/* --- Telegram admin --- */
+.tg-chan-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.tg-chan-row input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+}
+.tg-perm-scroll { overflow-x: auto; }
+.tg-perm-table { border-collapse: collapse; width: 100%; }
+.tg-perm-table th, .tg-perm-table td { padding: 6px 10px; text-align: center; }
+.tg-perm-table th { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.tg-perm-user { text-align: left !important; white-space: nowrap; }
 .sched-topbar {
   display: flex;
   align-items: center;
