@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.43
+- **Fix: "connection lost" errors when a Cloudflare Access session expires.** When
+  the dashboard is behind Cloudflare Access (or a similar auth proxy) and its login
+  session times out, background requests were being bounced to the login page and
+  failing with a cryptic cross-origin ("CORS blocked") error, so the page looked
+  broken until a manual refresh. Those redirects are now detected and the page
+  reloads itself once, which completes the sign-in and lands you back where you
+  were.
+
 ## 2.9.42
 - **Fix: Telegram Notifications did nothing on a real install (405 on save).** The
   add-on image wasn't shipping the `telegram_feed` module, so on installed add-ons
@@ -24,19 +33,14 @@
   Telegram app), and refreshes about every 45 seconds.
 
 ## 2.9.39
-- **Telegram Notifications (Phase 2): live connection to your real channels.** The
-  viewer now reads your actual Telegram channels (history, search, and inline
-  photos) over Telegram's user API, replacing the sample data once you connect.
-  Connecting is done in the admin **Telegram** tab, two ways: **sign in here**
-  (enter your phone and the code Telegram sends, plus a 2FA password if you have
-  one), or **paste a session string** minted offline with the shipped
-  `tools/telegram_login.py` helper (nothing sensitive touches the add-on). A
-  connection status line shows whether it's connected. Downloaded photos are kept
-  in a small in-memory cache and never written to disk. Recommended setup: use a
-  dedicated Telegram account that only sits in the log channels, with a 2FA
-  password; you can see and revoke the add-on's session anytime in Telegram
-  (Settings, Devices, it shows up as "Control Center"). The connector is optional:
-  without credentials the feature stays inert, exactly as before.
+- **Telegram Notifications now reads your real channels.** Phase 1 ran on sample
+  data; this connects it to a live account. In the admin **Telegram** tab, sign in
+  with your phone (enter the code Telegram sends) or paste a session string from
+  `tools/telegram_login.py`. You then get real history, search, and inline photos.
+  Photos are cached in memory, never on disk. Tip: use a throwaway account with
+  2FA - revoke it any time from Telegram's Devices screen.
+
+## 2.9.38
 - **New: Telegram Notifications (Phase 1).** A new "Telegram Notifications" item in
   the profile menu opens a list of the Telegram channels an admin shares with the
   user; tap one to read its log (read-only, newest-first, with "load older" paging)

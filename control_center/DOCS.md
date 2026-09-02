@@ -405,6 +405,14 @@ When a session does expire or become invalid, the app redirects silently to the 
 
 (Sessions survive add-on restarts and updates because the signing secret is stored under `/data`. If users are logged out on every restart, check that the add-on's `/data` is writable/persistent.)
 
+If you put the dashboard behind **Cloudflare Access** (or a similar auth proxy)
+and its session times out, background requests get redirected to the proxy's login
+page. The app detects this and **reloads once** so the login can complete at the
+top level, instead of failing with a confusing cross-origin ("CORS blocked")
+error. You can also reduce how often this happens by raising the Access session
+duration, or by bypassing `/api/*` in Cloudflare Access (Control Center already
+protects those with its own login).
+
 ## Live updates
 
 The dashboard updates in **real time** over a WebSocket: any change (from the

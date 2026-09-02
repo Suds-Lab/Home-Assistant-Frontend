@@ -23,9 +23,24 @@ function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+let _authReloading = false;
+// Behind Cloudflare Access (or any auth proxy), an expired session makes an XHR
+// 302 to a cross-origin login page. With redirect:'manual' that comes back as an
+// 'opaqueredirect' response instead of a cryptic "CORS blocked" console error. An
+// XHR can't complete that login, but a top-level navigation can, so reload once
+// (the reloaded page follows the redirect at the top level and shows the login).
+function handleAuthRedirect(res) {
+  if (res && res.type === 'opaqueredirect') {
+    if (!_authReloading) { _authReloading = true; window.location.reload(); }
+    return true;
+  }
+  return false;
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
+    redirect: 'manual', // surface an auth-proxy login redirect (see handleAuthRedirect)
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -33,6 +48,7 @@ async function request(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  if (handleAuthRedirect(res)) return new Promise(() => {});
   // Rolling session: the server hands back a refreshed token once ours is past
   // halfway through its life, so active users stay signed in. Store it for the
   // next request.
@@ -2176,10 +2192,11 @@ function TgImage({ channel, id }) {
     let obj = null;
     const token = getToken();
     fetch(new URL(`api/telegram/media?channel=${encodeURIComponent(channel)}&id=${id}`, document.baseURI), {
+      redirect: 'manual', // same auth-proxy redirect handling as request()
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((r) => { if (!r.ok) throw new Error('media'); return r.blob(); })
-      .then((b) => { if (!alive) return; obj = URL.createObjectURL(b); setUrl(obj); })
+      .then((r) => { if (handleAuthRedirect(r)) return null; if (!r.ok) throw new Error('media'); return r.blob(); })
+      .then((b) => { if (!b || !alive) return; obj = URL.createObjectURL(b); setUrl(obj); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; if (obj) URL.revokeObjectURL(obj); };
   }, [channel, id]);
