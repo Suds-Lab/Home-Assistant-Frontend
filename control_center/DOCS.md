@@ -426,6 +426,10 @@ When a new version of the app is deployed, open
 dashboards **reload themselves** to pick it up; no manual refresh needed. The
 build version is shown as a small label in the corner of each screen.
 
+If a single part of the dashboard ever hits an error, it now fails **in place** -
+that one device card (or view) shows a small "could not load" message while the
+rest of the dashboard keeps working, instead of the whole screen going blank.
+
 ## Installable app (PWA)
 
 The user dashboard is a Progressive Web App. On a phone or desktop it offers an

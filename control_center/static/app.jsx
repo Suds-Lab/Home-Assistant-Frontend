@@ -81,6 +81,37 @@ async function request(path, options = {}) {
   return data;
 }
 
+// If a component throws while rendering, show a small fallback (with a reload)
+// instead of blanking the entire page. Wrapped around the app root, each main
+// view, and each device card, so one bad component (or bad data) can't take down
+// all of Control Center. Must be a class - React has no hook equivalent.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error, info) {
+    // Log for diagnosis; never rethrow.
+    // eslint-disable-next-line no-console
+    console.error('[CC] render error' + (this.props.label ? ` in ${this.props.label}` : ''), error, info);
+  }
+  render() {
+    if (this.state.failed) {
+      if (this.props.fallback !== undefined) return this.props.fallback;
+      return (
+        <div className="cc-error">
+          <p>Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}.</p>
+          <button type="button" className="btn-primary" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Subtle tap haptics on press-down (which is what feels native), cross-platform:
 //  * Android / anything with the Vibration API -> navigator.vibrate.
 //  * iOS Safari (no Vibration API) -> toggle a hidden <input type="checkbox"
@@ -4661,13 +4692,13 @@ function Dashboard({
       )}
 
       <div className="view-swap" key={view}>{view === 'schedules' ? (
-        <SchedulerPanel />
+        <ErrorBoundary label="schedules"><SchedulerPanel /></ErrorBoundary>
       ) : view === 'organize' ? (
-        <Organize />
+        <ErrorBoundary label="the organizer"><Organize /></ErrorBoundary>
       ) : view === 'lists' ? (
-        <ListsManager onChange={refreshLists} />
+        <ErrorBoundary label="lists"><ListsManager onChange={refreshLists} /></ErrorBoundary>
       ) : view === 'telegram' ? (
-        <TelegramPanel unread={tgUnread} onRead={markChannelRead} />
+        <ErrorBoundary label="Telegram Notifications"><TelegramPanel unread={tgUnread} onRead={markChannelRead} /></ErrorBoundary>
       ) : (
       <>{/* normal dashboard */}
 
@@ -4789,13 +4820,15 @@ function Dashboard({
                         <Collapsible open={aopen} allowOverflow>
                           <div className="grid">
                             {list.map((d) => (
-                              <DeviceCard
-                                key={d.entity_id}
-                                device={d}
-                                onChange={refresh}
-                                onError={flashCmdError}
-                                onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
-                              />
+                              <ErrorBoundary key={d.entity_id} label={d.name}
+                                fallback={<div className="card cc-card-error">{d.name || 'Device'} could not load.</div>}>
+                                <DeviceCard
+                                  device={d}
+                                  onChange={refresh}
+                                  onError={flashCmdError}
+                                  onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
+                                />
+                              </ErrorBoundary>
                             ))}
                           </div>
                         </Collapsible>
@@ -4805,13 +4838,15 @@ function Dashboard({
                 ) : (
                   <div className="grid">
                     {groups[key].map((d) => (
-                      <DeviceCard
-                        key={d.entity_id}
-                        device={d}
-                        onChange={refresh}
-                        onError={flashCmdError}
-                        onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
-                      />
+                      <ErrorBoundary key={d.entity_id} label={d.name}
+                        fallback={<div className="card cc-card-error">{d.name || 'Device'} could not load.</div>}>
+                        <DeviceCard
+                          device={d}
+                          onChange={refresh}
+                          onError={flashCmdError}
+                          onEdit={isManager && mgrData ? () => openDeviceEdit(d) : undefined}
+                        />
+                      </ErrorBoundary>
                     ))}
                   </div>
                 )}
@@ -6988,4 +7023,6 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary><App /></ErrorBoundary>,
+);
