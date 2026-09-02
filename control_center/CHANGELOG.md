@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.41
+- **Telegram: one "Connect an account" card with a Phone / Session-string toggle.**
+  The two separate sign-in cards are merged into one: enter api_id and api_hash
+  once, then pick **Phone + code** or **Session string** with a toggle (you only
+  ever use one). Less clutter, and the misleading "offline" label is gone.
+
 ## 2.9.40
 - **Telegram Notifications: unread dots.** A small red dot now appears on your
   account avatar and on the **Telegram Notifications** menu item when a channel you

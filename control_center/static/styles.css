@@ -2966,6 +2966,7 @@ img.install-icon {
   box-shadow: 0 0 0 2px var(--card);
 }
 .tg-badge-item { margin-left: 6px; vertical-align: middle; }
+.tg-method { margin: 4px 0 12px; flex-wrap: wrap; }
 .sched-topbar {
   display: flex;
   align-items: center;
