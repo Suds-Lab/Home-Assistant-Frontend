@@ -14,6 +14,10 @@ from store import ICON_DIR
 
 TELEGRAM_CONFIG_FILE = ICON_DIR / "telegram_config.json"
 TELEGRAM_PERMS_FILE = ICON_DIR / "telegram_perms.json"
+# Per-user read state: {username: {channel_id: last_seen_message_id}}. Unread is
+# per Control-Center-user (everyone shares one Telegram account, so Telegram's own
+# unread is meaningless here), and never touches Telegram's own read state.
+TELEGRAM_READ_FILE = ICON_DIR / "telegram_read.json"
 
 # Sentinel in a user's perms list meaning "every configured channel, present and
 # future" - mirrors the scheduling ALL_CLIMATE wildcard.
@@ -68,6 +72,28 @@ def channels():
 
 def channel_ids():
     return [c["id"] for c in channels()]
+
+
+def load_read():
+    return _load(TELEGRAM_READ_FILE, {})
+
+
+def save_read(data):
+    _save(TELEGRAM_READ_FILE, data)
+
+
+def get_last_seen(username, channel_id):
+    return (load_read().get(username) or {}).get(channel_id)
+
+
+def set_last_seen(username, channel_id, msg_id):
+    """Advance the read high-water mark (never moves backward)."""
+    data = load_read()
+    per_user = data.setdefault(username, {})
+    prev = per_user.get(channel_id)
+    if prev is None or int(msg_id) > prev:
+        per_user[channel_id] = int(msg_id)
+        save_read(data)
 
 
 def resolve_allowed(username):

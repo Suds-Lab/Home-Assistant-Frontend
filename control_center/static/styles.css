@@ -2948,6 +2948,24 @@ img.install-icon {
   vertical-align: middle;
 }
 .tg-conn-dot.on { background: #3fb950; }
+/* Unread dots (avatar, menu item, channel list) */
+.account-btn { position: relative; }
+.tg-badge {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5484d;
+}
+.tg-badge-avatar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.tg-badge-item { margin-left: 6px; vertical-align: middle; }
 .sched-topbar {
   display: flex;
   align-items: center;

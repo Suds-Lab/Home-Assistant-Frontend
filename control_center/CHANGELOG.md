@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.9.40
+- **Telegram Notifications: unread dots.** A small red dot now appears on your
+  account avatar and on the **Telegram Notifications** menu item when a channel you
+  can see has messages you haven't read yet, and on each unread channel in the
+  channel list. Opening a channel marks it read and clears its dot. Unread is
+  tracked **per user** (each household member has their own), is independent of
+  Telegram's own read state (so reading here never clears notifications in the real
+  Telegram app), and refreshes about every 45 seconds.
+
 ## 2.9.39
 - **Telegram Notifications (Phase 2): live connection to your real channels.** The
   viewer now reads your actual Telegram channels (history, search, and inline

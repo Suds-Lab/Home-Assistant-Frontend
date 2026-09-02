@@ -43,6 +43,9 @@ class NullSource:
     def media(self, channel_id, message_id):
         return None
 
+    def latest_id(self, channel_id):
+        return None
+
 
 class MockSource:
     """A fixed, deterministic feed per channel so the UI has something real to
@@ -94,6 +97,9 @@ class MockSource:
         q = (query or "").lower()
         hits = [m for m in self._all(channel_id) if q in m["text"].lower()]
         return self._page(hits, before_id, limit)
+
+    def latest_id(self, channel_id):
+        return self._COUNT  # newest mock message id
 
     def media(self, channel_id, message_id):
         """A deterministic placeholder 'photo' for image messages (Phase B streams

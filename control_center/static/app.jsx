@@ -341,6 +341,9 @@ const getTelegramMessages = (channel, before) =>
   request(`/telegram/messages?channel=${encodeURIComponent(channel)}${before ? `&before=${before}` : ''}`);
 const searchTelegram = (channel, q, before) =>
   request(`/telegram/search?channel=${encodeURIComponent(channel)}&q=${encodeURIComponent(q)}${before ? `&before=${before}` : ''}`);
+const getTelegramUnread = () => request('/telegram/unread');
+const markTelegramRead = (channel, last_id) =>
+  request('/telegram/read', { method: 'POST', body: JSON.stringify({ channel, last_id }) });
 // Telegram Notifications (admin)
 const adminGetTelegramConfig = () => request('/admin/telegram-config');
 const adminSetTelegramConfig = (cfg) =>
@@ -2086,7 +2089,7 @@ function Avatar({ name, picture, size = 32 }) {
 
 // Account dropdown in the dashboard header: the avatar opens a menu with the
 // manager organizer and log out. (Change password is added in a later step.)
-function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLists, onTelegram, onLogout }) {
+function AccountMenu({ name, picture, isManager, canChangePassword, onChangePassword, onOrganize, onSchedules, onLists, onTelegram, telegramUnread, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -2108,6 +2111,7 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
         title={name || 'Account'}
       >
         <Avatar name={name} picture={picture} />
+        {telegramUnread && <span className="tg-badge tg-badge-avatar" aria-label="Unread Telegram messages" />}
       </button>
       {menuMounted && (
         <div className={`account-menu${open ? '' : ' closing'}`} role="menu">
@@ -2135,6 +2139,7 @@ function AccountMenu({ name, picture, isManager, canChangePassword, onChangePass
           {onTelegram && (
             <button role="menuitem" onClick={() => { setOpen(false); onTelegram(); }}>
               Telegram Notifications
+              {telegramUnread && <span className="tg-badge tg-badge-item" />}
             </button>
           )}
           <button role="menuitem" className="danger" onClick={() => { setOpen(false); onLogout(); }}>
@@ -2183,7 +2188,7 @@ function TgImage({ channel, id }) {
   return <img className="tg-msg-img" src={url} alt="" loading="lazy" />;
 }
 
-function TelegramPanel() {
+function TelegramPanel({ unread = [], onRead }) {
   const [status, setStatus] = useState(null);
   const [channel, setChannel] = useState('');   // '' = channel list; else the open channel
   const [messages, setMessages] = useState([]); // stored ascending (oldest first)
@@ -2208,7 +2213,17 @@ function TelegramPanel() {
     setError('');
     setLoading(true);
     getTelegramMessages(channel)
-      .then((d) => { const m = d.messages || []; setMessages(m); setAtStart(m.length < 30); })
+      .then((d) => {
+        const m = d.messages || [];
+        setMessages(m);
+        setAtStart(m.length < 30);
+        // Opening a channel marks it read up to its newest loaded message.
+        if (m.length) {
+          const newest = m[m.length - 1].id;
+          markTelegramRead(channel, newest).catch(() => {});
+          if (onRead) onRead(channel);
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [channel]);
@@ -2284,6 +2299,7 @@ function TelegramPanel() {
   if (!status) return <div className="sched-panel"><p className="muted">Loading…</p></div>;
 
   const channels = status.channels || [];
+  const unreadSet = new Set((unread || []).filter((c) => c.unread).map((c) => c.id));
   if (!channels.length) {
     return (
       <div className="sched-panel">
@@ -2302,7 +2318,10 @@ function TelegramPanel() {
         <div className="tg-chan-list">
           {channels.map((c) => (
             <button key={c.id} type="button" className="tg-chan-item" onClick={() => setChannel(c.id)}>
-              <span className="tg-chan-name">{c.name}</span>
+              <span className="tg-chan-name">
+                {c.name}
+                {unreadSet.has(c.id) && <span className="tg-badge tg-badge-item" />}
+              </span>
               <span className="tg-chan-caret">&#8250;</span>
             </button>
           ))}
@@ -3345,15 +3364,15 @@ function TelegramLogin({ onDone }) {
     <div className="card editor settings-card">
       <div className="sched-section-label">Sign in to Telegram (in-app)</div>
       <p className="muted" style={{ marginTop: 0 }}>
-        The simple option: enter your phone and the code Telegram sends you, right here. (More
-        technical, or prefer that no login runs through the add-on? Use the offline script and paste a
-        session string below instead.)
+        api_id &amp; api_hash come from{' '}
+        <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org</a>.
+        Enter them with your phone and we send a code. (Or paste a session string below.)
       </p>
       {stage === 'done' ? (
         <p className="muted">Signed in. The connection status above should now show connected.</p>
       ) : stage === 'idle' ? (
         <>
-          <label>api_id<input type="text" value={f.api_id} onChange={set('api_id')} placeholder="from my.telegram.org" /></label>
+          <label>api_id<input type="text" value={f.api_id} onChange={set('api_id')} /></label>
           <label>api_hash<input type="password" value={f.api_hash} onChange={set('api_hash')} /></label>
           <label>Phone number<input type="tel" value={f.phone} onChange={set('phone')} placeholder="+1 555 000 1234" /></label>
           <div className="editor-actions">
@@ -4220,6 +4239,7 @@ function Dashboard({
   const [showPw, setShowPw] = useState(false);
   const [hasSchedPerms, setHasSchedPerms] = useState(false);
   const [hasTelegram, setHasTelegram] = useState(false);
+  const [tgUnread, setTgUnread] = useState([]); // [{id, name, unread}]
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -4246,6 +4266,21 @@ function Dashboard({
       .then((d) => setHasTelegram(!!d.available))
       .catch(() => {});
   }, []);
+
+  // Poll per-channel unread flags (dots on the avatar / menu / channel list).
+  useEffect(() => {
+    if (!hasTelegram) return undefined;
+    let alive = true;
+    const load = () => getTelegramUnread()
+      .then((d) => { if (alive) setTgUnread(d.channels || []); })
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 45000);
+    return () => { alive = false; clearInterval(t); };
+  }, [hasTelegram]);
+  const tgHasUnread = tgUnread.some((c) => c.unread);
+  const markChannelRead = (cid) =>
+    setTgUnread((prev) => prev.map((c) => (c.id === cid ? { ...c, unread: false } : c)));
 
   function openDeviceEdit(entity) {
     if (!mgrData || !entity.device_id) return;
@@ -4600,6 +4635,7 @@ function Dashboard({
             onSchedules={hasSchedPerms ? () => setView('schedules') : undefined}
             onLists={() => setView('lists')}
             onTelegram={hasTelegram ? () => setView('telegram') : undefined}
+            telegramUnread={tgHasUnread}
             onLogout={onLogout}
           />
         </div>
@@ -4616,7 +4652,7 @@ function Dashboard({
       ) : view === 'lists' ? (
         <ListsManager onChange={refreshLists} />
       ) : view === 'telegram' ? (
-        <TelegramPanel />
+        <TelegramPanel unread={tgUnread} onRead={markChannelRead} />
       ) : (
       <>{/* normal dashboard */}
 

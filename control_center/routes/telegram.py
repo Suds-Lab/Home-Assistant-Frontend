@@ -69,6 +69,47 @@ def telegram_search():
     return jsonify({"messages": msgs})
 
 
+@bp.get("/api/telegram/unread")
+def telegram_unread():
+    """Per-user unread flag for each of this user's channels. A channel is unread
+    when its newest message id is past what this user has already seen. First
+    exposure initializes the mark to the current newest (so no day-one flood)."""
+    user = current_user()
+    src = get_source()
+    allowed = _allowed(user)
+    out = []
+    for c in tstore.channels():
+        if c["id"] not in allowed:
+            continue
+        latest = src.latest_id(c["id"])
+        seen = tstore.get_last_seen(user["username"], c["id"])
+        if latest is None:
+            unread = False
+        elif seen is None:
+            tstore.set_last_seen(user["username"], c["id"], latest)
+            unread = False
+        else:
+            unread = latest > seen
+        out.append({"id": c["id"], "name": c["name"], "unread": unread})
+    return jsonify({"channels": out, "any": any(x["unread"] for x in out)})
+
+
+@bp.post("/api/telegram/read")
+def telegram_read():
+    """Mark a channel read up to `last_id` (or its current newest) for this user."""
+    user = current_user()
+    data = request.get_json(force=True) or {}
+    channel = (data.get("channel") or "").strip()
+    if not channel or channel not in _allowed(user):
+        raise ApiError("No access to that channel", 403)
+    last_id = data.get("last_id")
+    if last_id is None:
+        last_id = get_source().latest_id(channel)
+    if last_id is not None:
+        tstore.set_last_seen(user["username"], channel, int(last_id))
+    return jsonify({"ok": True})
+
+
 @bp.get("/api/telegram/media")
 def telegram_media():
     """Image bytes for one message (permission-checked). The frontend fetches this
