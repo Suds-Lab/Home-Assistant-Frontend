@@ -5,3 +5,7 @@ gunicorn==23.0.0
 python-dotenv==1.0.1
 websocket-client==1.8.0
 flask-sock==0.7.0
+# Optional: powers the live Telegram Notifications backend (telegram_feed/live.py).
+# All imports are guarded, so the app runs fine without it - the feature just stays
+# inert until it's installed and credentials are set.
+Telethon==1.36.0

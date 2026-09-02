@@ -1904,6 +1904,7 @@ img.install-icon {
 
 .editor input[type='text'],
 .editor input[type='password'],
+.editor input[type='tel'],
 .editor input[type='date'] {
   padding: 10px 12px;
   border-radius: 10px;
@@ -2916,20 +2917,37 @@ img.install-icon {
 }
 .tg-older { align-self: center; margin-top: 10px; }
 /* --- Telegram admin --- */
-.tg-chan-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.tg-chan-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .tg-chan-row input {
-  flex: 1;
-  padding: 7px 10px;
+  flex: 1 1 0;
+  min-width: 0;               /* let inputs shrink so the remove button stays in view */
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--card);
+  background: var(--input-bg);
   color: var(--text);
+}
+.tg-chan-id { flex: 0 1 96px !important; }
+.tg-chan-rm {
+  flex: none;
+  padding: 6px 10px;
+  line-height: 1;
+  font-size: 1rem;
 }
 .tg-perm-scroll { overflow-x: auto; }
 .tg-perm-table { border-collapse: collapse; width: 100%; }
 .tg-perm-table th, .tg-perm-table td { padding: 6px 10px; text-align: center; }
 .tg-perm-table th { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
 .tg-perm-user { text-align: left !important; white-space: nowrap; }
+.tg-conn-dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--muted);
+  vertical-align: middle;
+}
+.tg-conn-dot.on { background: #3fb950; }
 .sched-topbar {
   display: flex;
   align-items: center;

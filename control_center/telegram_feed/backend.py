@@ -25,12 +25,14 @@ _LIMIT = 30
 class NullSource:
     mode = "off"
 
+    def __init__(self, detail=None):
+        self._detail = detail or "Telegram live backend is not configured yet."
+
     def available(self):
         return False
 
     def status(self):
-        return {"available": False, "mode": self.mode,
-                "detail": "Telegram live backend is not enabled yet."}
+        return {"available": False, "mode": self.mode, "detail": self._detail}
 
     def history(self, channel_id, before_id=None, limit=_LIMIT):
         return []
@@ -60,7 +62,7 @@ class MockSource:
 
     def status(self):
         return {"available": True, "mode": self.mode,
-                "detail": "Showing mock data (dev). Real channels arrive in Phase B."}
+                "detail": "Showing mock data (dev mode)."}
 
     def _all(self, channel_id):
         base = int(hashlib.sha256(channel_id.encode()).hexdigest(), 16)
@@ -113,13 +115,59 @@ class MockSource:
 
 
 _SOURCE = None
+_SIG = None
+
+
+def _creds_sig(creds):
+    return (creds.get("api_id"), creds.get("api_hash"), bool(creds.get("session")))
 
 
 def get_source():
-    """The active message source (memoized). MOCK_HA -> mock feed; otherwise the
-    live adapter once Phase B lands, and until then a NullSource that cleanly
-    reports 'not configured'."""
-    global _SOURCE
-    if _SOURCE is None:
-        _SOURCE = MockSource() if os.environ.get("MOCK_HA") else NullSource()
+    """The active message source. MOCK_HA -> mock feed. Otherwise, when the admin
+    has set api_id/api_hash/session, the live Telethon source (built lazily, so a
+    missing Telethon or a bad session degrades to a NullSource that explains why);
+    with nothing configured, a NullSource. Rebuilt when the credentials change."""
+    global _SOURCE, _SIG
+    if os.environ.get("MOCK_HA"):
+        if not isinstance(_SOURCE, MockSource):
+            _SOURCE = MockSource()
+        return _SOURCE
+
+    from telegram_feed import store as tstore
+    creds = tstore.load_config().get("creds") or {}
+    sig = _creds_sig(creds)
+    if sig != _SIG or _SOURCE is None:
+        _teardown()
+        _SIG = sig
+        if creds.get("api_id") and creds.get("api_hash") and creds.get("session"):
+            try:
+                from telegram_feed.live import TelethonSource
+                _SOURCE = TelethonSource(creds["api_id"], creds["api_hash"], creds["session"])
+            except Exception as exc:  # noqa: BLE001 - never break the app on a bad backend
+                _SOURCE = NullSource(f"Telegram backend unavailable: {exc}")
+        else:
+            _SOURCE = NullSource()
     return _SOURCE
+
+
+def _teardown():
+    global _SOURCE
+    try:
+        if _SOURCE is not None and hasattr(_SOURCE, "close"):
+            _SOURCE.close()
+    except Exception:  # noqa: BLE001
+        pass
+    _SOURCE = None
+
+
+def reset_source():
+    """Force get_source() to rebuild on next call (call after credentials change)."""
+    global _SIG
+    _teardown()
+    _SIG = None
+
+
+def get_login_manager():
+    """The in-app login state machine (lazy; requires Telethon)."""
+    from telegram_feed.live import login_manager
+    return login_manager()

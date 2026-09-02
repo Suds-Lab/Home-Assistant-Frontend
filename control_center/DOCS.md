@@ -582,11 +582,17 @@ one person's lists are never visible to another.
 ## Telegram Notifications
 
 Some households use Telegram channels as a cheap, unlimited place to keep logs and
-notifications. This feature lets users **read and search** those channels from
-inside Control Center, with the admin deciding which channels exist and who may see
-each one. It is a self-contained, optional module: if it isn't configured (and
-until the live backend is enabled) it stays hidden from users and affects nothing
-else.
+notifications. This feature lets users **read and search** those channels (with inline photos)
+from inside Control Center, with the admin deciding which channels exist and who
+may see each one. It is a self-contained, optional module: if no account is
+connected it stays hidden from users and affects nothing else.
+
+It reads Telegram over the **user API** (so full history and search work), which
+means connecting one Telegram **account** that is a member of the channels.
+**Strongly recommended:** use a **dedicated account** that only sits in the log
+channels (nothing personal to lose) and give it a **2FA password**. You can see and
+revoke the add-on's session anytime in Telegram (**Settings, Devices** - it appears
+as "Control Center"); revoking it instantly disconnects Control Center.
 
 ### Admin setup
 
@@ -598,10 +604,18 @@ Open the sidebar (Ingress) admin panel and pick the **Telegram** tab:
 2. **Who can see which channel** - a grid of users by channels. Tick a channel for
    a user, or tick **All** to give them every channel (including ones you add
    later). Changes save immediately.
-3. **Telegram API credentials** - your `api_id` and `api_hash` from
-   [my.telegram.org](https://my.telegram.org/apps), plus a login session string.
-   These are stored **write-only** (never shown back) and are used by the live
-   connection. Leave a field blank to keep its current value.
+3. **Connect an account** - first create an app at
+   [my.telegram.org](https://my.telegram.org/apps) to get an `api_id` and
+   `api_hash`. Then connect one of two ways:
+   - **Sign in here (in-app)** - enter your `api_id`, `api_hash`, and phone number;
+     type the code Telegram sends you (and your 2FA password if set). Simplest.
+   - **Paste a session string (offline)** - run `tools/telegram_login.py` on your
+     own computer (`pip install telethon`), which logs in there and prints a
+     session string; paste it, with the `api_id`/`api_hash`, into the credentials
+     card. This keeps the login (phone, code, password) entirely off the add-on.
+
+   Credentials are stored **write-only** (never shown back). The **Connection** line
+   at the top of the tab shows whether the account is connected.
 
 ### User view
 
@@ -612,9 +626,6 @@ filters within the channel, and **‹ Channels** returns to the list. **Images p
 to a channel are shown inline** with their caption. New messages appear
 automatically while a channel is open. Users only ever see the channels an admin
 shared with them.
-
-> This first release shows built-in **sample data** so the flow is usable right
-> away; connecting to your real channels lands in a following release.
 
 ## Supported devices
 

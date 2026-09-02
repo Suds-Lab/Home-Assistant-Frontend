@@ -127,7 +127,84 @@ def admin_set_config():
                 creds[k] = str(v)
         cfg["creds"] = creds
     tstore.save_config(cfg)
+    from telegram_feed.backend import reset_source
+    reset_source()  # pick up new creds/channels on the next request
     return jsonify({"ok": True})
+
+
+@bp.get("/api/admin/telegram-status")
+def admin_status():
+    require_admin()
+    return jsonify(get_source().status())
+
+
+# --- In-app login (mints a session from phone + code, an alternative to pasting
+#     a session string generated offline) ------------------------------------
+
+def _store_session(session):
+    cfg = tstore.load_config()
+    creds = cfg.get("creds") or {}
+    creds["session"] = session
+    cfg["creds"] = creds
+    tstore.save_config(cfg)
+
+
+@bp.post("/api/admin/telegram-login/start")
+def tg_login_start():
+    require_admin()
+    data = request.get_json(force=True) or {}
+    cfg = tstore.load_config()
+    creds = cfg.get("creds") or {}
+    api_id = data.get("api_id") or creds.get("api_id")
+    api_hash = data.get("api_hash") or creds.get("api_hash")
+    phone = (data.get("phone") or "").strip()
+    if not api_id or not api_hash or not phone:
+        raise ApiError("api_id, api_hash and phone are required", 400)
+    # Remember the api creds so the user doesn't retype them and the built source
+    # can use them later.
+    creds["api_id"] = str(api_id)
+    creds["api_hash"] = str(api_hash)
+    cfg["creds"] = creds
+    tstore.save_config(cfg)
+    try:
+        from telegram_feed.backend import get_login_manager
+        return jsonify(get_login_manager().start(api_id, api_hash, phone))
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError(f"could not start login: {exc}", 502)
+
+
+@bp.post("/api/admin/telegram-login/code")
+def tg_login_code():
+    require_admin()
+    code = str((request.get_json(force=True) or {}).get("code") or "").strip()
+    if not code:
+        raise ApiError("code required", 400)
+    from telegram_feed.backend import get_login_manager, reset_source
+    try:
+        res = get_login_manager().submit_code(code)
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError(f"sign-in failed: {exc}", 502)
+    if res.get("stage") == "done":
+        _store_session(res["session"])
+        reset_source()
+        return jsonify({"stage": "done"})
+    return jsonify(res)  # {"stage": "password"}
+
+
+@bp.post("/api/admin/telegram-login/password")
+def tg_login_password():
+    require_admin()
+    pw = str((request.get_json(force=True) or {}).get("password") or "")
+    if not pw:
+        raise ApiError("password required", 400)
+    from telegram_feed.backend import get_login_manager, reset_source
+    try:
+        res = get_login_manager().submit_password(pw)
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError(f"two-step password failed: {exc}", 502)
+    _store_session(res["session"])
+    reset_source()
+    return jsonify({"stage": "done"})
 
 
 @bp.get("/api/admin/telegram-perms")
