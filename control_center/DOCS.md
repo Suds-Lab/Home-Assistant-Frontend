@@ -627,6 +627,12 @@ to a channel are shown inline** with their caption. New messages appear
 automatically while a channel is open. Users only ever see the channels an admin
 shared with them.
 
+A red **unread dot** appears on the account avatar and the **Telegram
+Notifications** menu item (and on each unread channel in the list) when there are
+new messages since you last opened that channel; opening it clears the dot. Unread
+is per user and separate from Telegram's own read state, so reading here never
+clears notifications in the real Telegram app.
+
 ## Supported devices
 
 Lights (with brightness), switches, fans (with speed), climate (modes +

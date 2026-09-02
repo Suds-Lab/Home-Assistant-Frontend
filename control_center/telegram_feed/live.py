@@ -10,6 +10,7 @@ a bounded in-memory LRU and never written to disk (Telegram stays the store).
 """
 import asyncio
 import threading
+import time
 from collections import OrderedDict
 
 _MEDIA_CACHE_BYTES = 64 * 1024 * 1024  # photos kept in RAM, oldest evicted past this
@@ -104,6 +105,7 @@ class TelethonSource:
     def __init__(self, api_id, api_hash, session):
         self._loop = _loop()
         self._media = _Lru(_MEDIA_CACHE_BYTES)
+        self._latest = {}  # channel_id -> (newest_id, fetched_at), short-TTL cache
         self._client = None
         self._authed = False
         self._error = None
@@ -195,6 +197,26 @@ class TelethonSource:
         result = ("image/jpeg", data)
         self._media.put(key, result, len(data))
         return result
+
+    def latest_id(self, channel_id):
+        """Newest message id in a channel, cached ~30s and shared across users so
+        the unread poll never makes a call per user per channel."""
+        now = time.time()
+        hit = self._latest.get(channel_id)
+        if hit and now - hit[1] < 30:
+            return hit[0]
+
+        async def _f():
+            ent = await self._client.get_entity(_norm(channel_id))
+            msgs = await self._client.get_messages(ent, limit=1)
+            return msgs[0].id if msgs else None
+
+        try:
+            val = self._loop.run(_f(), timeout=30)
+        except Exception:  # noqa: BLE001 - keep the stale value on a hiccup
+            return hit[0] if hit else None
+        self._latest[channel_id] = (val, now)
+        return val
 
     def close(self):
         try:
