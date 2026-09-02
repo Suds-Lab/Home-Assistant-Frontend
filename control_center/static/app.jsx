@@ -348,6 +348,13 @@ const adminSetTelegramConfig = (cfg) =>
 const adminGetTelegramPerms = () => request('/admin/telegram-perms');
 const adminSetTelegramPerms = (username, channel_ids, all) =>
   request('/admin/telegram-perms', { method: 'POST', body: JSON.stringify({ username, channel_ids, all }) });
+const adminGetTelegramStatus = () => request('/admin/telegram-status');
+const tgLoginStart = (api_id, api_hash, phone) =>
+  request('/admin/telegram-login/start', { method: 'POST', body: JSON.stringify({ api_id, api_hash, phone }) });
+const tgLoginCode = (code) =>
+  request('/admin/telegram-login/code', { method: 'POST', body: JSON.stringify({ code }) });
+const tgLoginPassword = (password) =>
+  request('/admin/telegram-login/password', { method: 'POST', body: JSON.stringify({ password }) });
 
 // Live pull of Home Assistant's own logbook for a range (never stored by us).
 const adminHaLogbook = (startISO, endISO, entity) => {
@@ -3307,6 +3314,76 @@ function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
   );
 }
 
+/* TelegramLogin: the in-app sign-in flow (phone -> code -> optional 2FA), an
+   alternative to running the offline script and pasting a session string. On
+   success the backend stores the session and rebuilds the live source. */
+function TelegramLogin({ onDone }) {
+  const [stage, setStage] = useState('idle'); // idle | code | password | done
+  const [f, setF] = useState({ api_id: '', api_hash: '', phone: '', code: '', password: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  async function run(fn) {
+    setBusy(true); setErr('');
+    try { return await fn(); } catch (e) { setErr(e.message); return null; } finally { setBusy(false); }
+  }
+  async function start() {
+    const r = await run(() => tgLoginStart(f.api_id.trim(), f.api_hash.trim(), f.phone.trim()));
+    if (r) setStage(r.stage);
+  }
+  async function submitCode() {
+    const r = await run(() => tgLoginCode(f.code.trim()));
+    if (r) { if (r.stage === 'done') { setStage('done'); onDone && onDone(); } else setStage('password'); }
+  }
+  async function submitPassword() {
+    const r = await run(() => tgLoginPassword(f.password));
+    if (r) { setStage('done'); onDone && onDone(); }
+  }
+
+  return (
+    <div className="card editor settings-card">
+      <div className="sched-section-label">Sign in to Telegram (in-app)</div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        The simple option: enter your phone and the code Telegram sends you, right here. (More
+        technical, or prefer that no login runs through the add-on? Use the offline script and paste a
+        session string below instead.)
+      </p>
+      {stage === 'done' ? (
+        <p className="muted">Signed in. The connection status above should now show connected.</p>
+      ) : stage === 'idle' ? (
+        <>
+          <label>api_id<input type="text" value={f.api_id} onChange={set('api_id')} placeholder="from my.telegram.org" /></label>
+          <label>api_hash<input type="password" value={f.api_hash} onChange={set('api_hash')} /></label>
+          <label>Phone number<input type="tel" value={f.phone} onChange={set('phone')} placeholder="+1 555 000 1234" /></label>
+          <div className="editor-actions">
+            <button className="btn-primary" onClick={start} disabled={busy}>{busy ? 'Sending…' : 'Send code'}</button>
+          </div>
+        </>
+      ) : stage === 'code' ? (
+        <>
+          <p className="muted">Telegram sent a login code to your account. Enter it here.</p>
+          <label>Login code<input type="text" value={f.code} onChange={set('code')} inputMode="numeric" /></label>
+          <div className="editor-actions">
+            <button className="btn-primary" onClick={submitCode} disabled={busy}>{busy ? 'Verifying…' : 'Verify'}</button>
+            <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted">Your account has a two-step (2FA) password. Enter it to finish.</p>
+          <label>Two-step password<input type="password" value={f.password} onChange={set('password')} /></label>
+          <div className="editor-actions">
+            <button className="btn-primary" onClick={submitPassword} disabled={busy}>{busy ? 'Finishing…' : 'Finish'}</button>
+            <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
+          </div>
+        </>
+      )}
+      {err && <div className="error banner">{err}</div>}
+    </div>
+  );
+}
+
 /* AdminTelegramView: admin config for the Telegram feature - the channel list,
    who may see which channel (matrix), and the API credentials (write-only, used
    by the live backend). Self-contained; remove with the rest of the module. */
@@ -3318,14 +3395,16 @@ function AdminTelegramView() {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [conn, setConn] = useState(null);         // live backend status
 
   function loadAll() {
-    Promise.all([adminGetTelegramConfig(), adminGetTelegramPerms(), adminGetUsers()])
-      .then(([cfg, p, u]) => {
+    Promise.all([adminGetTelegramConfig(), adminGetTelegramPerms(), adminGetUsers(), adminGetTelegramStatus()])
+      .then(([cfg, p, u, st]) => {
         setChannels(cfg.channels || []);
         setCredsSet(cfg.creds_set || {});
         setPerms(p || {});
         setUsers((u && u.users) || []);
+        setConn(st || null);
       })
       .catch((e) => setError(e.message));
   }
@@ -3377,6 +3456,17 @@ function AdminTelegramView() {
     <div>
       {error && <div className="error banner">{error}</div>}
 
+      {conn && (
+        <div className="card editor settings-card">
+          <div className="sched-section-label">Connection</div>
+          <p style={{ margin: 0 }}>
+            <span className={`tg-conn-dot${conn.available && conn.mode !== 'mock' ? ' on' : ''}`} />
+            {conn.mode === 'mock' ? 'Mock data (dev)' : conn.available ? 'Connected to Telegram' : 'Not connected'}
+            {conn.detail && <span className="muted"> - {conn.detail}</span>}
+          </p>
+        </div>
+      )}
+
       <div className="card editor settings-card">
         <div className="sched-section-label">Channels</div>
         <p className="muted" style={{ marginTop: 0 }}>
@@ -3385,9 +3475,9 @@ function AdminTelegramView() {
         </p>
         {channels.map((c, i) => (
           <div key={i} className="tg-chan-row">
-            <input placeholder="id (e.g. logs)" value={c.id} onChange={setChan(i, 'id')} />
+            <input className="tg-chan-id" placeholder="id" value={c.id} onChange={setChan(i, 'id')} />
             <input placeholder="Display name" value={c.name} onChange={setChan(i, 'name')} />
-            <button type="button" className="ghost" onClick={() => rmChan(i)}>Remove</button>
+            <button type="button" className="ghost tg-chan-rm" onClick={() => rmChan(i)} aria-label="Remove channel" title="Remove">&#10005;</button>
           </div>
         ))}
         <div className="editor-actions">
@@ -3441,11 +3531,14 @@ function AdminTelegramView() {
         <p className="muted">"All" covers every channel, including ones added later. Changes save immediately.</p>
       </div>
 
+      <TelegramLogin onDone={loadAll} />
+
       <div className="card editor settings-card">
-        <div className="sched-section-label">Telegram API credentials</div>
+        <div className="sched-section-label">Telegram API credentials (offline path)</div>
         <p className="muted" style={{ marginTop: 0 }}>
-          api_id / api_hash from my.telegram.org, plus a login session string. Used by the live backend
-          (arriving next); stored write-only. Leave a field blank to keep the current value.
+          api_id / api_hash from my.telegram.org, plus a session string minted offline with the
+          tools/telegram_login.py helper. Stored write-only. Leave a field blank to keep the current
+          value. (Or use the in-app sign-in above instead.)
         </p>
         <label>
           api_id {credsSet.api_id && <span className="muted">(set)</span>}
