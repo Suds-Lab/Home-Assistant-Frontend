@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.42
+- **Fix: Telegram Notifications did nothing on a real install (405 on save).** The
+  add-on image wasn't shipping the `telegram_feed` module, so on installed add-ons
+  the backend quietly disabled the whole feature (its routes returned 404/405) even
+  though the Telegram tab still appeared. The module is now included in the build,
+  so channels, permissions, and sign-in work on real installs, not just in
+  development.
+
 ## 2.9.41
 - **Telegram: one "Connect an account" card with a Phone / Session-string toggle.**
   The two separate sign-in cards are merged into one: enter api_id and api_hash
