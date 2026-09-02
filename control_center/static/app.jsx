@@ -3333,68 +3333,106 @@ function SchedAdminSchedRow({ sched, entities, onToggle, onDelete }) {
   );
 }
 
-/* TelegramLogin: the in-app sign-in flow (phone -> code -> optional 2FA), an
-   alternative to running the offline script and pasting a session string. On
-   success the backend stores the session and rebuilds the live source. */
-function TelegramLogin({ onDone }) {
-  const [stage, setStage] = useState('idle'); // idle | code | password | done
-  const [f, setF] = useState({ api_id: '', api_hash: '', phone: '', code: '', password: '' });
+/* TelegramConnect: one card, two ways to connect (a pill toggle - you only ever
+   pick one): enter phone + code here, or paste a session string minted with the
+   helper script. Both share api_id / api_hash. On success the backend rebuilds
+   the live source. */
+function TelegramConnect({ credsSet = {}, onDone }) {
+  const [method, setMethod] = useState('phone'); // 'phone' | 'session'
+  const [api, setApi] = useState({ api_id: '', api_hash: '' });
+  const [stage, setStage] = useState('idle');    // idle | code | password | done
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [session, setSession] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const [ok, setOk] = useState('');
+  const setA = (k) => (e) => setApi({ ...api, [k]: e.target.value });
 
   async function run(fn) {
-    setBusy(true); setErr('');
+    setBusy(true); setErr(''); setOk('');
     try { return await fn(); } catch (e) { setErr(e.message); return null; } finally { setBusy(false); }
   }
   async function start() {
-    const r = await run(() => tgLoginStart(f.api_id.trim(), f.api_hash.trim(), f.phone.trim()));
+    const r = await run(() => tgLoginStart(api.api_id.trim(), api.api_hash.trim(), phone.trim()));
     if (r) setStage(r.stage);
   }
   async function submitCode() {
-    const r = await run(() => tgLoginCode(f.code.trim()));
+    const r = await run(() => tgLoginCode(code.trim()));
     if (r) { if (r.stage === 'done') { setStage('done'); onDone && onDone(); } else setStage('password'); }
   }
   async function submitPassword() {
-    const r = await run(() => tgLoginPassword(f.password));
+    const r = await run(() => tgLoginPassword(password));
     if (r) { setStage('done'); onDone && onDone(); }
+  }
+  async function saveSession() {
+    const creds = {};
+    if (api.api_id) creds.api_id = api.api_id.trim();
+    if (api.api_hash) creds.api_hash = api.api_hash.trim();
+    if (session) creds.session = session.trim();
+    const r = await run(() => adminSetTelegramConfig({ creds }));
+    if (r) { setOk('Saved'); setSession(''); onDone && onDone(); }
   }
 
   return (
     <div className="card editor settings-card">
-      <div className="sched-section-label">Sign in to Telegram (in-app)</div>
+      <div className="sched-section-label">Connect an account</div>
       <p className="muted" style={{ marginTop: 0 }}>
         api_id &amp; api_hash come from{' '}
         <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer">my.telegram.org</a>.
-        Enter them with your phone and we send a code. (Or paste a session string below.)
+        Leave a field blank to keep the stored value.
       </p>
-      {stage === 'done' ? (
-        <p className="muted">Signed in. The connection status above should now show connected.</p>
-      ) : stage === 'idle' ? (
-        <>
-          <label>api_id<input type="text" value={f.api_id} onChange={set('api_id')} /></label>
-          <label>api_hash<input type="password" value={f.api_hash} onChange={set('api_hash')} /></label>
-          <label>Phone number<input type="tel" value={f.phone} onChange={set('phone')} placeholder="+1 555 000 1234" /></label>
-          <div className="editor-actions">
-            <button className="btn-primary" onClick={start} disabled={busy}>{busy ? 'Sending…' : 'Send code'}</button>
-          </div>
-        </>
-      ) : stage === 'code' ? (
-        <>
-          <p className="muted">Telegram sent a login code to your account. Enter it here.</p>
-          <label>Login code<input type="text" value={f.code} onChange={set('code')} inputMode="numeric" /></label>
-          <div className="editor-actions">
-            <button className="btn-primary" onClick={submitCode} disabled={busy}>{busy ? 'Verifying…' : 'Verify'}</button>
-            <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
-          </div>
-        </>
+      <label>api_id {credsSet.api_id && <span className="muted">(set)</span>}
+        <input type="text" value={api.api_id} onChange={setA('api_id')} /></label>
+      <label>api_hash {credsSet.api_hash && <span className="muted">(set)</span>}
+        <input type="password" value={api.api_hash} onChange={setA('api_hash')} /></label>
+
+      <div className="tabs tg-method">
+        <button type="button" className={`seg${method === 'phone' ? ' on' : ''}`} onClick={() => setMethod('phone')}>Phone + code</button>
+        <button type="button" className={`seg${method === 'session' ? ' on' : ''}`} onClick={() => setMethod('session')}>Session string</button>
+      </div>
+
+      {method === 'phone' ? (
+        stage === 'done' ? (
+          <p className="muted">Signed in. See the connection status above.</p>
+        ) : stage === 'idle' ? (
+          <>
+            <label>Phone number<input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 1234" /></label>
+            <div className="editor-actions">
+              <button className="btn-primary" onClick={start} disabled={busy}>{busy ? 'Sending…' : 'Send code'}</button>
+            </div>
+          </>
+        ) : stage === 'code' ? (
+          <>
+            <p className="muted">Enter the code Telegram sent your account.</p>
+            <label>Login code<input type="text" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" /></label>
+            <div className="editor-actions">
+              <button className="btn-primary" onClick={submitCode} disabled={busy}>{busy ? 'Verifying…' : 'Verify'}</button>
+              <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">Your account has a two-step (2FA) password.</p>
+            <label>Two-step password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+            <div className="editor-actions">
+              <button className="btn-primary" onClick={submitPassword} disabled={busy}>{busy ? 'Finishing…' : 'Finish'}</button>
+              <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
+            </div>
+          </>
+        )
       ) : (
         <>
-          <p className="muted">Your account has a two-step (2FA) password. Enter it to finish.</p>
-          <label>Two-step password<input type="password" value={f.password} onChange={set('password')} /></label>
+          <p className="muted">
+            Paste a session string made with <code>tools/telegram_login.py</code> on your own computer
+            (your phone, code, and password never touch the add-on).
+            {credsSet.session && <span> A session is already stored.</span>}
+          </p>
+          <label>Session string<input type="password" value={session} onChange={(e) => setSession(e.target.value)} /></label>
           <div className="editor-actions">
-            <button className="btn-primary" onClick={submitPassword} disabled={busy}>{busy ? 'Finishing…' : 'Finish'}</button>
-            <button className="ghost" onClick={() => setStage('idle')} disabled={busy}>Start over</button>
+            <button className="btn-primary" onClick={saveSession} disabled={busy}>Save</button>
+            {ok && <span className="muted">{ok}</span>}
           </div>
         </>
       )}
@@ -3409,7 +3447,6 @@ function TelegramLogin({ onDone }) {
 function AdminTelegramView() {
   const [channels, setChannels] = useState(null); // editable [{id,name}]
   const [credsSet, setCredsSet] = useState({});
-  const [creds, setCreds] = useState({ api_id: '', api_hash: '', session: '' });
   const [perms, setPerms] = useState({});         // username -> [ids] ("*" = all)
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
@@ -3440,18 +3477,6 @@ function AdminTelegramView() {
         .map((c) => ({ id: (c.id || '').trim(), name: (c.name || '').trim() }))
         .filter((c) => c.id);
       await adminSetTelegramConfig({ channels: clean });
-      setStatus('Saved');
-      loadAll();
-    } catch (e) { setStatus(e.message); }
-  }
-
-  async function saveCreds() {
-    setStatus('Saving…');
-    try {
-      const payload = {};
-      ['api_id', 'api_hash', 'session'].forEach((k) => { if (creds[k]) payload[k] = creds[k]; });
-      await adminSetTelegramConfig({ creds: payload });
-      setCreds({ api_id: '', api_hash: '', session: '' });
       setStatus('Saved');
       loadAll();
     } catch (e) { setStatus(e.message); }
@@ -3550,34 +3575,7 @@ function AdminTelegramView() {
         <p className="muted">"All" covers every channel, including ones added later. Changes save immediately.</p>
       </div>
 
-      <TelegramLogin onDone={loadAll} />
-
-      <div className="card editor settings-card">
-        <div className="sched-section-label">Telegram API credentials (offline path)</div>
-        <p className="muted" style={{ marginTop: 0 }}>
-          api_id / api_hash from my.telegram.org, plus a session string minted offline with the
-          tools/telegram_login.py helper. Stored write-only. Leave a field blank to keep the current
-          value. (Or use the in-app sign-in above instead.)
-        </p>
-        <label>
-          api_id {credsSet.api_id && <span className="muted">(set)</span>}
-          <input type="text" value={creds.api_id} placeholder={credsSet.api_id ? '••••••' : ''}
-            onChange={(e) => setCreds({ ...creds, api_id: e.target.value })} />
-        </label>
-        <label>
-          api_hash {credsSet.api_hash && <span className="muted">(set)</span>}
-          <input type="password" value={creds.api_hash} placeholder={credsSet.api_hash ? '••••••' : ''}
-            onChange={(e) => setCreds({ ...creds, api_hash: e.target.value })} />
-        </label>
-        <label>
-          session string {credsSet.session && <span className="muted">(set)</span>}
-          <input type="password" value={creds.session} placeholder={credsSet.session ? '••••••' : ''}
-            onChange={(e) => setCreds({ ...creds, session: e.target.value })} />
-        </label>
-        <div className="editor-actions">
-          <button className="btn-primary" onClick={saveCreds}>Save credentials</button>
-        </div>
-      </div>
+      <TelegramConnect credsSet={credsSet} onDone={loadAll} />
     </div>
   );
 }

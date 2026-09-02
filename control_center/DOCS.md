@@ -606,13 +606,13 @@ Open the sidebar (Ingress) admin panel and pick the **Telegram** tab:
    later). Changes save immediately.
 3. **Connect an account** - first create an app at
    [my.telegram.org](https://my.telegram.org/apps) to get an `api_id` and
-   `api_hash`. Then connect one of two ways:
-   - **Sign in here (in-app)** - enter your `api_id`, `api_hash`, and phone number;
-     type the code Telegram sends you (and your 2FA password if set). Simplest.
-   - **Paste a session string (offline)** - run `tools/telegram_login.py` on your
-     own computer (`pip install telethon`), which logs in there and prints a
-     session string; paste it, with the `api_id`/`api_hash`, into the credentials
-     card. This keeps the login (phone, code, password) entirely off the add-on.
+   `api_hash`. Enter those, then pick one method with the toggle:
+   - **Phone + code** - type your phone number, then the code Telegram sends you
+     (and your 2FA password if set). Simplest.
+   - **Session string** - run `tools/telegram_login.py` on your own computer
+     (`pip install telethon`), which logs in there and prints a session string;
+     paste it here. This keeps the login (phone, code, password) entirely off the
+     add-on.
 
    Credentials are stored **write-only** (never shown back). The **Connection** line
    at the top of the tab shows whether the account is connected.
