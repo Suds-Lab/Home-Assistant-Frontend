@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # (shown as the build label / asset ?v=); without it the version reads "dev".
 COPY app.py core.py config.py errors.py access.py ha.py store.py security.py user.py scheduler.py users.json config.yaml ./
 COPY routes/ ./routes/
+COPY telegram_feed/ ./telegram_feed/
 COPY static/ ./static/
 
 # 4000 = management (Ingress, not published); 8099 = user dashboard (published).
