@@ -2967,6 +2967,28 @@ img.install-icon {
 }
 .tg-badge-item { margin-left: 6px; vertical-align: middle; }
 .tg-method { margin: 4px 0 12px; flex-wrap: wrap; }
+/* Error-boundary fallbacks: shown when a component crashes, so one bad piece
+   never blanks the whole app. */
+.cc-error {
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.cc-error p { margin: 0 0 14px; }
+.cc-card-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
 .sched-topbar {
   display: flex;
   align-items: center;

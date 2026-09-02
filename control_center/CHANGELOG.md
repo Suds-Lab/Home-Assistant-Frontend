@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.44
+- **A single broken component can no longer blank the whole dashboard.** Control
+  Center now wraps the app, each main view (schedules, lists, Telegram, etc.), and
+  each device card in error boundaries. If one piece hits an error while rendering,
+  it shows a small "could not load" message in just that spot (with a Reload for a
+  full-page crash) instead of leaving a blank screen, and everything else keeps
+  working.
+
 ## 2.9.43
 - **Fix: "connection lost" errors when a Cloudflare Access session expires.** When
   the dashboard is behind Cloudflare Access (or a similar auth proxy) and its login
