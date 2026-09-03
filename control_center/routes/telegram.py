@@ -57,7 +57,10 @@ def telegram_messages():
     user = current_user()
     channel = _require_channel(user)
     msgs = get_source().history(channel, before_id=_before_arg(), limit=_LIMIT)
-    return jsonify({"messages": msgs})
+    # The read mark as it stands right now (before opening marks the channel read),
+    # so the client can draw a "last read" divider at the old position.
+    last_seen = tstore.get_last_seen(user["username"], channel)
+    return jsonify({"messages": msgs, "last_seen": last_seen})
 
 
 @bp.get("/api/telegram/search")
