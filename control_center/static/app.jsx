@@ -2245,6 +2245,9 @@ function TelegramPanel({ unread = [], onRead }) {
   const [loading, setLoading] = useState(false);
   const [atStart, setAtStart] = useState(false); // no older messages left
   const [error, setError] = useState('');
+  const [readMark, setReadMark] = useState(null); // last-read message id, captured at open
+  const readLineRef = useRef(null);
+  const scrollPending = useRef(false);
 
   useEffect(() => {
     getTelegramStatus()
@@ -2265,6 +2268,8 @@ function TelegramPanel({ unread = [], onRead }) {
         const m = d.messages || [];
         setMessages(m);
         setAtStart(m.length < 30);
+        setReadMark(d.last_seen ?? null); // where to draw the "last read" divider
+        scrollPending.current = true;     // scroll to it once this batch renders
         // Opening a channel marks it read up to its newest loaded message.
         if (m.length) {
           const newest = m[m.length - 1].id;
@@ -2293,6 +2298,13 @@ function TelegramPanel({ unread = [], onRead }) {
     }, 15000);
     return () => clearInterval(t);
   }, [channel, searching]);
+
+  // After a freshly-opened channel renders, scroll to the last-read divider once.
+  useEffect(() => {
+    if (!scrollPending.current) return;
+    scrollPending.current = false;
+    if (readLineRef.current) readLineRef.current.scrollIntoView({ block: 'center' });
+  }, [messages, readMark]);
 
   function backToList() {
     setChannel('');
@@ -2404,13 +2416,32 @@ function TelegramPanel({ unread = [], onRead }) {
         {shown.length === 0 && !loading && (
           <p className="muted">{searching ? 'No matches.' : 'No messages.'}</p>
         )}
-        {shown.map((m) => (
-          <div key={m.id} className="tg-msg">
-            <span className="tg-msg-time muted">{fmtTgTime(m.date)}</span>
-            {m.media && <TgImage channel={channel} id={m.id} />}
-            {m.text && <span className="tg-msg-text">{m.text}</span>}
-          </div>
-        ))}
+        {(() => {
+          // "Last read" divider: between unread (newer, shown on top) and the
+          // messages already read. Only when there's something unread and not while
+          // searching. -1 = none; shown.length = boundary is below the loaded set.
+          let dividerIdx = -1;
+          if (!searching && readMark != null && shown.length && shown[0].id > readMark) {
+            const idx = shown.findIndex((m) => m.id <= readMark);
+            dividerIdx = idx === -1 ? shown.length : idx;
+          }
+          const line = <div ref={readLineRef} className="tg-readline"><span>Last read</span></div>;
+          return (
+            <>
+              {shown.map((m, i) => (
+                <React.Fragment key={m.id}>
+                  {i === dividerIdx && line}
+                  <div className="tg-msg">
+                    <span className="tg-msg-time muted">{fmtTgTime(m.date)}</span>
+                    {m.media && <TgImage channel={channel} id={m.id} />}
+                    {m.text && <span className="tg-msg-text">{m.text}</span>}
+                  </div>
+                </React.Fragment>
+              ))}
+              {dividerIdx === shown.length && line}
+            </>
+          );
+        })()}
         {!atStart && messages.length > 0 && (
           <button type="button" className="ghost tg-older" onClick={loadOlder} disabled={loading}>
             {loading ? 'Loading…' : 'Load older'}

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.45
+- **Telegram: a "Last read" marker that you jump to automatically.** When you open
+  a channel that has new messages, a **Last read** divider now shows exactly where
+  you left off, and the view scrolls to it, so you land right at your unread
+  messages instead of hunting for them. Channels you're already caught up on open
+  normally, with no marker.
+
 ## 2.9.44
 - **A single broken component can no longer blank the whole dashboard.** Control
   Center now wraps the app, each main view (schedules, lists, Telegram, etc.), and
