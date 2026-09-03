@@ -4033,7 +4033,7 @@ function AdminAcSchedDetail({ entity, schedules, users, perms, permBusy, toggleP
 }
 
 /* ListsManager: create/rename/delete per-user device lists and assign devices
-   to them (reuses EntityChips). Rendered as a full panel like SchedulerPanel;
+   to them (chips + the multi-select menu). Rendered as a full panel like SchedulerPanel;
    the shared topbar "Done" leaves the view. onChange() lets the dashboard
    refresh its filter chips after edits. */
 function ListsManager({ onChange }) {
@@ -5440,22 +5440,21 @@ function IconSettings() {
 
 // Which sign-in methods the user dashboard offers. OAuth credentials live in
 // the add-on config; this just toggles Local / OAuth / Both.
-// Gmail-recipients-style field: selected entities as removable chips, with a
-// type-to-search box that suggests matches to add.
-function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device…', showChips = true }) {
+// Multi-select entity picker: an always-visible type-to-search box that drops an
+// auto-suggest list; each row has a tick and toggles on click WITHOUT closing the
+// list, so you can add several in a row. Selected items also show as removable
+// chips (unless showChips=false, when they're listed elsewhere).
+function EntityChips({ entities, selected, onToggle, placeholder = 'Search devices…', showChips = true }) {
   const [q, setQ] = useState('');
   const sel = selected instanceof Set ? selected : new Set(selected);
   const byId = {};
   for (const e of entities) byId[e.entity_id] = e;
   const term = q.trim().toLowerCase();
-  // No result cap: show every match. The menu scrolls (.chips-menu has a
-  // max-height + overflow), and HA's entity count is bounded, so there's no
-  // reason to hide matches behind an arbitrary limit.
+  // Only suggest once you type (these lists span every entity). Selected items
+  // stay in the list, ticked, so you can un-tick them too.
   const matches = term
     ? entities.filter(
-        (e) =>
-          !sel.has(e.entity_id) &&
-          (e.name.toLowerCase().includes(term) || e.entity_id.toLowerCase().includes(term))
+        (e) => e.name.toLowerCase().includes(term) || e.entity_id.toLowerCase().includes(term)
       )
     : [];
   return (
@@ -5465,7 +5464,8 @@ function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device
           [...sel].map((id) => {
             const e = byId[id] || { entity_id: id, name: id };
             return (
-              <button type="button" key={id} className="chip" onClick={() => onToggle(id)}>
+              <button type="button" key={id} className="chip" onClick={() => onToggle(id)}
+                aria-label={`Remove ${e.name}`}>
                 {e.name} <span aria-hidden="true">✕</span>
               </button>
             );
@@ -5479,21 +5479,23 @@ function EntityChips({ entities, selected, onToggle, placeholder = 'Add a device
       </div>
       {matches.length > 0 && (
         <div className="chips-menu">
-          {matches.map((e) => (
-            <button
-              type="button"
-              key={e.entity_id}
-              className="chips-menu-row"
-              onClick={() => {
-                onToggle(e.entity_id);
-                setQ('');
-              }}
-            >
-              <DomainIcon domain={e.domain} />
-              <span className="chips-menu-name">{e.name}</span>
-              <span className="chips-menu-id muted">{e.entity_id}</span>
-            </button>
-          ))}
+          {matches.map((e) => {
+            const on = sel.has(e.entity_id);
+            return (
+              <button
+                type="button"
+                key={e.entity_id}
+                className={`chips-menu-row${on ? ' sel' : ''}`}
+                aria-pressed={on}
+                onClick={() => onToggle(e.entity_id)}
+              >
+                <span className="chips-check" aria-hidden="true">{on ? '✓' : ''}</span>
+                <DomainIcon domain={e.domain} />
+                <span className="chips-menu-name">{e.name}</span>
+                <span className="chips-menu-id muted">{e.entity_id}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -5506,6 +5508,10 @@ function IncludedEntitiesSettings() {
   const [all, setAll] = useState(null);
   const [sel, setSel] = useState(new Set());
   const [status, setStatus] = useState('');
+  // Mirror `sel` in a ref so several toggles in one tick (multi-select clicks)
+  // compound instead of each reading the same stale set.
+  const selRef = useRef(sel);
+  selRef.current = sel;
 
   useEffect(() => {
     Promise.all([adminGetAllEntities(), adminGetSettings()])
@@ -5516,17 +5522,15 @@ function IncludedEntitiesSettings() {
       .catch((err) => setStatus(err.message));
   }, []);
 
-  async function toggle(id) {
-    const next = new Set(sel);
+  function toggle(id) {
+    const next = new Set(selRef.current);
     next.has(id) ? next.delete(id) : next.add(id);
+    selRef.current = next;
     setSel(next);
     setStatus('Saving…');
-    try {
-      await adminSetSettings({ includedEntities: [...next] });
-      setStatus('Saved.');
-    } catch (e) {
-      setStatus(e.message);
-    }
+    adminSetSettings({ includedEntities: [...next] })
+      .then(() => setStatus('Saved.'))
+      .catch((e) => setStatus(e.message));
   }
 
   if (all === null) return null;

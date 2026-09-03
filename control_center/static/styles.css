@@ -2141,6 +2141,16 @@ img.install-icon {
   background: var(--input-bg);
 }
 
+/* Multi-select tick: a checkmark slot that fills when the row is selected. */
+.chips-check {
+  flex: none;
+  width: 1.1em;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+.chips-menu-row.sel .chips-menu-name { font-weight: 600; color: var(--accent); }
+
 .chips-menu-row .mdi-icon {
   color: var(--muted);
   flex-shrink: 0;

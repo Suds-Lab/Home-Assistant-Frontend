@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.46
+- **Add multiple devices at once when assigning them.** The per-user "add a
+  specific device" picker (in Manage users) and the global "Included entities"
+  picker are now multi-select: type to search and tick as many matches as you want
+  - the suggestion list stays open instead of closing after each pick and making
+  you search again.
+
 ## 2.9.45
 - **Telegram: a "Last read" marker that you jump to automatically.** When you open
   a channel that has new messages, a **Last read** divider now shows exactly where

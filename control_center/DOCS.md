@@ -299,9 +299,10 @@ system won't let you remove the last admin. Users are listed alphabetically.
 
 To give **one** user a device whose **type is turned off** (e.g. a single
 `switch.*`), use **Add a specific device** in their editor; it searches every
-entity and assigns it to that user only. (The Settings **Included entities**
-list is the opposite: it shows entities to *everyone* and grants them to
-**All devices** users.)
+entity and assigns it to that user only. Type to search and tick as many devices
+as you want at once - the suggestion list stays open. (The Settings **Included
+entities** list is the opposite: it shows entities to *everyone* and grants them
+to **All devices** users, with the same multi-select picker.)
 
 On first run a default admin **`alice` / `changeme`** is created so you can log
 in; change its password (and add everyone else) from the Manage users screen
