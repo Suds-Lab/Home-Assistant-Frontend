@@ -543,6 +543,18 @@ next event, so it never fights a real person. Only a change with no one behind i
 then only a couple of times: if a unit keeps reverting, the scheduler **stands
 down** rather than flapping, and notes it in the Activity feed.
 
+**Warns before a restart lands on a schedule.** A scheduled change only fires if
+Home Assistant is up at that minute, so a restart timed a few seconds before an
+event silently skips it. Control Center publishes its upcoming fires on a sensor,
+`sensor.control_center_schedules` (state = the soonest fire time, with the full
+list in its attributes), created and refreshed automatically - nothing to set up.
+Install the companion **[Restart Guard](https://github.com/Suds-Lab/ha-restart-guard)**
+custom integration (a HACS-style install) and Home Assistant's own restart dialog
+will warn you when you're about to restart into a scheduled change, with the
+thermostat, time and new setting shown. The admin **Schedules** tab shows a
+one-time tip linking to it. Restart Guard is optional: skipping it changes
+nothing about how schedules run, it only removes the pre-restart warning.
+
 ### Overrides (holidays and special events)
 
 An **override** is a schedule that runs only on a set of dates and, while active,

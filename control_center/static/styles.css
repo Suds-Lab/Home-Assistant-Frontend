@@ -2996,6 +2996,21 @@ img.install-icon {
 }
 .tg-badge-item { margin-left: 6px; vertical-align: middle; }
 .tg-method { margin: 4px 0 12px; flex-wrap: wrap; }
+/* Restart Guard suggestion tip (admin schedules) */
+.rg-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.rg-tip a { color: var(--accent); }
+.rg-tip-x { flex: none; padding: 2px 6px; line-height: 1; }
 /* Error-boundary fallbacks: shown when a component crashes, so one bad piece
    never blanks the whole app. */
 .cc-error {

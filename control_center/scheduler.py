@@ -5,10 +5,11 @@ against all enabled schedules, and fires HA climate services for each matching e
 Edge-triggered: the thermostat holds whatever state the last fired event set it to
 until the next event fires.
 """
+import os
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 _SCHEDULER_STARTED = False
 _SCHEDULER_LOCK = threading.Lock()
@@ -44,6 +45,12 @@ _VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
 _VERIFY_MAX_TRIES = 2       # give up after this many re-applies that didn't stick
                             # (a real bounce-back heals in 1; more means we're
                             #  fighting the device, so stand down instead of flapping)
+
+# How far ahead we publish upcoming fires (sensor.control_center_schedules) for a
+# restart guard to read. A bit wider than the guard's own ~60 min lookahead so it
+# always has data for whatever window it uses.
+_GUARD_LOOKAHEAD_MIN = 120
+_GUARD_SENSOR = "sensor.control_center_schedules"
 
 
 # ANSI colors for the add-on log (Supervisor's log viewer renders them).
@@ -551,6 +558,77 @@ def resolve_scheduled_fires(schedules, hhmm, dow, today):
     return fires, skipped
 
 
+def upcoming_fires(schedules, now=None, lookahead_min=_GUARD_LOOKAHEAD_MIN):
+    """Pure: the (sched, entry, target, at) climate fires due within the next
+    `lookahead_min` minutes, honoring the SAME weekly/override precedence the loop
+    applies (reuses resolve_scheduled_fires). Minute resolution; a fire in the
+    current minute whose second already passed is skipped."""
+    now = now or datetime.now()
+    base = now.replace(second=0, microsecond=0)
+    out = []
+    for m in range(0, lookahead_min + 1):
+        t = base + timedelta(minutes=m)
+        if t < now:
+            continue  # this minute's fire already happened
+        fires, _ = resolve_scheduled_fires(
+            schedules, t.strftime("%H:%M"), t.weekday(), t.strftime("%Y-%m-%d"))
+        for sched, entry, target in fires:
+            out.append((sched, entry, target, t))
+    return out
+
+
+def _guard_items(now=None):
+    """Upcoming fires as plain dicts for the guard sensor's `items` attribute."""
+    from store import load_schedules
+    from core import STATE_CACHE
+    now = now or datetime.now()
+    items = []
+    for sched, entry, target, at in upcoming_fires(load_schedules(), now):
+        attrs = (STATE_CACHE.get(target) or {}).get("attributes") or {}
+        friendly = attrs.get("friendly_name") or target.split(":", 1)[-1]
+        mode = entry.get("mode", "heat")
+        temp = entry.get("temp")
+        detail = _MODE_DISPLAY.get(mode, mode)
+        if mode != "off" and temp is not None:
+            tv = float(temp)
+            detail += f" {int(tv) if tv.is_integer() else tv}°"
+        items.append({
+            "entity_id": target,
+            "name": sched.get("name") or "Schedule",
+            "friendly": friendly,
+            "at": at.astimezone().isoformat(),  # local, tz-aware ISO
+            "detail": detail,
+            "minutes": round((at - now).total_seconds() / 60, 1),
+        })
+    items.sort(key=lambda i: i["at"])
+    return items
+
+
+def publish_guard_sensor():
+    """Publish upcoming climate-schedule fires as an HA sensor so a restart guard
+    (e.g. bundled ha-restart-guard) can warn before an HA restart lands on one.
+    Best-effort: never raises, so a publish hiccup can't disturb the scheduler."""
+    items = _guard_items()
+    soonest = items[0]["at"] if items else None
+    attrs = {
+        "next_trigger": soonest,
+        "items": items,
+        "count": len(items),
+        "friendly_name": "Control Center schedules",
+        "icon": "mdi:calendar-clock",
+        "rg_source": "control_center",  # marker the restart guard recognizes
+    }
+    if os.environ.get("MOCK_HA"):
+        print(f"[mock_ha] guard sensor {_GUARD_SENSOR}: {len(items)} upcoming")
+        return
+    try:
+        from ha import ha_request
+        ha_request(f"/api/states/{_GUARD_SENSOR}", "POST",
+                   {"state": soonest or "none", "attributes": attrs})
+    except Exception as exc:  # noqa: BLE001
+        _log(f"guard sensor publish failed: {exc}")
+
+
 def _scheduler_loop():
     from store import load_schedules
     _log("scheduler started (checks every 30s)")
@@ -646,6 +724,10 @@ def _scheduler_loop():
                     enabled = sum(1 for s in schedules if s.get("enabled", True))
                     _log(f"alive - {enabled}/{len(schedules)} schedule(s) enabled, "
                          f"{len(_pending)} awaiting confirmation")
+
+                # Publish upcoming fires so a restart guard can warn before an HA
+                # restart lands on a scheduled fire (best-effort, never raises).
+                publish_guard_sensor()
             # Every tick: re-apply any recently-fired target that didn't take.
             _verify_pending(schedules, _override_covered_targets(schedules, today))
         except Exception as exc:  # noqa: BLE001

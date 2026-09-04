@@ -3661,6 +3661,27 @@ function AdminTelegramView() {
 
 /* AdminSchedulesView: pivot (By user / By thermostat) + searchable selector + a
    focused detail card. Replaces the old stacked "Access" + "All schedules" tabs. */
+/* A dismissible tip suggesting the Restart Guard fork, which reads the
+   sensor.control_center_schedules that the scheduler publishes and warns before an
+   HA restart lands on a scheduled change. Dismissal is remembered per browser. */
+const RG_TIP_KEY = 'ha_app_rg_tip_dismissed';
+function RestartGuardTip() {
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(RG_TIP_KEY) === '1');
+  if (dismissed) return null;
+  return (
+    <div className="rg-tip">
+      <span>
+        Tip: install{' '}
+        <a href="https://github.com/Suds-Lab/ha-restart-guard" target="_blank" rel="noopener noreferrer">Restart Guard</a>{' '}
+        so Home Assistant warns you before a restart lands on a scheduled change. Control Center publishes
+        its upcoming fires for it automatically - nothing else to set up.
+      </span>
+      <button type="button" className="ghost rg-tip-x" aria-label="Dismiss"
+        onClick={() => { localStorage.setItem(RG_TIP_KEY, '1'); setDismissed(true); }}>&#10005;</button>
+    </div>
+  );
+}
+
 function AdminSchedulesView() {
   const [pivot, setPivot] = React.useState('user');
   const [schedules, setSchedules] = React.useState(null);
@@ -3780,6 +3801,8 @@ function AdminSchedulesView() {
         <button className={`seg${pivot === 'user' ? ' on' : ''}`} onClick={() => setPivot('user')} type="button">By user</button>
         <button className={`seg${pivot === 'thermostat' ? ' on' : ''}`} onClick={() => setPivot('thermostat')} type="button">By thermostat</button>
       </div>
+
+      <RestartGuardTip />
 
       {pivot === 'user' ? (
         !selectedUser ? (

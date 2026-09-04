@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.47
+- **Warn before a Home Assistant restart lands on a scheduled change.** A schedule
+  only fires if HA is up at that exact minute, so a restart timed seconds before an
+  event silently skips it. Control Center now publishes its upcoming fires on a
+  sensor, `sensor.control_center_schedules` (soonest fire as the state, the full
+  list in its attributes), created and refreshed automatically. Install the
+  companion **Restart Guard** integration
+  (https://github.com/Suds-Lab/ha-restart-guard) and Home Assistant's own restart
+  dialog will list the thermostat, time and new setting you're about to restart
+  into. The admin **Schedules** tab shows a one-time tip linking to it. Optional:
+  skipping it changes nothing about how schedules run.
+
 ## 2.9.46
 - **Add multiple devices at once when assigning them.** The per-user "add a
   specific device" picker (in Manage users) and the global "Included entities"
