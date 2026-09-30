@@ -549,25 +549,19 @@ event silently skips it. Control Center publishes its upcoming fires on a sensor
 `sensor.control_center_schedules` (state = the soonest fire time, with the full
 list in its attributes), created and refreshed automatically.
 
-To turn those into a warning, Control Center **bundles the
-[Restart Guard](https://github.com/Suds-Lab/ha-restart-guard) integration and
-installs it for you.** On start-up the add-on copies it into Home Assistant's
-`custom_components/` folder (this is why the add-on requests write access to the
-Home Assistant configuration). A custom integration only loads on a restart, so
-after the add-on installs or updates it, **restart Home Assistant** to enable it,
-then Home Assistant's own restart dialog will list the thermostat, time and new
-setting you're about to restart into. The admin **Schedules** tab shows a
-one-time reminder.
+To turn those into a warning, install the companion
+**[Restart Guard](https://github.com/Suds-Lab/ha-restart-guard)** integration:
+in HACS, add `https://github.com/Suds-Lab/ha-restart-guard` as a custom
+repository (type: Integration), install it, then restart Home Assistant and add
+it from **Settings > Devices & Services**. Once it is running, Home Assistant's
+own restart dialog will warn you before a restart lands on a scheduled change,
+listing the thermostat, time and new setting. The admin **Schedules** tab shows
+a one-time tip linking to it.
 
-This is optional and self-limiting:
-
-- Skipping the restart changes nothing about how schedules run; you only miss
-  the pre-restart warning.
-- If you already installed Restart Guard yourself (through HACS or by hand),
-  Control Center detects that copy and leaves it completely untouched: it only
-  ever manages a copy it installed.
-- Control Center only writes the integration into the config folder; it makes no
-  other use of that write access.
+Restart Guard is optional and reads the sensor with no extra setup: Control
+Center does not install or bundle it, and needs no write access to your Home
+Assistant configuration. Skipping it changes nothing about how schedules run, it
+only removes the pre-restart warning.
 
 ### Overrides (holidays and special events)
 

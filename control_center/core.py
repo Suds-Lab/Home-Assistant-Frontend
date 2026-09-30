@@ -437,12 +437,3 @@ except Exception as exc:  # noqa: BLE001 - optional feature must not break boot
 
 from scheduler import ensure_scheduler  # noqa: E402
 ensure_scheduler()
-
-# Copy the bundled Restart Guard integration into Home Assistant if ours is
-# missing or newer (best-effort; never blocks boot). It reads the sensor the
-# scheduler publishes and warns before a restart lands on a schedule.
-try:
-    from guard_install import install_bundled_guard  # noqa: E402
-    install_bundled_guard()
-except Exception as exc:  # noqa: BLE001 - bundling is optional, never fatal
-    print(f"[restart-guard bundle] disabled: {exc}")

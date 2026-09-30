@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.49
+- **Restart Guard is a separate HACS install again, not bundled.** Reverses the
+  bundling from 2.9.48: Control Center no longer ships the integration or copies
+  it into Home Assistant, and **drops the config-directory write permission**
+  (`homeassistant_config:rw`) that bundling needed. It still publishes
+  `sensor.control_center_schedules` with its upcoming fires; to get the
+  pre-restart warning, install **Restart Guard** from
+  https://github.com/Suds-Lab/ha-restart-guard as a HACS custom repository. The
+  admin **Schedules** tab links to it. Optional: schedules run the same with or
+  without it.
+
 ## 2.9.48
 - **Restart Guard is now bundled and installed for you.** Instead of asking you
   to install the companion integration by hand, Control Center ships it and, on
