@@ -3,7 +3,7 @@
 # NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
 # install's /data is keyed to it, so changing it would orphan existing data.
 name: Control Center
-version: "2.9.47"
+version: "2.9.48"
 slug: ha_frontend
 description: Per-user device dashboard for your Home Assistant
 url: https://github.com/Suds-Lab/Home-Assistant-Frontend
@@ -32,6 +32,14 @@ ports_description:
 # Grants a Supervisor token + proxied access to the core API at
 # http://supervisor/core/api - no long-lived token needed.
 homeassistant_api: true
+
+# Write access to Home Assistant's own config directory. Used once, on start-up,
+# to install the bundled Restart Guard integration into custom_components/ (see
+# guard_install.py) so a restart-time schedule warning is available out of the
+# box. The add-on never writes here otherwise; it leaves a hand- or HACS-
+# installed copy of that integration untouched.
+map:
+  - homeassistant_config:rw
 
 # Most things are configured live in the app's sidebar tabs (stored in /data):
 # users + devices in "Manage users", and names/icons/device-types plus which

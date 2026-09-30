@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.9.48
+- **Restart Guard is now bundled and installed for you.** Instead of asking you
+  to install the companion integration by hand, Control Center ships it and, on
+  start-up, copies it into Home Assistant's `custom_components/` folder. Because
+  a custom integration only loads on a restart, the add-on then posts a
+  notification asking you to restart Home Assistant to enable it (the admin
+  **Schedules** tab shows the same reminder). After that, HA's restart dialog
+  warns you before a restart lands on a Control Center schedule.
+  - This adds one add-on permission: write access to the Home Assistant config
+    directory (`homeassistant_config:rw`), used only to install the integration.
+  - If you already installed Restart Guard yourself (HACS or manual), your copy
+    is detected and left untouched; the add-on only manages a copy it installed.
+  - Optional: skip the restart and schedules run exactly as before, just without
+    the pre-restart warning.
+
 ## 2.9.47
 - **Warn before a Home Assistant restart lands on a scheduled change.** A schedule
   only fires if HA is up at that exact minute, so a restart timed seconds before an

@@ -547,13 +547,27 @@ down** rather than flapping, and notes it in the Activity feed.
 Home Assistant is up at that minute, so a restart timed a few seconds before an
 event silently skips it. Control Center publishes its upcoming fires on a sensor,
 `sensor.control_center_schedules` (state = the soonest fire time, with the full
-list in its attributes), created and refreshed automatically - nothing to set up.
-Install the companion **[Restart Guard](https://github.com/Suds-Lab/ha-restart-guard)**
-custom integration (a HACS-style install) and Home Assistant's own restart dialog
-will warn you when you're about to restart into a scheduled change, with the
-thermostat, time and new setting shown. The admin **Schedules** tab shows a
-one-time tip linking to it. Restart Guard is optional: skipping it changes
-nothing about how schedules run, it only removes the pre-restart warning.
+list in its attributes), created and refreshed automatically.
+
+To turn those into a warning, Control Center **bundles the
+[Restart Guard](https://github.com/Suds-Lab/ha-restart-guard) integration and
+installs it for you.** On start-up the add-on copies it into Home Assistant's
+`custom_components/` folder (this is why the add-on requests write access to the
+Home Assistant configuration). A custom integration only loads on a restart, so
+after the add-on installs or updates it, **restart Home Assistant** to enable it,
+then Home Assistant's own restart dialog will list the thermostat, time and new
+setting you're about to restart into. The admin **Schedules** tab shows a
+one-time reminder.
+
+This is optional and self-limiting:
+
+- Skipping the restart changes nothing about how schedules run; you only miss
+  the pre-restart warning.
+- If you already installed Restart Guard yourself (through HACS or by hand),
+  Control Center detects that copy and leaves it completely untouched: it only
+  ever manages a copy it installed.
+- Control Center only writes the integration into the config folder; it makes no
+  other use of that write access.
 
 ### Overrides (holidays and special events)
 

@@ -3661,20 +3661,22 @@ function AdminTelegramView() {
 
 /* AdminSchedulesView: pivot (By user / By thermostat) + searchable selector + a
    focused detail card. Replaces the old stacked "Access" + "All schedules" tabs. */
-/* A dismissible tip suggesting the Restart Guard fork, which reads the
-   sensor.control_center_schedules that the scheduler publishes and warns before an
-   HA restart lands on a scheduled change. Dismissal is remembered per browser. */
-const RG_TIP_KEY = 'ha_app_rg_tip_dismissed';
+/* A dismissible note about the bundled Restart Guard integration. Control Center
+   ships it and installs it into Home Assistant automatically (guard_install.py);
+   because a custom integration only loads on an HA restart, the note reminds you
+   to restart to enable it. Dismissal is remembered per browser. */
+const RG_TIP_KEY = 'ha_app_rg_tip_dismissed_v2';
 function RestartGuardTip() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(RG_TIP_KEY) === '1');
   if (dismissed) return null;
   return (
     <div className="rg-tip">
       <span>
-        Tip: install{' '}
+        Control Center bundles{' '}
         <a href="https://github.com/Suds-Lab/ha-restart-guard" target="_blank" rel="noopener noreferrer">Restart Guard</a>{' '}
-        so Home Assistant warns you before a restart lands on a scheduled change. Control Center publishes
-        its upcoming fires for it automatically - nothing else to set up.
+        and installs it into Home Assistant automatically. After an update that adds or updates it,
+        <strong> restart Home Assistant</strong> to enable the warning that fires before a restart lands on a
+        schedule. (Already using it via HACS? Yours is left untouched.)
       </span>
       <button type="button" className="ghost rg-tip-x" aria-label="Dismiss"
         onClick={() => { localStorage.setItem(RG_TIP_KEY, '1'); setDismissed(true); }}>&#10005;</button>
