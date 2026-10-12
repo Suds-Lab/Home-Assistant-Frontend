@@ -387,14 +387,18 @@ double-click to reset.
 The **Settings** tab has a **Backup & restore** card. **Export** downloads a
 single JSON file containing everything in `/data`: users, passwords, each
 user's device assignments, all settings, climate schedules and their per-user
-scheduling permissions, per-user device lists, the activity log and the uploaded
-app icon. Keep it somewhere safe (it contains passwords).
+scheduling permissions, per-user device lists, the Telegram feature's
+configuration (its API credentials, login session and channels), per-user
+channel permissions and read markers, the activity log and the uploaded app
+icon. Keep it somewhere safe: it contains passwords **and the Telegram login
+session, which is full access to that Telegram account.**
 
 If you uninstall and reinstall the add-on, open Settings → **Restore from
 file** and pick that JSON to bring everything back exactly as it was. Restoring
 replaces all current users, assignments, settings, schedules, scheduling
-permissions and lists. A backup made by an older version that predates these
-extras simply leaves the current ones untouched instead of clearing them.
+permissions, lists and Telegram configuration/permissions/read state. A backup
+made by an older version that predates any of these extras simply leaves the
+current ones untouched instead of clearing them.
 
 ## Session expiry
 

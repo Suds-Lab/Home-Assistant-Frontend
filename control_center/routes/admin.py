@@ -460,9 +460,11 @@ BACKUP_VERSION = 1
 def admin_export():
     """Download everything in /data as one JSON file: users (with passwords),
     device assignments, settings, climate schedules and their per-user
-    scheduling permissions, per-user device lists, the activity log and the
-    uploaded app icon. Restoring it after a reinstall brings the add-on back
-    exactly as it was."""
+    scheduling permissions, per-user device lists, the Telegram feature's
+    configuration (including its account credentials), channels, per-user
+    channel permissions and read markers, the activity log and the uploaded app
+    icon. Restoring it after a reinstall brings the add-on back exactly as it
+    was."""
     require_admin()
     data = {
         "type": BACKUP_TYPE,
@@ -473,6 +475,18 @@ def admin_export():
         "schedule_perms": load_schedule_perms(),
         "lists": load_lists(),
     }
+    # Telegram feature stores: config (api credentials + session + channels),
+    # per-user channel permissions, and per-user read markers. Wrapped so a
+    # missing/disabled telegram_feed package can never break a backup.
+    try:
+        from telegram_feed import store as tstore
+        data["telegram"] = {
+            "config": tstore.load_config(),
+            "perms": tstore.load_perms(),
+            "read": tstore.load_read(),
+        }
+    except Exception:  # noqa: BLE001 - telegram is optional, never break a backup
+        pass
     # The activity log can be large and is disposable - allow excluding it
     # with ?activity=0 (omitted entirely so restoring won't clear an existing log).
     if request.args.get("activity") not in ("0", "false", "no"):
@@ -494,7 +508,9 @@ def admin_export():
 @bp.post("/api/admin/import")
 def admin_import():
     """Restore a backup produced by /api/admin/export. Replaces all current
-    users, assignments, settings, schedules, scheduling permissions and lists."""
+    users, assignments, settings, schedules, scheduling permissions, lists and
+    Telegram configuration/permissions/read state (each only if the backup
+    carries it)."""
     require_admin()
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or body.get("type") != BACKUP_TYPE:
@@ -531,6 +547,24 @@ def admin_import():
     lists = body.get("lists")
     if isinstance(lists, dict):
         save_lists(lists)
+
+    # Telegram stores, each restored only if the backup carries it (an older
+    # backup predating this leaves the current Telegram setup untouched).
+    telegram = body.get("telegram")
+    if isinstance(telegram, dict):
+        try:
+            from telegram_feed import store as tstore
+            tcfg = telegram.get("config")
+            if isinstance(tcfg, dict):
+                tstore.save_config(tcfg)
+            tperms = telegram.get("perms")
+            if isinstance(tperms, dict):
+                tstore.save_perms(tperms)
+            tread = telegram.get("read")
+            if isinstance(tread, dict):
+                tstore.save_read(tread)
+        except Exception:  # noqa: BLE001 - telegram is optional, never break a restore
+            pass
 
     activity = body.get("activity")
     if isinstance(activity, list):

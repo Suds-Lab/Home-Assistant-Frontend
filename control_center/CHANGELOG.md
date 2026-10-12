@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.9.50
+- **Backup & restore now includes Telegram.** Export already bundled users,
+  settings, schedules, scheduling permissions, device lists, activity and the
+  app icon; it now also carries the Telegram feature's configuration (API
+  credentials, login session and channels), per-user channel permissions and
+  read markers, so a backup is a complete snapshot and a reinstall brings
+  Telegram back exactly as it was. Restore applies each piece only if the backup
+  contains it, so older backups leave the current Telegram setup untouched.
+  - Note: the export now also contains the Telegram login session, which is full
+    access to that account. Keep the backup file as securely as you would a
+    password export.
+
 ## 2.9.49
 - **Restart Guard is a separate HACS install again, not bundled.** Reverses the
   bundling from 2.9.48: Control Center no longer ships the integration or copies
