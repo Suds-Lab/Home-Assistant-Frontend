@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.9.51
+- **A schedule now waits out an offline thermostat instead of losing the event.**
+  If a unit is offline/unavailable when its event is due - or Home Assistant is
+  briefly unreachable, so the command never goes out - the scheduler keeps that
+  unit pending and delivers the whole action (mode, temperature and fan) as soon
+  as it comes back online, rather than skipping the change until the next event.
+  - This also fixes failed sends silently vanishing: a send that errored because
+    Home Assistant was momentarily unreachable is retried on return, not dropped.
+  - It keeps waiting up to 24h (the unit's next event re-arms the wait sooner, so
+    a recurring schedule keeps trying across days), and respects the same
+    back-off rules: a person touching the unit while it is waited on wins, and
+    once delivered the existing self-verify/anti-flap checks take over.
+
 ## 2.9.50
 - **Backup & restore now includes Telegram.** Export already bundled users,
   settings, schedules, scheduling permissions, device lists, activity and the

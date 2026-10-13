@@ -38,13 +38,22 @@ _OFFLINE_STATES = (None, "unavailable", "unknown")
 # drifts from what the schedule set. The window is deliberately short so we heal a
 # bounce-back (which happens within minutes) without fighting a later MANUAL
 # override. Touched only by the single scheduler thread, so no lock is needed.
-_pending = {}  # target -> {mode, temp, sched_id, name, owner, first_ts, last_try}
-_VERIFY_WINDOW_SECS = 600   # keep verifying for ~10 min after a fire
+_pending = {}  # target -> {mode, temp, fan, sched_id, name, owner, first_ts,
+               #            last_try, tries, delivered, online_ts}
+_VERIFY_WINDOW_SECS = 600   # keep verifying for ~10 min after a fire DELIVERED
 _VERIFY_RETRY_SECS = 120    # re-send at most every ~2 min per target
 _VERIFY_TEMP_TOL = 0.6      # degrees; tolerate float/unit rounding
 _VERIFY_MAX_TRIES = 2       # give up after this many re-applies that didn't stick
                             # (a real bounce-back heals in 1; more means we're
                             #  fighting the device, so stand down instead of flapping)
+# A fire that never reached the device - it was offline/unavailable, or the send
+# itself failed because Home Assistant was briefly unreachable - is NOT dropped.
+# The target is kept pending and the whole sequence (mode, temp AND fan) is
+# delivered once it comes back online. This is the ceiling on that wait so a dead
+# unit can't pin a slot forever; in practice the target's next scheduled event
+# re-registers the wait long before this, so a recurring schedule keeps trying
+# across days regardless.
+_OFFLINE_WAIT_SECS = 24 * 3600   # keep waiting up to ~24h for a target to return
 
 # How far ahead we publish upcoming fires (sensor.control_center_schedules) for a
 # restart guard to read. A bit wider than the guard's own ~60 min lookahead so it
@@ -271,37 +280,52 @@ def _fire_event(sched, entry, target):
     _log(f"FIRE '{name}' [{entry.get('time')}] -> {target}: set {detail} (was {was})")
 
     t0 = time.time()
+    send_ok = True
     try:
         _send_climate(target, mode, temp, fan)
     except Exception as exc:  # noqa: BLE001
         _log(f"  FAILED to send to {target} after {int((time.time() - t0) * 1000)}ms: {exc}")
-        _report_failure(name, target, f"send error: {exc}")
-        return  # don't watch a send that never went out
-    _log(f"  sent to {target} in {int((time.time() - t0) * 1000)}ms")
+        send_ok = False
+    else:
+        _log(f"  sent to {target} in {int((time.time() - t0) * 1000)}ms")
 
-    # Record in the activity log only if the thermostat is actually online, so a
-    # schedule firing at an offline device doesn't show up as if its owner acted.
-    # An offline fire is a failure the owner should see; an online one clears any
-    # standing failure for that unit.
-    if offline:
-        reason = _fire_failure_reason(target, b_state) or "unavailable"
-        _log(f"  {target} was {b_state}; command was still sent but may not arrive "
-             f"(not recorded in the activity log)")
+    # "Delivered" means the command actually reached an online device. A send that
+    # threw (Home Assistant briefly unreachable) or a device that was offline did
+    # NOT get it: we keep that target pending and deliver the whole sequence
+    # (mode, temp and fan) once it comes back, instead of losing the event.
+    delivered = send_ok and not offline
+
+    # Record in the activity log only when the change actually lands on an online
+    # device, so a schedule firing at an offline device doesn't show up as if its
+    # owner acted. A not-delivered fire is a failure the owner should see; a
+    # delivered one clears any standing failure for that unit.
+    if not delivered:
+        if offline:
+            reason = _fire_failure_reason(target, b_state) or "unavailable"
+        else:
+            reason = "send error (Home Assistant unreachable)"
+        _log(f"  {target} not delivered ({reason}); keeping it pending and will "
+             f"deliver the full sequence when it comes back online")
         _report_failure(name, target, reason)
     else:
         _clear_failure(target)
         _log_scheduled(sched, entry, target)
 
-    # Watch this target for a short window and re-send if the thermostat drifts
-    # from what we just set (see _verify_pending). A new fire for the same target
-    # overwrites the prior entry - the latest event wins.
+    # Watch this target: if DELIVERED, re-send when it drifts for a short window;
+    # if NOT delivered, wait for it to return and then deliver. A new fire for the
+    # same target overwrites the prior entry - the latest event wins.
     now = time.time()
     _pending[target] = {
-        "mode": mode, "temp": temp,
+        "mode": mode, "temp": temp, "fan": fan,
         "sched_id": sched.get("id"), "name": name,
         "owner": sched.get("owner"), "first_ts": now, "last_try": now, "tries": 0,
+        "delivered": delivered, "online_ts": now if delivered else None,
     }
-    _log(f"  confirming {target} for up to {_VERIFY_WINDOW_SECS // 60} min")
+    if delivered:
+        _log(f"  confirming {target} for up to {_VERIFY_WINDOW_SECS // 60} min")
+    else:
+        _log(f"  awaiting {target} coming online to deliver '{name}' "
+             f"(up to {_OFFLINE_WAIT_SECS // 3600}h, or until its next event)")
 
 
 def _log_scheduled(sched, entry, target):
@@ -375,6 +399,49 @@ def _log_giveup(p, target):
     })
 
 
+def _log_delivered(p, target):
+    """Activity-feed line when a fire that was deferred (the device was offline at
+    its scheduled time) is finally delivered after the device comes back, so it
+    appears for the owner as the change that actually happened - attributed to the
+    schedule, and noted as having waited for the unit to return."""
+    from store import _append_activity, load_users
+    from core import STATE_CACHE
+
+    owner = p.get("owner")
+    display = next(
+        (u.get("displayName") or u.get("username")
+         for u in load_users() if u.get("username") == owner),
+        owner,
+    ) or "A user"
+    attrs = (STATE_CACHE.get(target) or {}).get("attributes") or {}
+    entity_name = attrs.get("friendly_name") or target.split(":", 1)[-1]
+
+    mode = p.get("mode", "heat")
+    temp = p.get("temp")
+    mode_label = _MODE_DISPLAY.get(mode, mode)
+    if mode == "off":
+        verb = "was turned off once it came back online"
+    elif temp is not None:
+        t = float(temp)
+        temp_str = str(int(t)) if t.is_integer() else str(t)
+        verb = f"was set to {mode_label} {temp_str}° once it came back online"
+    else:
+        verb = f"was set to {mode_label} once it came back online"
+
+    _append_activity({
+        "ts": time.time(),
+        "username": owner,
+        "name": display,
+        "entity_id": target,
+        "entity": entity_name,
+        "domain": "climate",
+        "service": "schedule",
+        "verb": verb,
+        "source": "schedule",
+        "schedule": p.get("name") or "Schedule",
+    })
+
+
 def _temp_matches(cur_temp, want_temp):
     """True when the unit's live setpoint already equals the target within
     tolerance. Unknown/unparseable current temp counts as NOT matching, so we
@@ -405,9 +472,15 @@ def _matches_desired(target, mode, temp):
 
 
 def _verify_pending(schedules, override_targets=None):
-    """For each recently-fired target still inside its verification window, re-send
-    the scheduled mode/temp if the thermostat has drifted from it (rate-limited).
-    Drops entries once the window closes or their schedule is gone/disabled."""
+    """Per pending target, each tick:
+      * DELIVERED (the fire reached an online device): for a short window, re-send
+        the scheduled mode/temp if the thermostat drifts from it (rate-limited,
+        bounded tries, backing off to a person).
+      * NOT DELIVERED (fired while offline, or the send failed): wait for the
+        device to come back online, then deliver the whole sequence (mode, temp
+        AND fan) and switch it to the delivered rules above.
+    Drops an entry when its schedule is gone/disabled, an override takes over, a
+    person intervenes, it keeps reverting, or it never returns within the wait."""
     if not _pending:
         return
     from core import STATE_CACHE
@@ -417,10 +490,8 @@ def _verify_pending(schedules, override_targets=None):
     weekly_ids = {s.get("id") for s in schedules if s.get("type") != "override"}
     for target in list(_pending.keys()):
         p = _pending[target]
-        if now - p["first_ts"] > _VERIFY_WINDOW_SECS:
-            _pending.pop(target, None)
-            _log(f"done confirming {target} ('{p['name']}') - window ended")
-            continue
+        delivered = p.get("delivered", True)  # legacy entries are treated as delivered
+
         if p["sched_id"] not in enabled_ids:
             _pending.pop(target, None)
             _log(f"stopped confirming {target} ('{p['name']}') - schedule disabled or removed")
@@ -430,26 +501,70 @@ def _verify_pending(schedules, override_targets=None):
             _pending.pop(target, None)
             _log(f"stopped confirming {target} ('{p['name']}') - an override now governs it")
             continue
+
+        # Time bound. A delivered target is watched only for the short verify
+        # window (anchored at delivery). An undelivered one keeps waiting much
+        # longer for the device to return, but still gives up eventually.
+        if delivered:
+            if now - (p.get("online_ts") or p["first_ts"]) > _VERIFY_WINDOW_SECS:
+                _pending.pop(target, None)
+                _log(f"done confirming {target} ('{p['name']}') - window ended")
+                continue
+        else:
+            if now - p["first_ts"] > _OFFLINE_WAIT_SECS:
+                _pending.pop(target, None)
+                _log(f"giving up waiting for {target} ('{p['name']}') to come online "
+                     f"after {_OFFLINE_WAIT_SECS // 3600}h - schedule not delivered")
+                _report_failure(p.get("name") or "Schedule", target,
+                                "offline too long (schedule not delivered)")
+                continue
+
         m = _matches_desired(target, p["mode"], p["temp"])
         if m:
-            _clear_failure(target)  # it took (perhaps after a retry) - drop any failure note
+            _clear_failure(target)  # it took (after a retry, or it returned already set)
+            if not delivered:
+                p["delivered"] = True
+                p["online_ts"] = now
+                _log(f"{target} ('{p['name']}') came back online already set correctly")
             continue
         if m is None:
-            continue  # offline (can't tell) - leave it watching
-        # Drifted. If a PERSON moved it (in HA or via Control Center) after we
-        # fired, stand down - they win until the next event. A drift with no
-        # human behind it (a device bouncing back) is a mystery we keep enforcing.
+            continue  # offline (can't tell) - keep watching (delivered) or waiting
+
+        # Online but not matching. If a PERSON moved it (carries an HA user_id;
+        # a reconnect does not) after we fired, stand down - they win until the
+        # next event. This applies whether or not we had delivered yet.
         ov = _manual.get(target)
         if ov is not None and ov >= p["first_ts"]:
             _pending.pop(target, None)
             _log(f"backing off {target} ('{p['name']}') - a person changed it; "
                  f"schedule resumes at its next event")
             continue
+
         if now - p["last_try"] < _VERIFY_RETRY_SECS:
-            continue  # drifted (mystery), but re-sent too recently - wait
-        # Already re-applied the max number of times and it STILL drifted: we're
-        # fighting the device (e.g. it rejects a command and drops to off). Stand
-        # down instead of flapping, and tell the owner in the activity feed.
+            continue  # re-sent too recently - wait
+
+        if not delivered:
+            # The device was offline/unreachable at fire time and has now returned.
+            # Deliver the WHOLE sequence (mode, temp AND fan), because it never
+            # received the original command, then fall into the delivered rules.
+            p["last_try"] = now
+            _log(f"{target} ('{p['name']}') back online - delivering the schedule "
+                 f"(mode/temp/fan)")
+            try:
+                _send_climate(target, p["mode"], p["temp"], p.get("fan"))
+            except Exception as exc:  # noqa: BLE001
+                _log(f"  delivery FAILED on {target}: {exc} - will retry")
+                continue  # stay undelivered; retry next tick (rate-limited)
+            p["delivered"] = True
+            p["online_ts"] = now
+            p["tries"] = 0
+            _clear_failure(target)
+            _log_delivered(p, target)
+            continue
+
+        # Delivered but drifted. Already re-applied the max number of times and it
+        # STILL drifted: we're fighting the device (e.g. it rejects a command and
+        # drops to off). Stand down instead of flapping, and tell the owner.
         if p.get("tries", 0) >= _VERIFY_MAX_TRIES:
             _pending.pop(target, None)
             _log(f"giving up on {target} ('{p['name']}') after {p['tries']} re-applies - "

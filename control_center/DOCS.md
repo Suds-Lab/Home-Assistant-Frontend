@@ -534,9 +534,20 @@ on: sending just the mode change - the same single command they accept when turn
 on by hand - lets the start stick. Skipping only ever sends fewer commands, never
 different ones, so units that already worked are unaffected.
 
+**Waits out an offline unit:** if a thermostat is offline or unavailable when its
+event is due - or Home Assistant is briefly unreachable at that moment, so the
+command never goes out - the event is **not lost**. The scheduler keeps that unit
+pending and, as soon as it comes back online, delivers the whole action for it
+(mode, temperature and fan speed, since it never received the original command).
+It keeps waiting for up to 24 hours, though in practice the unit's next scheduled
+event re-arms the wait long before that, so a recurring schedule keeps trying
+across days. The same back-off rules apply: if a person sets the unit while it is
+being waited on, the schedule stands down until its next event. Once the unit is
+back and the action is delivered, the self-verifying checks below take over.
+
 **Self-verifying:** some thermostats (e.g. Honeywell) don't always apply a change
-on the first command, and quietly revert. For about 10 minutes after an event
-fires, the scheduler keeps checking that the thermostat's live mode and
+on the first command, and quietly revert. For about 10 minutes after an event is
+delivered, the scheduler keeps checking that the thermostat's live mode and
 temperature match what the schedule set, and re-sends the command (at most once
 every couple of minutes) if they don't. A change that didn't take fixes itself.
 
