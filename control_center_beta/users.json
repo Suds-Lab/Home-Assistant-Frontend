@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "username": "alice",
+      "password": "changeme",
+      "displayName": "Alice",
+      "admin": true,
+      "entities": [
+        "light.bedroom",
+        "light.bedroom_lamp",
+        "climate.bedroom_ac"
+      ]
+    },
+    {
+      "username": "bob",
+      "password": "changeme",
+      "displayName": "Bob",
+      "entities": [
+        "light.living_room",
+        "climate.living_room_ac"
+      ]
+    }
+  ]
+}

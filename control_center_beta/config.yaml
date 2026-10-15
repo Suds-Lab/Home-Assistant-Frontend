@@ -1,0 +1,98 @@
+# Home Assistant add-on manifest for "Control Center" (Python / Flask).
+# Docs: https://developers.home-assistant.io/docs/add-ons/configuration
+# NOTE: slug stays "ha_frontend" on purpose - it's the internal add-on id; the
+# install's /data is keyed to it, so changing it would orphan existing data.
+name: Control Center (Beta)
+version: "2.9.51"
+slug: control_center_beta
+description: Per-user device dashboard for your Home Assistant
+url: https://github.com/Suds-Lab/Home-Assistant-Frontend
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+
+# The "Control Center" sidebar tab (Ingress) is the ADMIN MANAGEMENT UI - manage
+# users and assign their devices. Ingress routes it through HA's own auth, and
+# it's admin-only (panel_admin defaults to true), like the Terminal add-on.
+ingress: true
+ingress_port: 4000
+panel_icon: mdi:flask-outline
+panel_title: Control Center (Beta)
+
+# The household-facing device dashboard is published here. Members open it at
+# http://<home-assistant>:8099 and log in with the app account an admin created.
+ports:
+  8099/tcp: 8098
+ports_description:
+  8099/tcp: Control Center user dashboard (per-user device control)
+
+# Grants a Supervisor token + proxied access to the core API at
+# http://supervisor/core/api - no long-lived token needed.
+homeassistant_api: true
+
+# Most things are configured live in the app's sidebar tabs (stored in /data):
+# users + devices in "Manage users", and names/icons/device-types plus which
+# login methods (Local / OAuth / Both) are offered in "Settings".
+# A default admin (alice / changeme) is seeded on first run; change it there.
+#
+# OAuth (optional): fill in the credentials below to enable "Sign in with
+# <provider>" on the user dashboard, then turn it on in Settings. Defaults
+# target Google; override the *_url options for any other OIDC provider.
+#   - oauth_redirect_url: the PUBLIC base URL of the dashboard. Add
+#     <that>/api/oauth/callback to the provider's authorised redirect URIs.
+#   - oauth_allowed_domains: restrict sign-in to these email domains
+#     (e.g. ["my.domain"]).
+#   - oauth_allowed_emails: individual addresses allowed, even outside the
+#     domains above (e.g. ["alice@gmail.com"]). Use this for personal Gmail.
+#   - oauth_allow_any: with NO domains/emails listed, sign-in is refused by
+#     default; set this true to allow anyone with a verified email instead.
+#   - oauth_logo_url: logo for the sign-in button on non-Google providers.
+# jwt_secret signs login sessions. Leave it blank to auto-generate and persist a
+# random secret (recommended); set a value only to pin your own.
+# block_iframe_embedding: set true to stop the user dashboard being embedded in
+# an iframe (clickjacking). Leave false if you embed it via a panel_iframe.
+options:
+  jwt_secret: ""
+  remote_instances:
+    - id: ""
+      name: ""
+      url: ""
+      token: ""
+  oauth_client_id: ""
+  oauth_client_secret: ""
+  oauth_redirect_url: ""
+  oauth_provider_name: Google
+  oauth_allowed_domains: []
+  oauth_allowed_emails: []
+  oauth_allow_any: false
+  block_iframe_embedding: false
+  oauth_authorize_url: "https://accounts.google.com/o/oauth2/v2/auth"
+  oauth_token_url: "https://oauth2.googleapis.com/token"
+  oauth_userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo"
+  oauth_scopes: "openid email profile"
+  oauth_logo_url: ""
+schema:
+  jwt_secret: str?
+  remote_instances:
+    - id: str
+      name: str
+      url: str
+      token: str
+  oauth_client_id: str?
+  oauth_client_secret: str?
+  oauth_redirect_url: str?
+  oauth_provider_name: str?
+  oauth_allowed_domains:
+    - str
+  oauth_allowed_emails:
+    - str
+  oauth_allow_any: bool?
+  block_iframe_embedding: bool?
+  oauth_authorize_url: str?
+  oauth_token_url: str?
+  oauth_userinfo_url: str?
+  oauth_scopes: str?
+  oauth_logo_url: str?

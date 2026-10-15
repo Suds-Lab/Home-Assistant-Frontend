@@ -1,0 +1,3533 @@
+/* Control Center palette: brand blue accent (#5B8DB8) from the logo, on neutral
+   dark/light surfaces. Navy (#1C3A5E) is the brand surface colorr (PWA chrome /
+   status bar); #7AB3E0 is the light highlight. */
+:root {
+  --bg: #111111;
+  --card: #1c1c1c;
+  --card-active: #2a2a2a;
+  --text: #e1e1e1;
+  --muted: #9b9b9b;
+  --accent: #5B8DB8;
+  --accent-2: #0f9d58;
+  --error: #f44336;
+  --border: rgba(225, 225, 225, 0.12);
+  --input-bg: #242424;
+  --switch-bg: #3f3f3f;
+  --seg-empty: rgba(255, 255, 255, 0.06);
+  --radius: 12px;
+  --card-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='light'] {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --card-active: #e6eef5;
+  --text: #212121;
+  --muted: #727272;
+  --accent: #5B8DB8;
+  --accent-2: #0f9d58;
+  --error: #d32f2f;
+  --border: rgba(0, 0, 0, 0.12);
+  --input-bg: #f4f5f7;
+  --switch-bg: #c8ccce;
+  --seg-empty: rgba(0, 0, 0, 0.06);
+  --card-shadow: 0 2px 1px -1px rgba(0, 0, 0, 0.2), 0 1px 1px rgba(0, 0, 0, 0.14),
+    0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Small, unobtrusive build-version label, pinned out of the way (clear of the
+   iPhone home indicator) and never intercepting taps. */
+.version-tag {
+  position: fixed;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  font-size: 0.66rem;
+  color: var(--muted);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+/* "Connection lost" toast (shown when the live connection drops). */
+.conn-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 9px 9px 9px 14px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.85rem;
+  animation: conn-in 0.2s ease;
+}
+/* Error variant: a failed control command (red accent). */
+.conn-toast.err {
+  padding: 9px 14px;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+@keyframes conn-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+.conn-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-top-color: var(--accent);
+  animation: conn-spin 0.8s linear infinite;
+}
+@keyframes conn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.conn-retry {
+  flex-shrink: 0;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 6px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.error.banner {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+
+/* --- Login --- */
+.centered {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  /* Keep clear of the notch / Dynamic Island and home indicator (the viewport
+     is viewport-fit=cover, so content can otherwise draw under them). */
+  padding: max(20px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
+}
+
+.login {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 32px 28px;
+}
+
+.login h1 {
+  margin: 0 0 4px;
+}
+
+/* Space the form rows (username, password, button) evenly. */
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.login input {
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.login button[type='submit'] {
+  margin-top: 4px;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.login button:disabled {
+  opacity: 0.6;
+}
+
+/* --- Dashboard --- */
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  /* Add the safe-area insets so the header clears the Dynamic Island / notch
+     (top) and the rounded corners / home indicator (sides) on iPhone. */
+  padding: calc(24px + env(safe-area-inset-top, 0px))
+    calc(20px + env(safe-area-inset-right, 0px))
+    40px
+    calc(20px + env(safe-area-inset-left, 0px));
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  /* When the title + actions can't fit on one line (narrow phone, or a large
+     accessibility font), let the action group drop to its own row instead of
+     overlapping the title. */
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.topbar > div {
+  min-width: 0; /* allow the title to wrap instead of shoving the buttons */
+  flex: 1 1 auto;
+}
+
+.topbar h1 {
+  margin: 0 0 2px;
+  font-size: 1.4rem;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
+.ghost.icon-only {
+  padding: 8px 10px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dashboard-search {
+  margin-bottom: 18px;
+}
+
+section {
+  margin-bottom: 36px;
+}
+
+section h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Collapsible top-level group header (Type / Area / Floor). A clean titled
+   section with a divider underneath. */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 2px 10px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.section-title {
+  text-align: left;
+}
+
+/* Area icon shown in the group/sub-group headers (mdi, accent-colorred). */
+.section-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.section-h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Count shown as a soft accent pill - used on floor/area/type headers. */
+.section-count {
+  margin-left: auto;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Instance source badge shown on area/room section headers when a room
+   contains devices from a remote HA instance. Uses accent-2 to stay visually
+   distinct from the count pill (which uses accent). */
+.section-instance-badge {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.dashboard-groupby {
+  margin-bottom: 18px;
+}
+
+/* Manager area organizer */
+.org-intro {
+  margin: 0 0 16px;
+}
+
+/* The whole row is the edit button (no separate pencil): reset button chrome,
+   make it full-width/left-aligned, and give it a clear tappable affordance. */
+.org-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+.org-row:hover {
+  background: var(--card-active);
+  border-color: var(--accent);
+}
+.org-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.org-row:active {
+  transform: translateY(1px);
+}
+
+.tap-hint {
+  color: #e0a23b;
+  font-weight: 600;
+}
+
+.org-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.org-info .meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-edit {
+  flex-shrink: 0;
+  font-size: 1.05rem;
+}
+
+/* Integration brand badge (logo + name) on manager device rows. */
+.int-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40%;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.int-badge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.int-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 4px;
+}
+/* Generic fallback glyph (puzzle piece) when an integration has no brand logo. */
+.int-generic {
+  fill: var(--muted);
+  opacity: 0.8;
+}
+
+/* Account avatar + dropdown menu in the dashboard header. */
+.account {
+  position: relative;
+  flex-shrink: 0;
+}
+.account-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+}
+.account-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+}
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 170px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.account-head {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-menu button {
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+}
+.account-menu button:hover {
+  background: var(--card-active);
+}
+.account-menu button.danger {
+  color: #e0524d;
+}
+
+/* Admin password-rules controls (under Sign-in methods). */
+.pw-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 13px;
+  background: var(--card-active);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.pw-rules-len {
+  display: flex;
+  gap: 14px;
+}
+.pw-rules-len label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.pw-rules-len input {
+  width: 90px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.pw-rules .checkbox-row {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.pw-rules input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+/* Password requirements hint inside the Change password dialog. */
+.pw-reqs {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  background: var(--card-active);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* "Account expired" prompt on the login screen. */
+.expired-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 45%, var(--border));
+  background: color-mix(in srgb, #ef4444 12%, var(--card-active));
+  color: var(--text);
+  text-align: left;
+}
+.expired-notice span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Small explanatory note under a form field. */
+.field-note {
+  margin: -4px 0 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* Selected-device rows in the user editor: remove (✕), name, optional expiry.
+   The expiry control lives right on the device you allow/disallow. */
+.sel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sel-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sel-remove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+.sel-remove:hover {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--border));
+  color: #ef4444;
+}
+.sel-expiry {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.sel-expiry input[type='date'] {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+[data-theme='dark'] .sel-expiry input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* "Expiring devices" recap: a glanceable list of what's due to disappear. */
+.entity-expiry {
+  margin-top: 14px;
+  padding: 12px 13px;
+  background: var(--card-active);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.expiring-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.expiring-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expiring-date {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Organize: Devices / Areas sub-tabs - reuse the segmented "split" control
+   (.lb-scope), left-aligned with room below before the content. */
+.organize-tabs {
+  margin: 0 0 18px;
+}
+
+/* Area organizer (floors → areas) */
+.area-org-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.area-add {
+  flex-shrink: 0;
+}
+.area-org section {
+  margin-bottom: 8px;
+}
+.area-empty {
+  margin: 0 0 10px;
+}
+.area-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--input-bg);
+  color: var(--accent);
+}
+/* Theming comes from .user-filter (already in the cached stylesheet); this only
+   adds the layout it needs in the area row. */
+.area-floor-select {
+  flex-shrink: 0;
+  max-width: 45%;
+}
+
+/* Quick-edit dialog form fields */
+.modal-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.modal-form input,
+.modal-form select {
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+/* Area sub-sections nested under a floor: each is a rounded accordion row. */
+.area-subgroup {
+  margin: 0 0 10px;
+}
+
+.area-subhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 11px 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.area-subhead:hover {
+  border-color: var(--accent);
+}
+
+.area-subgroup .grid {
+  margin: 12px 2px 6px;
+}
+
+/* Each top-level view (Dashboard, Lists, Organize, Schedules) springs in on nav.
+   (Device cards no longer rise individually: sections now animate their own
+   height open/closed via <Collapsible>, so a per-card rise on top read as
+   motion-on-motion.) */
+@keyframes cc-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.view-swap { animation: cc-rise 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .view-swap { animation: none; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+/* Compact view: smaller, denser cards so more devices fit per screen. The grid
+   is responsive either way (more columns on wider screens), but compact also
+   shrinks each card's internals. On an average phone this fits roughly two
+   climate cards plus three lights/switches without much scrolling. */
+.compact .grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.compact section {
+  margin-bottom: 18px;
+}
+.compact section h2 {
+  margin-bottom: 8px;
+}
+.compact .card {
+  padding: 12px;
+}
+.compact .device-sub,
+.compact .slider {
+  font-size: 0.76rem;
+}
+.compact .temp-control {
+  margin: 8px 0;
+  gap: 10px;
+}
+.compact .temp-control button {
+  width: 32px;
+  height: 32px;
+  font-size: 1.15rem;
+}
+.compact .temp-value {
+  font-size: 1.35rem;
+  min-width: 56px;
+}
+.compact .mode-row {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+}
+.compact .mode {
+  padding: 5px 4px;
+  font-size: 0.74rem;
+  min-height: 28px;
+}
+/* Compact: on climate cards, swap the bulky mode button-row and fan slider for
+   space-saving dropdowns (regular view keeps the full controls). The fan slider
+   (.fan-modes) is hidden and replaced by the .card-fan-dd dropdown; the mode
+   button-row (.card-modes) by the .card-mode-dd dropdown. */
+.compact .fan-modes {
+  display: none;
+}
+.card-dd {                 /* mode/fan dropdown wrapper - hidden in regular view */
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.card-dd > .muted {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 0 0 auto;
+}
+.card-dd select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.compact .card-modes { display: none; }
+.compact .card-mode-dd,
+.compact .card-fan-dd { display: flex; }
+.compact .switch {
+  width: 40px;
+  height: 22px;
+}
+.compact .switch .knob {
+  width: 16px;
+  height: 16px;
+}
+.compact .switch.on .knob {
+  left: 21px;
+}
+
+/* Springy morph when switching between comfortable and compact view: the cards
+   and their controls resize with an overshoot instead of snapping. Scoped to
+   `.morphing` (added only for the ~half-second of the switch) and marked
+   important so it wins over each element's own transition just for that moment,
+   without touching normal interactions the rest of the time. */
+.dashboard.morphing .grid,
+.dashboard.morphing section,
+.dashboard.morphing section h2,
+.dashboard.morphing .card,
+.dashboard.morphing .device-sub,
+.dashboard.morphing .slider,
+.dashboard.morphing .temp-control,
+.dashboard.morphing .temp-control button,
+.dashboard.morphing .temp-value,
+.dashboard.morphing .mode-row,
+.dashboard.morphing .mode,
+.dashboard.morphing .switch,
+.dashboard.morphing .switch .knob {
+  transition:
+    padding 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    gap 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    min-width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    min-height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    font-size 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    margin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard.morphing .grid, .dashboard.morphing section, .dashboard.morphing section h2,
+  .dashboard.morphing .card, .dashboard.morphing .device-sub, .dashboard.morphing .slider,
+  .dashboard.morphing .temp-control, .dashboard.morphing .temp-control button,
+  .dashboard.morphing .temp-value, .dashboard.morphing .mode-row, .dashboard.morphing .mode,
+  .dashboard.morphing .switch, .dashboard.morphing .switch .knob { transition: none !important; }
+}
+
+.device {
+  border: 1px solid transparent;
+  transition: background 0.3s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+/* State-reactive accent. Each accent sets --g; `.glow` paints with it. */
+.accent-warm { --g: #fbbf24; } /* light on  */
+.accent-on { --g: #22c55e; } /* generic on */
+.accent-heat { --g: #ef4444; } /* heating   */
+.accent-cool { --g: #3b82f6; } /* cooling   */
+.accent-dry { --g: #06b6d4; } /* dry       */
+.accent-sky { --g: #38bdf8; } /* cover open */
+.accent-amber { --g: #f59e0b; } /* unlocked  */
+.accent-media { --g: #a855f7; } /* playing   */
+.accent-mix { --g: color-mix(in srgb, #ef4444, #3b82f6); } /* heat+cool blend */
+
+.device.glow {
+  border-color: color-mix(in srgb, var(--g) 55%, transparent);
+  background: var(--card);
+  box-shadow:
+    inset 0 0 60px -34px var(--g),
+    0 0 22px -8px var(--g);
+}
+
+/* Tint the device name with the accent so it reads at a glance. */
+.device.glow .device-name {
+  color: color-mix(in srgb, var(--g) 70%, var(--text));
+}
+
+.device.pulse {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: inset 0 0 60px -34px var(--g), 0 0 16px -10px var(--g);
+  }
+  50% {
+    box-shadow: inset 0 0 72px -24px var(--g), 0 0 30px -4px var(--g);
+  }
+}
+
+/* Spinning indicator for a running fan. */
+.fan-spin {
+  margin-right: auto;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--accent-2);
+  animation: spin 2.4s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device.pulse,
+  .fan-spin {
+    animation: none;
+  }
+}
+
+/* --- PWA install banner --- */
+.install-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  max-width: 460px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  z-index: 60;
+  animation: slide-up 0.3s ease;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(140%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.install-icon {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+/* When the brand glyph is the logo image (the default) rather than an emoji.
+   Sized in em so it scales with the heading it sits in (bigger on the login
+   title, smaller in the dashboard topbar) - just like an emoji would. */
+img.app-icon {
+  height: 1.1em;
+  width: 1.1em;
+  border-radius: 0.2em;
+  vertical-align: -0.2em;
+}
+img.install-icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.install-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-text span {
+  font-size: 0.8rem;
+}
+
+.install-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-banner {
+    animation: none;
+  }
+}
+
+.device-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.device-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Manager-only edit pencil on a control card */
+.device-edit {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.device-edit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.device-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Toggle switch */
+.switch {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--switch-bg);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.switch.on {
+  background: var(--accent-2);
+}
+
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: left 0.2s;
+}
+
+.switch.on .knob {
+  left: 23px;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.slider input {
+  width: 100%;
+}
+
+/* Themed range slider (fan speed, brightness, volume): HA-blue fill + thumb on
+   a muted track. The filled portion is driven by an inline --fill (0-100%);
+   Firefox uses ::-moz-range-progress instead. */
+.slider input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px; /* hit area + room for the thumb; the track is drawn shorter */
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+.slider input[type='range']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* WebKit: a 6px track with the HA-blue fill (driven by --fill) + centered thumb. */
+.slider input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--switch-bg);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: var(--fill, 0%) 100%;
+}
+.slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px; /* center the 20px thumb on the 6px track */
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+/* Firefox: track + native progress fill + thumb. */
+.slider input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--switch-bg);
+}
+.slider input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.slider input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* Climate */
+.climate-readout {
+  margin-top: 10px;
+}
+
+.temp-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.temp-control button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+  /* Press-and-hold to repeat: stop touch scrolling, the long-press context
+     menu, text selection and double-tap zoom from interrupting the hold. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.temp-control button:active {
+  background: var(--card-active);
+}
+
+.temp-control button:disabled {
+  opacity: 0.4;
+}
+
+.temp-value {
+  font-size: 1.8rem;
+  font-weight: 600;
+  min-width: 70px;
+  text-align: center;
+}
+
+.mode-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 18px;
+  align-items: stretch; /* same-row buttons share the tallest height */
+}
+
+.mode {
+  padding: 7px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-transform: capitalize;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  min-height: 34px;
+  /* Wrap long labels (and break long single words like "MediumHigh") so the
+     button grows vertically instead of the text overflowing. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* Selected mode / lock-state button takes the card's state accent
+   (Heat = red, Cool = blue, locked = green, ...), falling back to blue. */
+.mode.selected {
+  background: var(--g, var(--accent));
+  border-color: var(--g, var(--accent));
+  color: #fff;
+}
+
+/* "Off" is a neutral state - grey it out even when selected. */
+.mode.mode-off.selected {
+  background: var(--switch-bg);
+  border-color: var(--switch-bg);
+  color: var(--text);
+}
+
+/* Climate fan-speed row. */
+.fan-modes {
+  margin-top: 20px;
+}
+/* Space the "auto" (etc.) buttons below the fan-speed slider. */
+.fan-slider {
+  margin-bottom: 6px;
+}
+.fan-slider + .mode-row {
+  margin-top: 22px;
+}
+
+.fan-modes > .muted {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Other controls inside a glowing card pick up the accent too. */
+.device.glow .switch.on {
+  background: var(--g);
+}
+
+/* Subtle accent tint on control buttons (media transport, cover open/close,
+   climate +/-). `.mode` buttons are excluded: they already convey state through
+   the accent background (.mode.selected) with white text, so tinting them too
+   made lock Lock/Unlock text clash - amber-on-amber on a selected button, and a
+   loud accent-on-accent tint against the glowing card when not selected. Mode
+   buttons keep neutral text (var(--text)) / white-on-accent when selected. */
+.device.glow .btn-row button:not(.mode),
+.device.glow .temp-control button {
+  border-color: color-mix(in srgb, var(--g) 45%, var(--border));
+  color: color-mix(in srgb, var(--g) 55%, var(--text));
+}
+
+.device.glow .btn-row button:hover:not(:disabled),
+.device.glow .temp-control button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--g) 16%, var(--input-bg));
+}
+
+/* --- Admin / manage users --- */
+.admin {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* The Activity (logbook) view spans the full width on every screen. */
+.admin-wide {
+  max-width: none;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0; /* keep the action group compact; let the title wrap instead */
+  /* If the buttons still can't fit (very narrow screen / huge font), wrap them
+     onto another line, kept to the right, rather than overlapping the title. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Never wrap "Log out" / "Install": a wrapped label made the action row tall,
+   and the default stretch then ballooned every button. nowrap keeps the row
+   short, and the stretch gives the buttons a uniform height. */
+.topbar-actions button {
+  white-space: nowrap;
+}
+
+.btn-primary {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  color: var(--error);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.btn-success {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-2);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.icon-settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.icon-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.icon-settings-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-btn {
+  cursor: pointer;
+  display: inline-block;
+}
+
+.device-types {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.type-chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.user-row .meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.or-sep {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 14px 0;
+  gap: 10px;
+}
+.or-sep::before,
+.or-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.btn-oauth {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.btn-oauth:hover {
+  border-color: var(--accent);
+}
+.oauth-logo {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.onboarding {
+  text-align: center;
+  padding: 48px 20px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.onboarding-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.onboarding h2 {
+  margin: 0 0 8px;
+}
+
+.warn-box {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--warn-text, #92400e);
+  background: var(--warn-bg, rgba(245, 158, 11, 0.14));
+  border: 1px solid var(--warn-border, rgba(245, 158, 11, 0.4));
+}
+
+.user-filter {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* Logbook filter controls */
+.lb-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lb-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.lb-range input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  color-scheme: dark light;
+}
+
+.lb-dash {
+  color: var(--muted);
+}
+
+/* On phones, stack the controls vertically so wide native date inputs (which
+   ignore flex-shrink on iOS/Android) can never run off the edge. */
+@media (max-width: 560px) {
+  .lb-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lb-range {
+    flex-direction: column;
+    align-items: stretch;
+    flex-basis: auto;
+  }
+  .lb-range input {
+    width: 100%;
+  }
+  .lb-dash {
+    display: none;
+  }
+  .user-filter,
+  .lb-multi,
+  .lb-multi > summary {
+    width: 100%;
+  }
+}
+
+.lb-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.lb-nav .icon-only {
+  font-size: 1.1rem;
+  min-width: 40px;
+}
+
+/* Item multi-select (native <details> dropdown) */
+.lb-multi {
+  position: relative;
+}
+
+.lb-multi > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.lb-multi > summary::-webkit-details-marker {
+  display: none;
+}
+
+.lb-multi > summary::after {
+  content: ' ▾';
+  color: var(--muted);
+}
+
+.lb-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+}
+
+.lb-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.lb-menu-row:hover {
+  background: var(--input-bg);
+}
+
+.lb-menu-row .mdi-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.lb-menu-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-menu-clear {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* Home Assistant logbook-style list */
+.lb-group {
+  margin-top: 14px;
+}
+
+.lb-date {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.lb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.lb-row:last-child {
+  border-bottom: none;
+}
+
+.lb-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+}
+
+.lb-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-line {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.lb-entity {
+  color: var(--accent);
+  font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.lb-entity:hover {
+  text-decoration: underline;
+}
+
+/* Marks an activity row that was fired by a schedule (not a manual action). */
+.lb-sched-badge {
+  margin-left: 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0 6px;
+  border-radius: 999px;
+  vertical-align: 1px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* "Showing only X" banner when filtered to specific entities. */
+.lb-filter-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 0.88rem;
+}
+.lb-overflow {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ff9800 16%, transparent);
+  color: var(--text);
+  font-size: 0.84rem;
+}
+.lb-clear {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.lb-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+/* "These logs / All" segmented toggle in the Activity header. */
+.lb-scope {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.lb-scope button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lb-scope button + button {
+  border-left: 1px solid var(--border);
+}
+.lb-scope button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.lb-scope-note {
+  font-size: 0.82rem;
+  margin: -4px 0 12px;
+}
+
+/* Per-device interactive history chart (uPlot). */
+.lb-chart {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  margin-bottom: 14px;
+  background: var(--card, transparent);
+}
+.lb-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.lb-chart-title {
+  font-weight: 600;
+}
+.lb-chart-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.lb-chart-canvas {
+  width: 100%;
+}
+/* uPlot dark-mode readability: let our axis/legend colors win. */
+.lb-chart .u-legend {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.lb-chart .u-title {
+  display: none;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Manager badge - distinct soft pill so managers stand out in the user list. */
+.badge-manager {
+  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+  color: var(--accent-2);
+}
+
+/* Account expiry: amber when a future expiry is set, red once it has passed. */
+.badge-expires {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #f59e0b;
+}
+.badge-expired {
+  background: color-mix(in srgb, #ef4444 20%, transparent);
+  color: #ef4444;
+}
+
+.editor h3 {
+  margin: 0 0 16px;
+}
+
+.editor > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.editor input[type='text'],
+.editor input[type='password'],
+.editor input[type='tel'],
+.editor input[type='date'] {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+/* Make the native date picker's calendar icon visible in dark mode. */
+[data-theme='dark'] .editor input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.editor input:disabled {
+  opacity: 0.6;
+}
+
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.all-toggle {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.all-note {
+  margin: 4px 0 8px;
+}
+
+.devices-heading {
+  margin: 18px 0 8px;
+}
+
+.entity-group {
+  margin: 10px 0;
+}
+
+.entity-group h4 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.entity-group .checkbox-row {
+  padding: 5px 0;
+  font-size: 0.9rem;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.search {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+
+/* Search box with a clear (✕) button. */
+.search-wrap {
+  position: relative;
+}
+.search-wrap .search {
+  display: block;
+  padding-right: 36px; /* room for the clear button */
+}
+/* Hide the browser's native clear so there's only ours. */
+.search-wrap .search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--switch-bg);
+  color: var(--text);
+  font-size: 0.68rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.search-clear:hover {
+  opacity: 1;
+}
+
+/* --- Entity picker (redesigned) --- */
+.selected-box {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.selected-head {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.chip {
+  cursor: pointer;
+}
+
+.chip span {
+  opacity: 0.8;
+}
+
+/* "+ Add" affordance in a pill row: an outlined pill, not a filled selection. */
+.chip-add {
+  background: transparent;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+}
+.chip-add .sm-caret { font-size: 0.7rem; opacity: 1; }
+
+.add-specific {
+  margin-bottom: 14px;
+}
+.add-specific-label {
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+/* Gmail-style entity field: chips + inline search, with a suggestions menu. */
+.chips-field {
+  position: relative;
+}
+
+.chips-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--input-bg);
+}
+
+.chips-box:focus-within {
+  border-color: var(--accent);
+}
+
+.chips-input {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.92rem;
+  padding: 4px 2px;
+  outline: none;
+}
+
+.chips-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 280px;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+}
+
+.chips-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chips-menu-row:hover {
+  background: var(--input-bg);
+}
+
+/* Multi-select tick: a checkmark slot that fills when the row is selected. */
+.chips-check {
+  flex: none;
+  width: 1.1em;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+.chips-menu-row.sel .chips-menu-name { font-weight: 600; color: var(--accent); }
+
+.chips-menu-row .mdi-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chips-menu-name {
+  flex-shrink: 0;
+}
+
+.chips-menu-id {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floor-group {
+  margin-bottom: 14px;
+}
+
+.floor-head {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  padding: 8px 0 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.floor-group .entity-group {
+  margin: 6px 0 6px 6px;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pick-row:hover {
+  background: var(--input-bg);
+}
+
+/* Clear selected state in the picker. */
+.pick-row.picked {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.pick-row input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.pick-icon {
+  flex-shrink: 0;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.pick-row.picked .pick-icon {
+  color: var(--accent);
+}
+
+.mdi-icon {
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Name over a muted entity_id - reads cleanly and never crowds on mobile. */
+.pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-id {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-instance-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  vertical-align: middle;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Group-by segmented control */
+.group-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 10px;
+  font-size: 0.8rem;
+  /* One line: the Type/Area/Floor + list chips scroll horizontally, never wrap. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+.group-by::-webkit-scrollbar {
+  display: none; /* WebKit: hide the scrollbar, still scrollable by wheel/drag */
+}
+.group-by > * {
+  flex: 0 0 auto; /* keep each chip its natural width - no shrinking or wrapping */
+}
+
+/* Lists manager (account menu -> Lists) */
+.list-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.list-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card, var(--surface));
+  color: var(--text);
+  font: inherit;
+}
+.list-row {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.list-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* Drag-to-reorder handle. touch-action:none so dragging from the handle moves
+   the row instead of scrolling the page on touch. */
+.list-drag {
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.list-drag:active { cursor: grabbing; }
+/* Rows slide smoothly as one is dragged past them (the dragged row itself has
+   transition:none set inline so it tracks the pointer 1:1). */
+/* Springy overshoot so the rows sliding aside feel jelly-like, not mechanical. */
+/* No `will-change` here: it would make every row its own stacking context and
+   trap an open device-search dropdown behind the rows below it. It's only needed
+   while actually dragging, so it lives on `.dragging`. */
+.list-row { transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.list-row.dragging {
+  background: var(--card-active);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  position: relative;
+  will-change: transform;
+  cursor: grabbing;
+}
+
+/* ---- Jelly entrances: menus, popups, dialogs and sheets spring into view,
+   sharing the same overshoot curve as the drag reorder above. ---- */
+@keyframes cc-pop-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cc-modal-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cc-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes cc-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.account-menu, .sched-smenu, .chips-menu {
+  animation: cc-pop-in 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top left; /* grow out of the trigger, so the motion reads clearly */
+}
+.account-menu { transform-origin: top right; }
+
+/* The dropdown caret flips up while its menu is open, so the trigger itself
+   responds (not just the panel). */
+.sm-caret { display: inline-block; transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.sched-smenu-wrap button[aria-expanded="true"] .sm-caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .sm-caret { transition: none; } }
+.modal { animation: cc-modal-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-overlay, .sched-overlay { animation: cc-overlay-in 0.18s ease; }
+.sched-sheet {
+  animation: cc-sheet-in 0.4s cubic-bezier(0.2, 1.3, 0.35, 1);
+  /* The sheet is anchored to the bottom, so a spring that overshoots would lift it
+     off the edge and reveal a sliver of the backdrop; this paints a card-coloured
+     block just below it to cover any overshoot gap. */
+  box-shadow: 0 100px 0 var(--card);
+}
+
+/* ...and reverse on the way out (quick, no overshoot) so closing is animated too. */
+@keyframes cc-pop-out { to { opacity: 0; transform: scale(0.6); } }
+@keyframes cc-modal-out { to { opacity: 0; transform: scale(0.92); } }
+@keyframes cc-sheet-out { to { transform: translateY(100%); } }
+@keyframes cc-overlay-out { to { opacity: 0; } }
+.account-menu.closing, .sched-smenu.closing { animation: cc-pop-out 0.15s ease forwards; }
+.modal.closing { animation: cc-modal-out 0.16s ease forwards; }
+.modal-overlay.closing, .sched-overlay.closing { animation: cc-overlay-out 0.16s ease forwards; }
+.sched-sheet.closing { animation: cc-sheet-out 0.24s cubic-bezier(0.4, 0, 1, 1) forwards; }
+
+/* The on/off knob overshoots slightly as it slides, so switches feel springy. */
+.switch .knob { transition: left 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu, .sched-smenu, .chips-menu, .modal,
+  .modal-overlay, .sched-overlay, .sched-sheet,
+  .account-menu.closing, .sched-smenu.closing, .modal.closing,
+  .modal-overlay.closing, .sched-overlay.closing, .sched-sheet.closing { animation: none; }
+  .sched-sheet { box-shadow: none; }
+  .switch .knob { transition: left 0.15s ease; }
+}
+.list-head .list-name-edit {
+  flex: 1;
+  min-width: 140px;
+  font-weight: 600;
+}
+.list-count {
+  white-space: nowrap;
+}
+.list-assign {
+  padding-top: 12px;
+}
+
+/* Reusable open/close height animation (the <Collapsible> component). The wrapper
+   animates its row track 0fr <-> content height; the inner clips during the
+   grow/shrink, and an open region can opt into overflow:visible (`.free`) so a
+   child dropdown can escape. */
+@keyframes cc-expand-in { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+@keyframes cc-expand-out { from { grid-template-rows: 1fr; } to { grid-template-rows: 0fr; } }
+.collapsible { display: grid; grid-template-rows: 1fr; }
+.collapsible.opening { animation: cc-expand-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.collapsible.closing { animation: cc-expand-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.collapsible > .collapsible-inner { overflow: hidden; min-height: 0; }
+.collapsible.free > .collapsible-inner { overflow: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .collapsible.opening, .collapsible.closing { animation: none; }
+  .collapsible > .collapsible-inner { overflow: visible; }
+}
+
+.seg {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.seg.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.seg:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.seg-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+}
+
+/* Management Users/Settings tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+
+.tabs .seg {
+  padding: 7px 16px;
+  font-size: 0.9rem;
+}
+
+.tab-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.settings-card {
+  margin-bottom: 16px;
+}
+
+/* Settings cards: put the title and its description on their own lines with
+   breathing room before the control (they were inline spans running together). */
+.settings-card > .device-name {
+  display: block;
+}
+.settings-card > .meta {
+  display: block;
+  margin: 4px 0 14px;
+  line-height: 1.45;
+}
+
+/* Space the two device searches in the user editor apart. */
+.browse-devices {
+  margin-top: 6px;
+}
+.add-specific .chips-field,
+.browse-devices .search {
+  margin-top: 6px;
+}
+
+/* Collapsible group (accordion) */
+.acc-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.acc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.acc-caret {
+  transition: transform 0.15s ease;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.acc-caret.open {
+  transform: rotate(90deg);
+}
+
+.acc-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.acc-count {
+  font-size: 0.8rem;
+}
+
+.acc-body {
+  padding: 4px 8px 8px;
+}
+
+.acc-subgroup {
+  margin: 2px 0 6px;
+}
+
+.acc-subhead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+}
+
+.acc-subtitle {
+  flex: 1;
+  font-weight: 600;
+}
+
+/* --- Device cards (generic) --- */
+.device-state {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+  text-transform: capitalize;
+}
+
+.controls {
+  margin-top: 12px;
+}
+
+.row-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.btn-row button:disabled {
+  opacity: 0.4;
+}
+
+.info-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.info-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* --- Detail panel (modal) --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+.attr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.attr-table td {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.attr-table td:first-child {
+  width: 40%;
+  white-space: nowrap;
+}
+
+.attr-val {
+  word-break: break-word;
+}
+
+.modal h4 {
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.modal code {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+/* =====================================================================
+   Climate Scheduler
+   ===================================================================== */
+
+.sched-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+.sched-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.sched-header h2 {
+  flex: 1;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+/* =======================================================
+   Scheduler UI - all scheduler CSS from here to end of file
+   ======================================================= */
+
+/* SchedSwitch */
+.sched-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  height: 24px;
+  border: none;
+  border-radius: 12px;
+  background: var(--switch-bg, #555);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.sched-switch.on { background: var(--accent); }
+.sched-switch:disabled { opacity: 0.5; cursor: default; }
+.sched-switch-knob {
+  position: absolute;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+.sched-switch.on .sched-switch-knob { transform: translateX(20px); }
+
+/* SchedSearchableMenu */
+.sched-smenu-wrap { position: relative; }
+.sched-smenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+  z-index: 300;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.28);
+  overflow: hidden;
+}
+.sched-smenu-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--input-bg);
+}
+.sched-smenu-search-icon { color: var(--muted); font-size: 0.9rem; }
+.sched-smenu-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.88rem;
+  outline: none;
+  padding: 0;
+}
+.sched-smenu-list { max-height: 220px; overflow-y: auto; }
+.sched-smenu-empty { padding: 10px 14px; color: var(--muted); font-size: 0.88rem; }
+.sched-smenu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+  gap: 6px;
+}
+.sched-smenu-item:hover, .sched-smenu-item.hi { background: var(--card-active); }
+.sched-smenu-item.sel { color: var(--accent); }
+.sched-smenu-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-smenu-sub { margin-left: auto; color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+.sched-smenu-check { color: var(--accent); font-size: 0.9rem; flex-shrink: 0; }
+.sched-smenu-footer { border-top: 1px solid var(--border); }
+.sched-menu-create {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sched-menu-create:hover { background: var(--card-active); }
+.sched-menu-create:disabled { opacity: 0.5; cursor: default; }
+
+/* Schedule switcher trigger */
+.sched-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--card-shadow);
+  margin-bottom: 12px;
+}
+.sched-switcher:hover { background: var(--card-active); }
+.sched-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sched-switcher-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-switcher-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sched-caret { font-size: 0.65rem; color: var(--muted); }
+
+/* Panel / view layout */
+.sched-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+/* --- Telegram Notifications panel --- */
+.tg-chan-list { display: flex; flex-direction: column; gap: 8px; }
+.tg-chan-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  text-align: left;
+}
+.tg-chan-item:hover { border-color: var(--accent); }
+.tg-chan-name { font-weight: 600; }
+.tg-chan-caret { color: var(--muted); font-size: 1.4rem; line-height: 1; }
+.tg-detail-bar { justify-content: flex-start; }
+.tg-back { margin-right: 4px; }
+.tg-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.tg-search input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+}
+.tg-note { font-size: 0.8rem; margin-bottom: 10px; }
+.tg-feed { display: flex; flex-direction: column; gap: 2px; }
+.tg-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.tg-msg-time { font-size: 0.72rem; }
+.tg-msg-text { white-space: pre-wrap; word-break: break-word; }
+.tg-msg-img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  margin: 2px 0;
+  object-fit: cover;
+}
+.tg-img-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  border: 1px dashed var(--border);
+  font-size: 0.8rem;
+}
+.tg-older { align-self: center; margin-top: 10px; }
+/* "Last read" divider in the message feed */
+.tg-readline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 2px;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tg-readline::before, .tg-readline::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0.45;
+}
+/* --- Telegram admin --- */
+.tg-chan-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.tg-chan-row input {
+  flex: 1 1 0;
+  min-width: 0;               /* let inputs shrink so the remove button stays in view */
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+}
+.tg-chan-id { flex: 0 1 96px !important; }
+.tg-chan-rm {
+  flex: none;
+  padding: 6px 10px;
+  line-height: 1;
+  font-size: 1rem;
+}
+.tg-perm-scroll { overflow-x: auto; }
+.tg-perm-table { border-collapse: collapse; width: 100%; }
+.tg-perm-table th, .tg-perm-table td { padding: 6px 10px; text-align: center; }
+.tg-perm-table th { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.tg-perm-user { text-align: left !important; white-space: nowrap; }
+.tg-conn-dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--muted);
+  vertical-align: middle;
+}
+.tg-conn-dot.on { background: #3fb950; }
+/* Unread dots (avatar, menu item, channel list) */
+.account-btn { position: relative; }
+.tg-badge {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5484d;
+}
+.tg-badge-avatar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.tg-badge-item { margin-left: 6px; vertical-align: middle; }
+.tg-method { margin: 4px 0 12px; flex-wrap: wrap; }
+/* Restart Guard suggestion tip (admin schedules) */
+.rg-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.rg-tip a { color: var(--accent); }
+.rg-tip-x { flex: none; padding: 2px 6px; line-height: 1; }
+/* Error-boundary fallbacks: shown when a component crashes, so one bad piece
+   never blanks the whole app. */
+.cc-error {
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.cc-error p { margin: 0 0 14px; }
+.cc-card-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+.sched-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.sched-view { display: flex; flex-direction: column; gap: 0; }
+
+/* Schedule card */
+.sched-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sched-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sched-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+}
+.sched-name-input:focus { border-bottom-color: var(--accent); }
+
+/* Subsection */
+.sched-sub { display: flex; flex-direction: column; gap: 6px; }
+.sched-unit-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* Chip row */
+.sched-chip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sched-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--card-active);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sched-chip-x {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.sched-chip-x:hover { color: var(--text); }
+.sched-chip-add {
+  border-style: dashed;
+  color: var(--accent);
+  cursor: pointer;
+  background: transparent;
+}
+.sched-chip-add:hover { background: var(--card-active); }
+
+/* Week strip */
+.sched-strip-wrap { position: relative; }
+.sched-strip-axis {
+  position: relative;
+  height: 14px;
+  margin-left: 36px;
+  margin-bottom: 2px;
+}
+.sched-strip-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: var(--muted);
+  user-select: none;
+}
+.sched-strip { display: flex; flex-direction: column; gap: 3px; }
+.sched-strip-row { display: flex; align-items: center; gap: 6px; height: 14px; }
+.sched-strip-day {
+  width: 30px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  text-align: right;
+}
+.sched-strip-bar {
+  flex: 1;
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--input-bg);
+  overflow: hidden;
+}
+.sched-strip-seg { position: absolute; top: 0; height: 100%; }
+
+/* Entry row */
+.sched-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+.sched-entry-row[role=button] { cursor: pointer; }
+.sched-entry-row[role=button]:hover { background: var(--card-active); }
+.sched-entry-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sched-entry-dot-icon { font-size: 0.72rem; color: #fff; line-height: 1; }
+.sched-entry-info { flex: 1; min-width: 0; }
+.sched-entry-time-line { display: flex; align-items: baseline; gap: 6px; }
+.sched-entry-time { font-size: 0.92rem; font-weight: 600; color: var(--text); }
+.sched-entry-mode-label { font-size: 0.75rem; color: var(--muted); }
+.sched-entry-days { display: flex; gap: 4px; font-size: 0.68rem; color: var(--text); margin-top: 2px; }
+.sched-entry-source {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+.sched-entry-warn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e53935;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.sched-entry-action { color: var(--muted); font-size: 1.1rem; }
+
+/* Add button / danger link */
+.sched-add-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 7px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sched-add-btn:hover { background: var(--card-active); }
+.sched-danger-link {
+  margin-top: 4px;
+  padding: 8px 0 0;
+  border: none;
+  background: none;
+  color: #e53935;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-align: left;
+}
+.sched-clash-note {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(229,57,53,0.12);
+  border-radius: var(--radius);
+  color: #e53935;
+  font-size: 0.82rem;
+}
+
+/* Entry editor overlay + sheet */
+.sched-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sched-sheet {
+  background: var(--card);
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 16px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sched-sheet-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sched-sheet-title { margin: 0; font-size: 1rem; font-weight: 700; }
+.sched-edit-ctx {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 6px 10px;
+  background: var(--input-bg);
+  border-radius: var(--radius);
+}
+.sched-field-group { display: flex; flex-direction: column; gap: 6px; }
+/* Fan-speed row: label on the left, opt-in toggle on the right. */
+.sched-fan-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sched-field-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sched-time-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 600;
+  width: 140px;
+}
+/* Override "Active dates" range pickers */
+.sched-date-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.sched-date-field { display: flex; flex-direction: column; gap: 4px; }
+.sched-date-field > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sched-date-field input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+.sched-day-btn-row { display: flex; gap: 4px; }
+.sched-day-toggle {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.sched-day-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sched-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.sched-preset-btn { font-size: 0.8rem; padding: 4px 10px; }
+.sched-mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sched-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.sched-mode-btn.on { font-weight: 600; }
+.sched-mode-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sched-temp-row { display: flex; align-items: center; gap: 12px; }
+.sched-temp-big {
+  font-size: 1.7rem;
+  font-weight: 700;
+  min-width: 72px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.sched-temp-row input[type=range] { flex: 1; }
+.sched-range-ends { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
+.sched-fan-group { margin-top: 8px; }
+.sched-fan-group + .sched-fan-group { border-top: 1px solid var(--border); padding-top: 8px; }
+.sched-fan-group-label { display: block; margin-bottom: 4px; font-size: 0.78rem; }
+.sched-fan-note { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
+/* Compact view hides `.fan-modes` on the dashboard cards to shrink them; the
+   schedule editor reuses the same control, so un-hide it here (higher specificity
+   than `.compact .fan-modes`) - the editor is never meant to be compacted. */
+.compact .sched-fan-group .fan-modes { display: block; }
+
+/* Admin user sections */
+.sched-admin-user-section { margin-bottom: 20px; }
+.sched-admin-user-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 6px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.sched-admin-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.sched-admin-count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+
+/* Admin pivot: searchable selector spacing + detail section headings */
+.sched-admin-select { margin-bottom: 14px; }
+.sched-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 20px 0 10px;
+}
+.sched-section-label:first-of-type { margin-top: 16px; }
+.sched-admin-prog { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+
+/* "Allow all climate (current & future)" toggle - its own row just above the
+   device grid, same in the user editor and the admin access grid. */
+/* `label.` (not just `.sched-all-toggle`) so this outweighs `.editor > label`,
+   which stacks a form label above its input; here the checkbox must sit inline
+   to the LEFT of its text, not centred on top. Same look in the admin access
+   grid, whose toggle is also a <label>. */
+label.sched-all-toggle {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+label.sched-all-toggle input { width: auto; cursor: pointer; accent-color: var(--accent); }
+
+/* Admin permissions 2-col grid */
+.sched-perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.sched-perm-grid .sched-perm-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.sched-perm-cell {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+  gap: 8px;
+}
+.sched-perm-cell:hover:not(:disabled):not(.locked) { background: var(--card-active); }
+.sched-perm-cell.on { border-color: var(--accent); }
+.sched-perm-cell.locked { opacity: 0.45; cursor: not-allowed; }
+.sched-perm-cell-name { flex: 1; min-width: 0; font-weight: 500; word-break: break-word; }
+.sched-perm-check { font-size: 0.9rem; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+
+/* Admin collapsible schedule rows */
+.sched-admin-sched {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  background: var(--card);
+  overflow: hidden;
+}
+.sched-admin-sched-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.sched-admin-chevron {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0 2px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.sched-admin-sched-main { flex: 1; min-width: 0; }
+.sched-admin-sched-name {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.sched-admin-meta { display: block; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+
+/* Marks a schedule as a date-scoped override in the admin views. */
+.sched-type-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.sched-admin-sched-name .sched-type-badge { margin-left: 8px; }
+.sched-override-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.sched-override-name { font-weight: 600; }
+.sched-override-meta { color: var(--muted); font-size: 0.85rem; }
+.sched-admin-trash {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.sched-admin-trash:hover { color: #e53935; background: rgba(229,57,53,0.1); }
+.sched-admin-body {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sched-admin-targets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .sched-perm-grid { grid-template-columns: 1fr; }
+  .sched-mode-grid { grid-template-columns: repeat(2, 1fr); }
+  .sched-temp-big { font-size: 1.4rem; min-width: 58px; }
+  .sched-sheet { padding: 14px 14px 40px; }
+  .sched-day-btn-row { gap: 3px; }
+  .sched-strip-day { width: 24px; font-size: 0.65rem; }
+  .sched-panel { padding: 0 12px 48px; }
+}

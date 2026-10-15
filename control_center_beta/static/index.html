@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Stamped by the server from config.yaml; check it to see which build is
+         live. The same version cache-busts the JS/CSS below (?v=). -->
+    <meta name="app-version" content="__APP_VERSION__" />
+    <title>Control Center</title>
+
+    <!-- Set the theme BEFORE first paint (the React app loads via in-browser
+         Babel, which is too late and causes a dark->light flash). Mirrors the
+         themePref/resolveTheme logic in app.jsx, using the same storage key. -->
+    <script>
+      (function () {
+        try {
+          var v = localStorage.getItem('ha_theme_v2');
+          var pref = v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+          var theme =
+            pref === 'system'
+              ? window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : pref;
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Relative href so styles resolve under any path prefix (Ingress).
+         ?v=… is stamped by the server so each release loads fresh CSS/JS. -->
+    <link rel="stylesheet" href="./styles.css?v=__APP_VERSION__" />
+
+    <!-- uPlot: tiny, zoomable time-series charts for the per-device history
+         graph (vendored locally, no CDN/internet at runtime). -->
+    <link rel="stylesheet" href="./vendor/uplot.min.css" />
+
+    <!-- PWA: installable, full-screen, native-feeling on phones.
+         use-credentials so the manifest loads behind a cookie auth gateway
+         (Cloudflare Access / Authelia / basic-auth) - the default no-credentials
+         manifest fetch gets blocked there and silently breaks install. -->
+    <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="theme-color" content="#1C3A5E" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Control Center" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" href="./icons/icon.svg" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+
+    <!-- React + Babel vendored locally (no npm, no build step, no CDN/internet
+         needed at runtime). Babel transforms app.jsx in the browser. -->
+    <script src="./vendor/react.production.min.js"></script>
+    <script src="./vendor/react-dom.production.min.js"></script>
+    <script src="./vendor/uplot.iife.min.js"></script>
+    <script src="./vendor/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="./app.jsx?v=__APP_VERSION__" data-presets="react"></script>
+  </body>
+</html>
