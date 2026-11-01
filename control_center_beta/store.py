@@ -1,53 +1,33 @@
 """Persistence layer for Control Center.
 
-Handles the user store (users.json), app settings (settings.json), activity log
-(activity.json), and the uploaded custom icon -- all under the same /data
-directory. Also provides the cfg_* accessors that read live display settings.
-No dependency on Flask, ha.py, access.py, or security.py.
+Backed by SQLite (see db.py) since v2.10.0. The public functions keep the exact
+same names, signatures and dict/list shapes they had in the JSON era, so routes,
+the scheduler and security.py are unchanged - only the internals are SQL. The
+uploaded icon stays a file under the data dir (ICON_DIR); db.py imports the
+legacy JSON into the database once, on first boot.
 """
 import json
-import os
 import threading
 import time
-from pathlib import Path
 
-import config
+import db
+from user import User
 from config import (
-    SUPERVISOR_TOKEN,
-    BASE_DIR,
     DEVICE_TYPES,
     APP_NAME,
     APP_ICON,
     addon_options,
     oauth_configured,
+    BASE_DIR,
 )
 
-
-def _store_path():
-    """Where accounts are read/written.
-
-    In the add-on this lives under /data (persisted across restarts and
-    updates); standalone it's users.json next to this file.
-    """
-    if os.environ.get("USERS_STORE"):
-        return Path(os.environ["USERS_STORE"])
-    if SUPERVISOR_TOKEN and Path("/data").is_dir():
-        return Path("/data/users.json")
-    return BASE_DIR / "users.json"
-
-
-STORE_FILE = _store_path()
-
-# Uploaded custom app icon lives next to the user store (persistent /data).
-ICON_DIR = STORE_FILE.parent
-SETTINGS_FILE = ICON_DIR / "settings.json"
-ACTIVITY_FILE = ICON_DIR / "activity.json"
+# The data dir (icon + db live together); kept for the icon helpers + callers
+# that import ICON_DIR.
+ICON_DIR = db.DATA_DIR
 ACTIVITY_MAX = 1000  # keep the most recent N actions
 
 
-# --- Settings cache --------------------------------------------------------
-# Settings are read on hot paths (including the live-broadcast access check, once
-# per state change), so cache them briefly to avoid a disk read every time.
+# --- Settings (kv-of-JSON table) + brief read cache ------------------------
 _SETTINGS_CACHE = {"ts": 0.0, "data": None}
 _SETTINGS_TTL = 3.0
 
@@ -57,72 +37,103 @@ def _load_settings():
     c = _SETTINGS_CACHE
     if c["data"] is not None and now - c["ts"] < _SETTINGS_TTL:
         return dict(c["data"])  # a copy, so callers can mutate freely
-    try:
-        data = json.loads(SETTINGS_FILE.read_text())
-    except (OSError, ValueError):
-        data = {}
+    data = {}
+    for row in db.get().execute("SELECT key, value FROM settings"):
+        try:
+            data[row["key"]] = json.loads(row["value"])
+        except (ValueError, TypeError):
+            pass
     c["data"] = data
     c["ts"] = now
     return dict(data)
 
 
 def _save_settings(data):
-    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM settings")
+        conn.executemany(
+            "INSERT INTO settings(key, value) VALUES(?, ?)",
+            [(k, json.dumps(v)) for k, v in data.items()],
+        )
     _SETTINGS_CACHE["data"] = dict(data)  # refresh the cache immediately
     _SETTINGS_CACHE["ts"] = time.time()
 
 
 # --- Activity log ----------------------------------------------------------
 _ACTIVITY_LOCK = threading.Lock()
-
-# Services that adjust a continuous value: stepping the AC up/down (or a dimmer,
-# cover position, volume) fires one call per press. Rather than logging every
-# step, collapse a run of them by the same user on the same entity into a single
-# entry showing the FINAL value, as long as they're close together in time.
 _COALESCE_SERVICES = {"set_temperature", "set_percentage", "set_cover_position", "volume_set"}
 _COALESCE_WINDOW = 120  # seconds
 
+_ACTIVITY_COLS = ("ts", "username", "name", "entity_id", "entity",
+                  "domain", "service", "verb", "source", "schedule")
+
+
+def _row_to_entry(row):
+    """Activity row -> dict, dropping NULL source/schedule so human entries keep
+    their original (source-less) shape."""
+    d = {k: row[k] for k in _ACTIVITY_COLS}
+    if d.get("source") is None:
+        d.pop("source", None)
+    if d.get("schedule") is None:
+        d.pop("schedule", None)
+    return d
+
+
+def _insert_activity(conn, entry):
+    conn.execute(
+        "INSERT INTO activity(ts,username,name,entity_id,entity,domain,service,"
+        "verb,source,schedule) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        tuple(entry.get(k) for k in _ACTIVITY_COLS),
+    )
+
 
 def _load_activity():
-    try:
-        data = json.loads(ACTIVITY_FILE.read_text())
-        return data if isinstance(data, list) else []
-    except (OSError, ValueError):
-        return []
+    return [_row_to_entry(r) for r in
+            db.get().execute("SELECT * FROM activity ORDER BY id")]
 
 
 def _append_activity(entry):
-    """Append one action to the activity log, coalescing continuous-value runs.
-
-    This is the app's own record of who did what - app users aren't HA users,
-    so HA's native logbook can only credit the Supervisor. This log always
-    shows the real person.
-    """
-    with _ACTIVITY_LOCK:
-        log = _load_activity()
-        last = log[-1] if log else None
+    """Append one action, coalescing continuous-value runs by the same user on
+    the same entity within the window (keep only the final value)."""
+    with _ACTIVITY_LOCK, db.transaction() as conn:
+        last = conn.execute("SELECT * FROM activity ORDER BY id DESC LIMIT 1").fetchone()
         coalesce = (
             last is not None
             and entry.get("service") in _COALESCE_SERVICES
-            and last.get("service") == entry.get("service")
-            and last.get("entity_id") == entry.get("entity_id")
-            and last.get("username") == entry.get("username")
-            and (entry.get("ts", 0) - last.get("ts", 0)) <= _COALESCE_WINDOW
+            and last["service"] == entry.get("service")
+            and last["entity_id"] == entry.get("entity_id")
+            and last["username"] == entry.get("username")
+            and (entry.get("ts", 0) - (last["ts"] or 0)) <= _COALESCE_WINDOW
         )
         if coalesce:
-            log[-1] = entry  # keep only the latest (final) value of the run
+            conn.execute(
+                "UPDATE activity SET ts=?,name=?,entity=?,domain=?,service=?,"
+                "verb=?,source=?,schedule=? WHERE id=?",
+                (entry.get("ts"), entry.get("name"), entry.get("entity"),
+                 entry.get("domain"), entry.get("service"), entry.get("verb"),
+                 entry.get("source"), entry.get("schedule"), last["id"]),
+            )
         else:
-            log.append(entry)
-        if len(log) > ACTIVITY_MAX:
-            log = log[-ACTIVITY_MAX:]
-        try:
-            ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
-            tmp = ACTIVITY_FILE.with_name(ACTIVITY_FILE.name + ".tmp")
-            tmp.write_text(json.dumps(log))
-            tmp.replace(ACTIVITY_FILE)
-        except OSError:
-            pass  # best-effort; never block a control action on logging
+            _insert_activity(conn, entry)
+        # trim to the most recent ACTIVITY_MAX
+        conn.execute(
+            "DELETE FROM activity WHERE id NOT IN "
+            "(SELECT id FROM activity ORDER BY id DESC LIMIT ?)", (ACTIVITY_MAX,))
+
+
+def replace_activity(entries):
+    """Replace the whole log (used by the importer and backup restore)."""
+    rows = entries if isinstance(entries, list) else []
+    with _ACTIVITY_LOCK, db.transaction() as conn:
+        conn.execute("DELETE FROM activity")
+        for e in rows[-ACTIVITY_MAX:]:
+            if isinstance(e, dict):
+                _insert_activity(conn, e)
+
+
+def clear_activity():
+    with _ACTIVITY_LOCK, db.transaction() as conn:
+        conn.execute("DELETE FROM activity")
 
 
 # --- User store ------------------------------------------------------------
@@ -138,25 +149,71 @@ def _seed_users():
 
 
 def save_users(users):
-    STORE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STORE_FILE.with_name(STORE_FILE.name + ".tmp")
-    tmp.write_text(json.dumps({"users": users}, indent=2))
-    tmp.replace(STORE_FILE)
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM users")  # cascades to entity child tables
+        for seq, u in enumerate(users):
+            usr = User.from_dict(u)
+            conn.execute(
+                "INSERT INTO users(username,display_name,admin,manager,all_devices,"
+                "password,email,provider,picture,expires,seq) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (usr.username, usr.display_name, int(usr.admin), int(usr.manager),
+                 int(usr.all_devices), usr.password, usr.email, usr.provider,
+                 usr.picture, usr.expires, seq),
+            )
+            for i, e in enumerate(usr.entities):
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_entities(username,entity_id,ordinal) VALUES(?,?,?)",
+                    (usr.username, e, i))
+            for e, exp in usr.entity_expires.items():
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_entity_expires(username,entity_id,expires) VALUES(?,?,?)",
+                    (usr.username, e, exp))
 
 
 def load_users():
-    """User -> entities mapping (read fresh each call, so edits are live)."""
-    if not STORE_FILE.exists():
+    """User list in the same dict shape User.to_dict produces (so callers that do
+    User.from_dict are unaffected). Seeds the default admin on an empty store."""
+    conn = db.get()
+    rows = conn.execute("SELECT * FROM users ORDER BY seq").fetchall()
+    if not rows:
         save_users(_seed_users())
-    return json.loads(STORE_FILE.read_text())["users"]
+        rows = conn.execute("SELECT * FROM users ORDER BY seq").fetchall()
+
+    ents = {}
+    for r in conn.execute("SELECT username,entity_id FROM user_entities ORDER BY username,ordinal"):
+        ents.setdefault(r["username"], []).append(r["entity_id"])
+    exps = {}
+    for r in conn.execute("SELECT username,entity_id,expires FROM user_entity_expires"):
+        exps.setdefault(r["username"], {})[r["entity_id"]] = r["expires"]
+
+    out = []
+    for r in rows:
+        d = {
+            "username": r["username"],
+            "displayName": r["display_name"] or r["username"],
+            "entities": ents.get(r["username"], []),
+            "admin": bool(r["admin"]),
+            "manager": bool(r["manager"]),
+            "all": bool(r["all_devices"]),
+            "expires": r["expires"],
+            "entity_expires": exps.get(r["username"], {}),
+        }
+        if r["password"] is not None:
+            d["password"] = r["password"]
+        if r["email"]:
+            d["email"] = r["email"]
+        if r["provider"]:
+            d["provider"] = r["provider"]
+        if r["picture"]:
+            d["picture"] = r["picture"]
+        out.append(d)
+    return out
 
 
 # --- Config accessors (read live display/auth settings) --------------------
 
 
 def enabled_domains():
-    """Domains the picker is allowed to show. None = all. The in-app setting
-    wins; otherwise the `device_types` config seeds it."""
     s = _load_settings()
     if isinstance(s.get("device_types"), list):
         return set(s["device_types"])
@@ -164,9 +221,6 @@ def enabled_domains():
 
 
 def included_entities():
-    """Specific entity_ids always available regardless of device-type filter -
-    so a noisy domain (e.g. switch) can be disabled while a few hand-picked
-    entities are still shown in the picker and granted to 'All devices' users."""
     s = _load_settings()
     inc = s.get("included_entities")
     return set(e for e in inc if isinstance(e, str)) if isinstance(inc, list) else set()
@@ -186,16 +240,13 @@ def cfg_emoji():
 
 
 def cfg_providers():
-    """Which login methods are offered on the user dashboard. The admin's
-    choice (Settings tab: 'local' | 'oauth' | 'both') intersected with what's
-    actually configured. Always leaves at least local enabled as a fallback."""
     choice = (_load_settings().get("auth_providers") or "local").lower()
     oauth = oauth_configured() and choice in ("oauth", "both")
     local = choice in ("local", "both") or not oauth
     return {"local": local, "oauth": oauth}
 
 
-# --- Uploaded custom icon --------------------------------------------------
+# --- Uploaded custom icon (still a file under ICON_DIR) ---------------------
 
 ICON_EXT = {
     "image/png": "png",
@@ -207,7 +258,6 @@ ICON_EXT = {
 
 
 def _find_icon():
-    """Path to the uploaded custom icon, if any."""
     for p in sorted(ICON_DIR.glob("app-icon.*")):
         return p
     return None
@@ -218,72 +268,144 @@ def _remove_icons():
         try:
             p.unlink()
         except OSError:
-            pass  # best-effort (e.g. transient file lock on Windows)
+            pass
 
 
 def _app_image_url():
-    """Cache-busted URL for the custom icon, or None when using the default."""
     p = _find_icon()
     return f"./app-icon?v={int(p.stat().st_mtime)}" if p else None
 
 
-# --- Schedule persistence --------------------------------------------------
-
-SCHEDULES_FILE = ICON_DIR / "schedules.json"
-SCHEDULE_PERMS_FILE = ICON_DIR / "schedule_perms.json"
+# --- Schedules -------------------------------------------------------------
 
 
 def load_schedules():
-    try:
-        data = json.loads(SCHEDULES_FILE.read_text())
-        if not isinstance(data, list):
-            return []
-        data.sort(key=lambda s: (s.get("name") or "").lower())  # alphabetical for display
-        return data
-    except (OSError, ValueError):
-        return []
+    conn = db.get()
+    scheds = conn.execute("SELECT * FROM schedules ORDER BY lower(name)").fetchall()
+
+    targets = {}
+    for r in conn.execute("SELECT schedule_id,entity_id FROM schedule_targets ORDER BY schedule_id,ordinal"):
+        targets.setdefault(r["schedule_id"], []).append(r["entity_id"])
+
+    days = {}
+    for r in conn.execute("SELECT entry_id,day FROM schedule_entry_days ORDER BY entry_id,ordinal"):
+        days.setdefault(r["entry_id"], []).append(r["day"])
+
+    entries = {}
+    for r in conn.execute("SELECT * FROM schedule_entries ORDER BY schedule_id,ordinal"):
+        entries.setdefault(r["schedule_id"], []).append({
+            "id": r["id"],
+            "days": days.get(r["id"], []),
+            "time": r["time"],
+            "mode": r["mode"],
+            "temp": r["temp"],
+            "fan": json.loads(r["fan"]) if r["fan"] is not None else None,
+        })
+
+    out = []
+    for s in scheds:
+        d = {
+            "id": s["id"],
+            "owner": s["owner"],
+            "name": s["name"],
+            "enabled": bool(s["enabled"]),
+            "targets": targets.get(s["id"], []),
+            "entries": entries.get(s["id"], []),
+        }
+        if s["type"] is not None:
+            d["type"] = s["type"]
+        if s["start"] is not None:
+            d["start"] = s["start"]
+        if s["end"] is not None:
+            d["end"] = s["end"]
+        out.append(d)
+    return out
 
 
 def save_schedules(schedules):
-    SCHEDULES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = SCHEDULES_FILE.with_name(SCHEDULES_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(schedules, indent=2))
-    tmp.replace(SCHEDULES_FILE)
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM schedules")  # cascades targets/entries/days
+        for si, s in enumerate(schedules):
+            sid = s.get("id") or f"sched-{si}"
+            conn.execute(
+                "INSERT INTO schedules(id,owner,name,enabled,type,start,end) VALUES(?,?,?,?,?,?,?)",
+                (sid, s.get("owner") or "", s.get("name") or "",
+                 1 if s.get("enabled", True) else 0,
+                 s.get("type"), s.get("start"), s.get("end")),
+            )
+            for ti, t in enumerate(s.get("targets") or []):
+                conn.execute(
+                    "INSERT OR IGNORE INTO schedule_targets(schedule_id,entity_id,ordinal) VALUES(?,?,?)",
+                    (sid, t, ti))
+            for ei, e in enumerate(s.get("entries") or []):
+                eid = e.get("id") or f"{sid}-entry-{ei}"
+                fan = e.get("fan")
+                conn.execute(
+                    "INSERT INTO schedule_entries(id,schedule_id,ordinal,time,mode,temp,fan) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (eid, sid, ei, e.get("time") or "", e.get("mode") or "heat",
+                     e.get("temp"), json.dumps(fan) if fan is not None else None),
+                )
+                for di, day in enumerate(e.get("days") or []):
+                    try:
+                        dv = int(day)
+                    except (TypeError, ValueError):
+                        continue
+                    conn.execute(
+                        "INSERT OR IGNORE INTO schedule_entry_days(entry_id,day,ordinal) VALUES(?,?,?)",
+                        (eid, dv, di))
 
 
 def load_schedule_perms():
-    try:
-        data = json.loads(SCHEDULE_PERMS_FILE.read_text())
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    perms = {}
+    for r in db.get().execute("SELECT username,entity_id FROM schedule_perms ORDER BY rowid"):
+        perms.setdefault(r["username"], []).append(r["entity_id"])
+    return perms
 
 
 def save_schedule_perms(perms):
-    SCHEDULE_PERMS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = SCHEDULE_PERMS_FILE.with_name(SCHEDULE_PERMS_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(perms, indent=2))
-    tmp.replace(SCHEDULE_PERMS_FILE)
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM schedule_perms")
+        for username, ids in (perms or {}).items():
+            for e in (ids or []):
+                conn.execute(
+                    "INSERT OR IGNORE INTO schedule_perms(username,entity_id) VALUES(?,?)",
+                    (username, e))
 
 
-# --- Per-user device lists (user-created tags/filters) ---------------------
-# Shape: { username: [ {"id": str, "name": str, "entities": [entity_id, ...]} ] }
-
-LISTS_FILE = ICON_DIR / "lists.json"
+# --- Per-user device lists -------------------------------------------------
 
 
 def load_lists():
-    # Stored array order IS the display order - the user arranges their own lists
-    # (see the reorder route), so we don't sort here.
-    try:
-        data = json.loads(LISTS_FILE.read_text())
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    conn = db.get()
+    ents = {}
+    for r in conn.execute("SELECT list_id,entity_id FROM list_entities ORDER BY list_id,ordinal"):
+        ents.setdefault(r["list_id"], []).append(r["entity_id"])
+    out = {}
+    for r in conn.execute("SELECT * FROM lists ORDER BY username,ordinal"):
+        out.setdefault(r["username"], []).append({
+            "id": r["id"], "name": r["name"], "entities": ents.get(r["id"], []),
+        })
+    return out
 
 
 def save_lists(lists):
-    LISTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = LISTS_FILE.with_name(LISTS_FILE.name + ".tmp")
-    tmp.write_text(json.dumps(lists, indent=2))
-    tmp.replace(LISTS_FILE)
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM lists")  # cascades list_entities
+        for username, items in (lists or {}).items():
+            for ordinal, lst in enumerate(items or []):
+                if not isinstance(lst, dict):
+                    continue
+                lid = lst.get("id") or f"{username}-list-{ordinal}"
+                conn.execute(
+                    "INSERT INTO lists(id,username,name,ordinal) VALUES(?,?,?,?)",
+                    (lid, username, lst.get("name") or "", ordinal))
+                for i, e in enumerate(lst.get("entities") or []):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO list_entities(list_id,entity_id,ordinal) VALUES(?,?,?)",
+                        (lid, e, i))
+
+
+# Create/upgrade the database and import any legacy JSON on first import of this
+# module - before any route, the scheduler, or security.py reads a thing.
+db.bootstrap()

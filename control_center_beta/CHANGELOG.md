@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.10.0
+- **Storage moved from JSON files to a SQLite database.** Everything the add-on
+  keeps (users, settings, schedules and their permissions, device lists, the
+  activity log, and the Telegram configuration/permissions/read state) now lives
+  in a single `control_center.db` under `/data`, in a proper relational schema.
+  This is the foundation for features that the flat JSON files could not scale to.
+  - **Automatic, one-time migration.** On the first start after updating, the
+    add-on imports your existing JSON into the database. It works from any older
+    version. Before touching anything it writes a full `pre-2.10-backup-*.json`
+    snapshot, then imports, then **verifies the database matches your JSON** and
+    only then archives the old files (renamed to `*.json.imported`, never
+    deleted). If the verification doesn't pass it stops and leaves your JSON
+    untouched, so a migration can never silently lose data.
+  - **Backup & Restore is unchanged and is the bridge between versions.** The
+    exported file format is identical, so a backup taken before this update still
+    restores, and a backup taken after can be restored onto an older version.
+  - **More robust under load.** Saves now run in serialized transactions, closing
+    the last-writer-wins races the JSON files could hit when two changes landed at
+    once.
+  - The uploaded app icon stays a normal file; nothing else about how the add-on
+    behaves changes.
+
 ## 2.9.51
 - **A schedule now waits out an offline thermostat instead of losing the event.**
   If a unit is offline/unavailable when its event is due - or Home Assistant is

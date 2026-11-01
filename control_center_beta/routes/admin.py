@@ -33,12 +33,12 @@ from security import (
     require_admin,
 )
 from store import (
-    ACTIVITY_FILE,
     ACTIVITY_MAX,
     ICON_DIR,
     ICON_EXT,
-    _ACTIVITY_LOCK,
     _find_icon,
+    clear_activity,
+    replace_activity,
     _load_activity,
     _load_settings,
     _remove_icons,
@@ -255,11 +255,7 @@ def admin_activity():
 def admin_clear_activity():
     """Clear the activity log."""
     require_admin()
-    with _ACTIVITY_LOCK:
-        try:
-            ACTIVITY_FILE.unlink()
-        except OSError:
-            pass
+    clear_activity()
     return jsonify(ok=True)
 
 
@@ -568,12 +564,7 @@ def admin_import():
 
     activity = body.get("activity")
     if isinstance(activity, list):
-        with _ACTIVITY_LOCK:
-            try:
-                ACTIVITY_FILE.parent.mkdir(parents=True, exist_ok=True)
-                ACTIVITY_FILE.write_text(json.dumps(activity))
-            except OSError:
-                pass
+        replace_activity(activity)
 
     _remove_icons()
     icon = body.get("icon")
