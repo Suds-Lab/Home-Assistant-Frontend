@@ -81,29 +81,42 @@ def ha_request(path, method="GET", payload=None, *, instance_id=None):
     return res.json() if res.text else None
 
 
-_HA_TEMP_UNIT = None
+_HA_TEMP_UNIT_BY_INST = {}  # instance_id (None = main) -> '°C'|'°F', cached on success
 
 
-def ha_temperature_unit():
-    """Home Assistant's configured temperature unit ('°C' or '°F'), cached.
+def ha_temperature_unit(instance_id=None, default="°C"):
+    """A Home Assistant instance's configured temperature unit ('°C' or '°F'),
+    cached per instance (instance_id None = the main instance, a string = a remote).
 
-    Schedules are always set and displayed in this unit; HA itself converts the
-    setpoint to each thermostat's own native unit when the command is sent, so a
-    mixed fleet needs no conversion on our side. Falls back to '°C' and doesn't
-    cache a failed lookup, so it retries next call."""
-    global _HA_TEMP_UNIT
-    if _HA_TEMP_UNIT:
-        return _HA_TEMP_UNIT
+    This is authoritative for how that instance interprets a set_temperature call.
+    HA reads the provided number in the instance's OWN system unit and converts it
+    to the target entity's unit before range-checking and applying it (climate's
+    async_service_temperature_set converts hass.config.units.temperature_unit ->
+    the entity unit). So to land a value on a thermostat, CC sends it in the
+    RECEIVING instance's system unit and lets HA do the conversion; the scheduler
+    does this in _send_temp. The main unit also doubles as the editor's display
+    hint. Returns `default` on any failure and does not cache it, so the lookup
+    retries next call."""
+    cached = _HA_TEMP_UNIT_BY_INST.get(instance_id)
+    if cached:
+        return cached
     if os.environ.get("MOCK_HA"):
-        _HA_TEMP_UNIT = os.environ.get("MOCK_TEMP_UNIT", "°C")
-        return _HA_TEMP_UNIT
+        unit = (os.environ.get(f"MOCK_TEMP_UNIT_{instance_id}") if instance_id else None) \
+            or os.environ.get("MOCK_TEMP_UNIT", "°C")
+        _HA_TEMP_UNIT_BY_INST[instance_id] = unit
+        return unit
     try:
-        cfg = ha_request("/api/config") or {}
+        if instance_id is None:
+            cfg = ha_request("/api/config") or {}
+        else:
+            cfg = ha_ws_command({"type": "get_config"}, instance_id=instance_id) or {}
         unit = (cfg.get("unit_system") or {}).get("temperature")
     except Exception:  # noqa: BLE001
-        return "°C"
-    _HA_TEMP_UNIT = unit if unit in ("°C", "°F") else "°C"
-    return _HA_TEMP_UNIT
+        return default
+    if unit not in ("°C", "°F"):
+        return default
+    _HA_TEMP_UNIT_BY_INST[instance_id] = unit
+    return unit
 
 
 def create_notification(notification_id, title, message):

@@ -148,6 +148,134 @@ def _resolve_fan(fan, target):
     return None
 
 
+# --- Per-unit temperature (°C / °F) ----------------------------------------
+# A schedule event stores temp as EITHER a single number (legacy / single-unit
+# schedule, in HA's configured unit) OR a list of per-unit groups:
+#   [{"unit": "C", "temp": 22}, {"unit": "F", "temp": 72}]
+# Each target is sent the value for ITS OWN unit, read live from the target's own
+# attributes (per entity / per instance - NEVER the main HA's unit, which is wrong
+# for remote instances and mixed fleets). We NEVER convert between C and F: each
+# thermostat gets a value already in its unit. Belt-and-braces, a value outside
+# the target's LIVE min_temp..max_temp is dropped (the unit is left alone), so a
+# wrong-unit or stale setpoint can never be sent - this is the hard guard that
+# would have prevented sending -6.9°C to a 10-30°C unit.
+def _norm_unit(u):
+    """'C' / 'F' from any spelling ('°C', 'c', 'F', ...), else None."""
+    s = str(u or "").strip().upper().lstrip("°")
+    return "F" if s == "F" else ("C" if s == "C" else None)
+
+
+def _target_unit(target):
+    """A target's temperature unit ('C'/'F'). Prefer the entity's reported
+    temperature_unit, but many integrations omit it from state entirely, so fall
+    back to the max_temp magnitude - a Celsius AC tops out near 30-35 and a
+    Fahrenheit one near 86-99, leaving the 40s an empty gap that separates them
+    cleanly (min_temp is a poor signal: a °F unit can report a min of 40). As a last
+    resort use the owning instance's own system unit. Must match the frontend's
+    schedUnitOf so the editor and fire-time logic agree on each unit."""
+    from core import STATE_CACHE
+    attrs = ((STATE_CACHE.get(target) or {}).get("attributes")) or {}
+    u = _norm_unit(attrs.get("temperature_unit"))
+    if u:
+        return u
+    # Infer from a live reading first (a room temp is ~15-30 °C or ~60-85 °F, and
+    # an occupied space never overlaps across the 40s), then the structural max_temp.
+    # current_temperature beats max_temp because some integrations report a metric
+    # default max (e.g. 35) while actually operating in °F (setpoint/reading ~70).
+    for key in ("current_temperature", "max_temp"):
+        v = attrs.get(key)
+        try:
+            if v is not None:
+                return "F" if float(v) >= 50 else "C"
+        except (TypeError, ValueError):
+            pass
+    from ha import split_instance_entity, ha_temperature_unit
+    inst, _real = split_instance_entity(target)
+    return _norm_unit(ha_temperature_unit(inst, default="°C")) or "C"
+
+
+def _resolve_temp(temp, target):
+    """The DESIRED setpoint for `target`, in ITS OWN (entity) unit, or None to leave
+    the temperature alone. A legacy number is taken as that unit; a per-unit list is
+    matched by the target's live unit. Range-checked against the target's live
+    min_temp..max_temp. This is the value shown in logs and compared against the
+    live reading; the number actually SENT is this value re-expressed in the
+    receiving instance's system unit (see _send_temp), because HA converts an
+    incoming set_temperature from the system unit to the entity unit."""
+    if temp is None or isinstance(temp, bool):
+        return None
+    val = None
+    if isinstance(temp, (int, float)):
+        val = float(temp)
+    elif isinstance(temp, list):
+        want = _target_unit(target)
+        for grp in temp:
+            if isinstance(grp, dict) and _norm_unit(grp.get("unit")) == want \
+               and grp.get("temp") is not None:
+                try:
+                    val = float(grp["temp"])
+                except (TypeError, ValueError):
+                    val = None
+                break
+        # no group for this target's unit -> leave it alone (never guess/convert)
+    if val is None:
+        return None
+    from core import STATE_CACHE
+    attrs = ((STATE_CACHE.get(target) or {}).get("attributes")) or {}
+    try:
+        lo = attrs.get("min_temp")
+        hi = attrs.get("max_temp")
+        if lo is not None and val < float(lo):
+            return None
+        if hi is not None and val > float(hi):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return val
+
+
+def _fmt_temp(v):
+    """Trim a setpoint for display: 22.0 -> '22', 21.5 -> '21.5'."""
+    try:
+        f = float(v)
+        return str(int(f)) if f.is_integer() else str(f)
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _convert_temp(v, frm, to):
+    """Convert a temperature between 'C' and 'F'. Mirrors HA's own conversion so we
+    can pre-encode a desired value into a receiving instance's system unit."""
+    if frm == to or frm is None or to is None:
+        return v
+    if frm == "C" and to == "F":
+        return v * 9.0 / 5.0 + 32.0
+    if frm == "F" and to == "C":
+        return (v - 32.0) * 5.0 / 9.0
+    return v
+
+
+def _send_temp(temp, target):
+    """The number to actually hand to climate.set_temperature for `target`.
+
+    HA interprets a set_temperature value in the RECEIVING instance's system unit
+    and converts it to the entity's own unit before applying it (see
+    ha.ha_temperature_unit). So we take the desired value (in the entity's unit,
+    already range-checked by _resolve_temp) and express it in that instance's system
+    unit; HA then converts it straight back to the entity unit on the way in. When
+    the system unit already matches the entity unit (the common case) this is a
+    no-op pass-through. If the instance's unit can't be read we fall back to the
+    entity unit (verbatim send, as before). Returns None to leave the temp alone."""
+    desired = _resolve_temp(temp, target)
+    if desired is None:
+        return None
+    from ha import split_instance_entity, ha_temperature_unit
+    inst, _real = split_instance_entity(target)
+    eu = _target_unit(target)
+    su = _norm_unit(ha_temperature_unit(inst, default=None)) or eu
+    return round(_convert_temp(desired, eu, su), 1)
+
+
 # --- Failure reporting: a red add-on-log line + one HA notification per unit --
 _notified = set()  # targets we currently have a failure notification up for
 
@@ -245,8 +373,17 @@ def _send_climate(target, mode, temp, fan=None):
     # case: the unit is off or drifted). If it's already in the mode we leave it.
     if cur_state != hvac_mode:
         call_service("climate", "set_hvac_mode", real_target, {"hvac_mode": hvac_mode}, instance_id=instance_id)
-    if temp is not None and not _temp_matches(cur_attrs.get("temperature"), temp):
-        call_service("climate", "set_temperature", real_target, {"temperature": float(temp)}, instance_id=instance_id)
+    # The DESIRED setpoint, in the unit's own (entity) unit - used to decide whether
+    # to send and to compare against the current reading. Never enforced outside the
+    # unit's live range (see _resolve_temp). The value actually sent is this
+    # re-expressed in the receiving instance's system unit (HA converts it back to
+    # the entity unit on the way in); see _send_temp.
+    want_temp = _resolve_temp(temp, target)
+    if temp is not None and want_temp is None:
+        _log(f"  temp left alone on {target} - no value for its unit, or out of its live range")
+    elif want_temp is not None and not _temp_matches(cur_attrs.get("temperature"), want_temp):
+        send_temp = _send_temp(temp, target)
+        call_service("climate", "set_temperature", real_target, {"temperature": send_temp}, instance_id=instance_id)
     if fan:
         resolved = _resolve_fan(fan, target)
         if resolved is None:
@@ -270,8 +407,10 @@ def _fire_event(sched, entry, target):
     offline = b_state in _OFFLINE_STATES
     want = "off" if mode == "off" else _MODE_TO_HVAC.get(mode, mode)
     detail = want
-    if mode != "off" and temp is not None:
-        detail += f" {temp}°"
+    if mode != "off":
+        shown_t = _resolve_temp(temp, target)  # what THIS unit will actually get
+        if shown_t is not None:
+            detail += f" {_fmt_temp(shown_t)}°{_target_unit(target)}"
     if mode != "off" and fan:
         shown = _resolve_fan(fan, target)  # what this specific unit will get, if anything
         if shown is not None:
@@ -345,14 +484,12 @@ def _log_scheduled(sched, entry, target):
     entity_name = attrs.get("friendly_name") or target.split(":", 1)[-1]
 
     mode = entry.get("mode", "heat")
-    temp = entry.get("temp")
     mode_label = _MODE_DISPLAY.get(mode, mode)
+    rt = _resolve_temp(entry.get("temp"), target)  # this unit's value
     if mode == "off":
         verb = "was turned off"
-    elif temp is not None:
-        t = float(temp)
-        temp_str = str(int(t)) if t.is_integer() else str(t)
-        verb = f"was set to {mode_label} {temp_str}°"
+    elif rt is not None:
+        verb = f"was set to {mode_label} {_fmt_temp(rt)}°{_target_unit(target)}"
     else:
         verb = f"was set to {mode_label}"
 
@@ -417,14 +554,12 @@ def _log_delivered(p, target):
     entity_name = attrs.get("friendly_name") or target.split(":", 1)[-1]
 
     mode = p.get("mode", "heat")
-    temp = p.get("temp")
     mode_label = _MODE_DISPLAY.get(mode, mode)
+    rt = _resolve_temp(p.get("temp"), target)  # this unit's value
     if mode == "off":
         verb = "was turned off once it came back online"
-    elif temp is not None:
-        t = float(temp)
-        temp_str = str(int(t)) if t.is_integer() else str(t)
-        verb = f"was set to {mode_label} {temp_str}° once it came back online"
+    elif rt is not None:
+        verb = f"was set to {mode_label} {_fmt_temp(rt)}°{_target_unit(target)} once it came back online"
     else:
         verb = f"was set to {mode_label} once it came back online"
 
@@ -465,8 +600,9 @@ def _matches_desired(target, mode, temp):
     want = "off" if mode == "off" else _MODE_TO_HVAC.get(mode, mode)
     if cur != want:
         return False
-    if mode != "off" and temp is not None:
-        if not _temp_matches((st.get("attributes") or {}).get("temperature"), temp):
+    if mode != "off":
+        want_temp = _resolve_temp(temp, target)  # this target's unit; None = nothing to enforce
+        if want_temp is not None and not _temp_matches((st.get("attributes") or {}).get("temperature"), want_temp):
             return False
     return True
 
@@ -579,7 +715,8 @@ def _verify_pending(schedules, override_targets=None):
         cur = st.get("state")
         cur_t = (st.get("attributes") or {}).get("temperature")
         want = "off" if p["mode"] == "off" else _MODE_TO_HVAC.get(p["mode"], p["mode"])
-        want_t = "" if (p["mode"] == "off" or p["temp"] is None) else f" {p['temp']}°"
+        _rt = None if p["mode"] == "off" else _resolve_temp(p["temp"], target)
+        want_t = f" {_fmt_temp(_rt)}°{_target_unit(target)}" if _rt is not None else ""
         have = f"{cur}" + (f" {cur_t}°" if cur_t is not None else "")
         _log(f"DRIFT {target} ('{p['name']}'): want {want}{want_t}, have {have} - "
              f"re-applying (try {p['tries']}/{_VERIFY_MAX_TRIES})")
@@ -702,11 +839,11 @@ def _guard_items(now=None):
         attrs = (STATE_CACHE.get(target) or {}).get("attributes") or {}
         friendly = attrs.get("friendly_name") or target.split(":", 1)[-1]
         mode = entry.get("mode", "heat")
-        temp = entry.get("temp")
         detail = _MODE_DISPLAY.get(mode, mode)
-        if mode != "off" and temp is not None:
-            tv = float(temp)
-            detail += f" {int(tv) if tv.is_integer() else tv}°"
+        if mode != "off":
+            rt = _resolve_temp(entry.get("temp"), target)  # this unit's value
+            if rt is not None:
+                detail += f" {_fmt_temp(rt)}°{_target_unit(target)}"
         items.append({
             "entity_id": target,
             "name": sched.get("name") or "Schedule",

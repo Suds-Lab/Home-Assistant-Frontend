@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.9.52
+- **Climate schedules now handle thermostats that use different temperature units
+  (°F and °C) correctly.** Previously a schedule stored one temperature and sent
+  that number unchanged to every thermostat. But Home Assistant reads a
+  set_temperature value in the RECEIVING instance's own unit system and converts it
+  to the thermostat's unit itself, so a number meant as 19.5°C, sent to an instance
+  running °F, was read as 19.5°F and converted to -6.9°C: far outside the
+  thermostat's range, and rejected. This hits mixed fleets and thermostats on remote
+  instances (which can run their own unit system).
+  - **Two sliders when units differ:** in the event editor, when a schedule's
+    thermostats span more than one unit, you now set **one temperature per unit**
+    (a °F slider and a °C slider, each in its own range). Each thermostat gets the
+    setpoint for its own unit. Single-unit schedules are unchanged (one slider).
+  - **Sent in each instance's own unit:** the scheduler expresses every thermostat's
+    setpoint in the unit system of the instance that owns it (read live per
+    instance), so HA's own conversion lands exactly the value you set. As a hard
+    safety net, a setpoint outside a thermostat's live min/max is skipped (the unit
+    is left alone and it's logged) rather than sent, so an out-of-range value can't
+    be pushed to a thermostat, even from an older schedule.
+  - **Reliable unit detection:** many thermostats don't report their unit in state
+    at all, so the editor and scheduler now infer it from the live reading and range
+    (a room sits near 20°C / 70°F, with nothing in between) instead of a brittle
+    min-temperature guess that mislabeled some Fahrenheit units.
+  - Fixes the related drift/retry churn where a schedule's number was compared
+    against a thermostat's reading across units (so it never "matched").
+  - Existing schedules keep working: a saved single number is treated as that
+    thermostat's unit and range-checked on every fire.
+
 ## 2.9.51
 - **A schedule now waits out an offline thermostat instead of losing the event.**
   If a unit is offline/unavailable when its event is due - or Home Assistant is
