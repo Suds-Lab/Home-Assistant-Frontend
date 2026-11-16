@@ -1,26 +1,32 @@
 # Changelog
 
-## 2.10.0
-- **Storage moved from JSON files to a SQLite database.** Everything the add-on
-  keeps (users, settings, schedules and their permissions, device lists, the
-  activity log, and the Telegram configuration/permissions/read state) now lives
-  in a single `control_center.db` under `/data`, in a proper relational schema.
-  This is the foundation for features that the flat JSON files could not scale to.
-  - **Automatic, one-time migration.** On the first start after updating, the
-    add-on imports your existing JSON into the database. It works from any older
-    version. Before touching anything it writes a full `pre-2.10-backup-*.json`
-    snapshot, then imports, then **verifies the database matches your JSON** and
-    only then archives the old files (renamed to `*.json.imported`, never
-    deleted). If the verification doesn't pass it stops and leaves your JSON
-    untouched, so a migration can never silently lose data.
-  - **Backup & Restore is unchanged and is the bridge between versions.** The
-    exported file format is identical, so a backup taken before this update still
-    restores, and a backup taken after can be restored onto an older version.
-  - **More robust under load.** Saves now run in serialized transactions, closing
-    the last-writer-wins races the JSON files could hit when two changes landed at
-    once.
-  - The uploaded app icon stays a normal file; nothing else about how the add-on
-    behaves changes.
+## 2.9.52
+- **Climate schedules now handle thermostats that use different temperature units
+  (°F and °C) correctly.** Previously a schedule stored one temperature and sent
+  that number unchanged to every thermostat. But Home Assistant reads a
+  set_temperature value in the RECEIVING instance's own unit system and converts it
+  to the thermostat's unit itself, so a number meant as 19.5°C, sent to an instance
+  running °F, was read as 19.5°F and converted to -6.9°C: far outside the
+  thermostat's range, and rejected. This hits mixed fleets and thermostats on remote
+  instances (which can run their own unit system).
+  - **Two sliders when units differ:** in the event editor, when a schedule's
+    thermostats span more than one unit, you now set **one temperature per unit**
+    (a °F slider and a °C slider, each in its own range). Each thermostat gets the
+    setpoint for its own unit. Single-unit schedules are unchanged (one slider).
+  - **Sent in each instance's own unit:** the scheduler expresses every thermostat's
+    setpoint in the unit system of the instance that owns it (read live per
+    instance), so HA's own conversion lands exactly the value you set. As a hard
+    safety net, a setpoint outside a thermostat's live min/max is skipped (the unit
+    is left alone and it's logged) rather than sent, so an out-of-range value can't
+    be pushed to a thermostat, even from an older schedule.
+  - **Reliable unit detection:** many thermostats don't report their unit in state
+    at all, so the editor and scheduler now infer it from the live reading and range
+    (a room sits near 20°C / 70°F, with nothing in between) instead of a brittle
+    min-temperature guess that mislabeled some Fahrenheit units.
+  - Fixes the related drift/retry churn where a schedule's number was compared
+    against a thermostat's reading across units (so it never "matched").
+  - Existing schedules keep working: a saved single number is treated as that
+    thermostat's unit and range-checked on every fire.
 
 ## 2.9.51
 - **A schedule now waits out an offline thermostat instead of losing the event.**

@@ -3350,6 +3350,9 @@ img.install-icon {
 .sched-fan-group { margin-top: 8px; }
 .sched-fan-group + .sched-fan-group { border-top: 1px solid var(--border); padding-top: 8px; }
 .sched-fan-group-label { display: block; margin-bottom: 4px; font-size: 0.78rem; }
+/* Per-unit temperature groups (one slider per °F/°C) */
+.sched-temp-group { margin-top: 10px; }
+.sched-temp-group + .sched-temp-group { border-top: 1px solid var(--border); padding-top: 10px; }
 .sched-fan-note { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
 /* Compact view hides `.fan-modes` on the dashboard cards to shrink them; the
    schedule editor reuses the same control, so un-hide it here (higher specificity

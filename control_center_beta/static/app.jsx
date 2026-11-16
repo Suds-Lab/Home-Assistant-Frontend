@@ -2462,6 +2462,46 @@ const TEMP_MIN_F = 60;    // °F fallback bounds (~16-30 °C) so an °F install 
 const TEMP_MAX_F = 86;    // Celsius numbers under a Fahrenheit label (and vice versa)
 
 /* Derive temp range/unit from the list of schedule entities (same as climate cards). */
+// 'C' / 'F' from any spelling ('°C', 'c', ...), else null. Mirrors the backend
+// scheduler._norm_unit so the editor and fire-time logic agree on the unit key.
+const schedNormUnit = (u) => {
+  const s = String(u || '').trim().toUpperCase().replace('°', '');
+  return s === 'F' ? 'F' : (s === 'C' ? 'C' : null);
+};
+
+// A climate entity's temperature_unit is commonly ABSENT from its state, so infer
+// the unit from max_temp: a Celsius AC tops out near 30-35 and a Fahrenheit one
+// near 86-99, leaving the 40s an empty gap that separates them cleanly (min_temp is
+// unreliable - a °F unit can report a min of 40). Prefer an explicit unit, then the
+// range, then the given fallback (the main HA unit). Returns 'C' / 'F' / null.
+// Mirrors backend scheduler._target_unit so the editor and fire-time logic agree.
+const schedUnitOf = (attrs, fallback) => {
+  const a = attrs || {};
+  const explicit = schedNormUnit(a.temperature_unit);
+  if (explicit) return explicit;
+  // Prefer a live reading (room temp ~15-30 °C vs ~60-85 °F, no overlap in the 40s),
+  // then the structural max_temp. current_temperature beats max_temp because some
+  // integrations report a metric default max (35) while operating in °F (~70).
+  for (const k of ['current_temperature', 'max_temp']) {
+    const v = Number(a[k]);
+    if (a[k] != null && !Number.isNaN(v)) return v >= 50 ? 'F' : 'C';
+  }
+  return schedNormUnit(fallback);
+};
+
+// A per-event temp can be a plain number (single-unit / legacy) or a list of
+// {unit, temp} groups; pick a scalar in the preferred unit for display (week
+// strip, rows, color). Falls back to the first group.
+const schedDisplayTemp = (temp, tUnit) => {
+  if (typeof temp === 'number') return temp;
+  if (Array.isArray(temp) && temp.length) {
+    const want = schedNormUnit(tUnit);
+    const hit = temp.find((g) => schedNormUnit(g?.unit) === want) || temp[0];
+    return hit && hit.temp != null ? hit.temp : null;
+  }
+  return null;
+};
+
 function schedTempInfo(entities, haUnit) {
   const list = entities || [];
   // Prefer a device that actually reports bounds; an offline one (no min/max)
@@ -2472,7 +2512,7 @@ function schedTempInfo(entities, haUnit) {
   // in that unit and converts to each device's own unit when the command fires); only
   // guess from a reported range when it's unknown. Resolve it BEFORE the fallback
   // bounds so those can be chosen in the SAME unit as the label.
-  const tUnit = haUnit || a.temperature_unit || ((a.min_temp ?? 0) > 40 ? '°F' : '°C');
+  const tUnit = schedUnitOf(a, haUnit) === 'F' ? '°F' : '°C';
   const isF = tUnit === '°F';
   const tMin = a.min_temp ?? (isF ? TEMP_MIN_F : TEMP_MIN);
   const tMax = a.max_temp ?? (isF ? TEMP_MAX_F : TEMP_MAX);
@@ -2482,7 +2522,8 @@ function schedTempInfo(entities, haUnit) {
 
 function segColor(entry, tMin, tMax) {
   if (!entry) return 'var(--seg-empty)';
-  const { mode, temp } = entry;
+  const { mode } = entry;
+  const temp = schedDisplayTemp(entry.temp);
   if (mode === 'off') return '#4a4a4a';
   if (mode === 'fan') return '#43a047';
   if (mode === 'dry') return '#ffa726';
@@ -2503,7 +2544,8 @@ function segColor(entry, tMin, tMax) {
 function segLabel(entry) {
   if (!entry || entry.mode === 'off') return '';
   if (entry.mode === 'fan' || entry.mode === 'dry') return MODE_LABELS[entry.mode] || entry.mode;
-  return entry.temp != null ? `${entry.temp}°` : (MODE_LABELS[entry.mode] || entry.mode);
+  const t = schedDisplayTemp(entry.temp);
+  return t != null ? `${t}°` : (MODE_LABELS[entry.mode] || entry.mode);
 }
 
 function daySegments(entries, dayIdx, tMin, tMax) {
@@ -2755,7 +2797,8 @@ function SchedWeekStrip({ entries, tMin, tMax }) {
 /* SchedEntryRow: 26x26 colored dot + mode abbr + opacity-based day letters */
 function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
   const unit = tUnit ?? '°';
-  const tempStr = entry.temp != null ? ` · ${entry.temp}${unit}` : '';
+  const _t = schedDisplayTemp(entry.temp, tUnit);
+  const tempStr = _t != null ? ` · ${_t}${unit}` : '';
   return (
     <div
       className="sched-entry-row"
@@ -2788,7 +2831,7 @@ function SchedEntryRow({ entry, onEdit, source, warn, tMin, tMax, tUnit }) {
 }
 
 /* SchedEntryEditor: bottom-sheet event editor, temp LEFT of slider */
-function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanGroups = [] }) {
+function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedName, affects, tMin, tMax, tStep, tUnit, hideDays, fanGroups = [], tempGroups = [] }) {
   useOpenHaptic();
   const lo = tMin ?? TEMP_MIN;
   const hi = tMax ?? TEMP_MAX;
@@ -2799,6 +2842,30 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
   const [days, setDays] = React.useState(new Set(entry?.days || [0, 1, 2, 3, 4]));
   const [mode, setMode] = React.useState(entry?.mode || 'heat');
   const [temp, setTemp] = React.useState(defaultTemp);
+  // When this schedule's thermostats span more than one temperature unit, author
+  // one setpoint PER unit (so a °F and a °C unit each get a value in their own
+  // unit; we never convert). Keyed by 'C'/'F'. Seeded from the stored entry:
+  // a per-unit list -> match by unit; a legacy single number -> fill the unit it
+  // was authored in (tUnit) and midpoint the others; nothing -> midpoints.
+  const multiUnit = tempGroups.length > 1;
+  const seedTemp = () => {
+    const raw = entry?.temp;
+    const out = {};
+    const mid = (g) => Math.round((g.min + g.max) / 2 * 2) / 2;
+    if (Array.isArray(raw)) {
+      for (const g of tempGroups) {
+        const hit = raw.find((x) => schedNormUnit(x?.unit) === g.unit);
+        out[g.unit] = (hit && hit.temp != null) ? hit.temp : mid(g);
+      }
+    } else if (typeof raw === 'number') {
+      const legacyUnit = schedNormUnit(unit);
+      for (const g of tempGroups) out[g.unit] = (g.unit === legacyUnit) ? raw : mid(g);
+    } else {
+      for (const g of tempGroups) out[g.unit] = mid(g);
+    }
+    return out;
+  };
+  const [tempByUnit, setTempByUnit] = React.useState(seedTemp);
   // Per-vocabulary fan choice, keyed by the group's local key. Seeded from the
   // stored entry: a list -> match each current group by set-equality; a legacy
   // string -> seed each group whose vocab contains that value.
@@ -2843,8 +2910,11 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
     const fanList = fanOn
       ? fanGroups.filter((g) => fanChoices[g.key]).map((g) => ({ modes: g.modes, fan: fanChoices[g.key] }))
       : [];
+    const tempVal = !showTemp ? null
+      : (multiUnit ? tempGroups.map((g) => ({ unit: g.unit, temp: tempByUnit[g.unit] }))
+                   : temp);
     onSave({ id: entry?.id, time, days: hideDays ? [] : daysArr, mode,
-             temp: showTemp ? temp : null, fan: fanList.length ? fanList : null });
+             temp: tempVal, fan: fanList.length ? fanList : null });
   }
 
   return (
@@ -2898,7 +2968,7 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
         </div>
       </div>
 
-      {showTemp && (
+      {showTemp && !multiUnit && (
         <div className="sched-field-group">
           <span className="sched-field-label">Temperature</span>
           <div className="sched-temp-row">
@@ -2908,6 +2978,35 @@ function SchedEntryEditor({ entry, closing, onSave, onCancel, onDelete, schedNam
               onChange={(e) => { haptic(); setTemp(Number(e.target.value)); }} />
           </div>
           <div className="sched-range-ends"><span>{lo}{unit}</span><span>{hi}{unit}</span></div>
+        </div>
+      )}
+
+      {showTemp && multiUnit && (
+        <div className="sched-field-group">
+          <span className="sched-field-label">Temperature</span>
+          {tempGroups.map((g) => {
+            const gv = tempByUnit[g.unit];
+            const col = segColor({ mode, temp: gv }, g.min, g.max);
+            return (
+              <div key={g.unit} className="sched-temp-group">
+                <span className="muted sched-fan-group-label">
+                  {g.label} units: {g.names.slice(0, 2).join(', ')}
+                  {g.names.length > 2 ? ` +${g.names.length - 2} more` : ''}
+                </span>
+                <div className="sched-temp-row">
+                  <span className="sched-temp-big" style={{ color: col }}>{gv}{g.label}</span>
+                  <input type="range" min={g.min} max={g.max} step={g.step} value={gv}
+                    style={{ accentColor: col }}
+                    onChange={(e) => { haptic(); const v = Number(e.target.value);
+                      setTempByUnit((prev) => ({ ...prev, [g.unit]: v })); }} />
+                </div>
+                <div className="sched-range-ends"><span>{g.min}{g.label}</span><span>{g.max}{g.label}</span></div>
+              </div>
+            );
+          })}
+          <span className="sched-fan-note">
+            These thermostats use different temperature units; each gets the setpoint for its own unit.
+          </span>
         </div>
       )}
 
@@ -3004,6 +3103,33 @@ function SchedMyView({ entities, schedules, setSchedules, override = false, haUn
     }
     return [...groups.values()];
   }, [sched?.targets, entities]);
+
+  // Group the targeted thermostats by TEMPERATURE UNIT, so the event editor can
+  // show one slider per distinct unit (°F vs °C) with that unit's own live range.
+  // Each unit carries its own setpoint; the scheduler sends each thermostat the
+  // value for its unit (never converting). Mirrors fanGroups above.
+  const tempGroups = React.useMemo(() => {
+    const byId = new Map((entities || []).map((e) => [e.entity_id, e]));
+    const groups = new Map();
+    for (const tid of (sched?.targets || [])) {
+      const a = byId.get(tid)?.attributes || {};
+      const unit = schedUnitOf(a, haUnit) || 'C';
+      if (!groups.has(unit)) groups.set(unit, { unit, min: null, max: null, step: null, names: [] });
+      const g = groups.get(unit);
+      g.names.push(byId.get(tid)?.name || tid);
+      if (g.min == null && a.min_temp != null) {  // first target that reports bounds wins
+        g.min = a.min_temp; g.max = a.max_temp; g.step = a.target_temp_step;
+      }
+    }
+    for (const g of groups.values()) {
+      const isF = g.unit === 'F';
+      g.min = g.min ?? (isF ? TEMP_MIN_F : TEMP_MIN);
+      g.max = g.max ?? (isF ? TEMP_MAX_F : TEMP_MAX);
+      g.step = g.step ?? (isF ? 1 : 0.5);
+      g.label = `°${g.unit}`;
+    }
+    return [...groups.values()];
+  }, [sched?.targets, entities, haUnit]);
 
   async function createNew() {
     setBusy(true);
@@ -3214,6 +3340,7 @@ function SchedMyView({ entities, schedules, setSchedules, override = false, haUn
             tMin={tInfo.tMin} tMax={tInfo.tMax} tStep={tInfo.tStep} tUnit={tInfo.tUnit}
             hideDays={override}
             fanGroups={fanGroups}
+            tempGroups={tempGroups}
           />
         </div>
       )}

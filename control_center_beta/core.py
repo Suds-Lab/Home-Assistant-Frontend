@@ -404,7 +404,24 @@ if os.environ.get("MOCK_HA"):
                 "max_temp": 30.0,
             },
         }
-    print(f"[mock_ha] Seeded {len(_MOCK_CLIMATE)} fake climate entities into STATE_CACHE")
+    # A Fahrenheit unit, so the mock fleet spans BOTH units: lets the schedule
+    # editor's two-slider (per-unit) path and the scheduler's per-target unit
+    # resolution be exercised in dev. Reports its own °F range + temperature_unit.
+    STATE_CACHE["climate.garage_ac_f"] = {
+        "entity_id": "climate.garage_ac_f",
+        "state": "cool",
+        "attributes": {
+            "friendly_name": "Garage AC (°F)",
+            "temperature": 72.0,
+            "current_temperature": 70.0,
+            "hvac_modes": _MOCK_HVAC_MODES,
+            "fan_modes": _MOCK_FAN_MODES,
+            "min_temp": 60.0,
+            "max_temp": 86.0,
+            "temperature_unit": "°F",
+        },
+    }
+    print(f"[mock_ha] Seeded {len(_MOCK_CLIMATE) + 1} fake climate entities into STATE_CACHE")
 
 # App-level middleware (security headers) and the dev-server entry point live in
 # app.py, the thin composition/entry module that imports this one.

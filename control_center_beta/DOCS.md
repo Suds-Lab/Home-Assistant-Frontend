@@ -400,16 +400,6 @@ permissions, lists and Telegram configuration/permissions/read state. A backup
 made by an older version that predates any of these extras simply leaves the
 current ones untouched instead of clearing them.
 
-**Where the data lives (v2.10.0+).** The add-on keeps everything in a single
-SQLite database, `control_center.db`, under `/data`. When you update to 2.10.0
-from any earlier version it migrates your old JSON files into the database
-automatically on first start: it writes a full `pre-2.10-backup-<timestamp>.json`
-snapshot first, imports, verifies the database matches your old files, and only
-then archives those files (renamed to `*.json.imported` - kept, never deleted).
-If the check doesn't pass it stops without touching your JSON, so the migration
-cannot lose data. The export/import format above is unchanged and is the
-supported way to move data between versions.
-
 ## Session expiry
 
 A login lasts **30 days** and is **rolling**: while a user keeps using the app,
@@ -506,13 +496,19 @@ The **Schedules** panel lets each user:
 3. Add **events** - each event fires at a specific time on selected days (the
    day picker and week preview start on Sunday), with Weekdays / Weekends /
    Every day presets, and sets a mode (off, cool, heat, auto, dry, fan) and a
-   temperature. The temperature slider range and step are read from the
-   thermostat (from the first one that reports a range, so an offline unit doesn't
-   force a fallback), and the unit (C or F) is Home Assistant's own configured unit
-   - schedules are always set and shown in that unit, and HA converts the setpoint
-   to each thermostat's native unit when the event fires, so a mixed fleet needs
-   no manual conversion. If no thermostat reports a range, the slider falls back to
-   a sensible range in that same unit. You can also set an optional **fan speed**,
+   temperature. The temperature slider's range, step and unit are read from each
+   thermostat's own reported range. When a schedule's thermostats use **different
+   temperature units** (some °F, some °C - common with a mixed fleet or thermostats
+   on different Home Assistant instances), the editor shows **one slider per unit**,
+   each in its own range, so you set the value you want each type of thermostat to
+   reach. Home Assistant reads a set_temperature value in the receiving instance's
+   own unit system and converts it to the thermostat's unit, so Control Center sends
+   each setpoint pre-expressed in that instance's unit (read live) and HA's own
+   conversion lands exactly the value you set. A value outside a thermostat's live
+   range is skipped (the unit is left alone) rather than sent, so an out-of-range
+   value can never reach a thermostat.
+   If no thermostat reports a range, the slider falls back to a sensible range for
+   that unit. You can also set an optional **fan speed**,
    which is off by default: flip the **Fan speed** toggle on to reveal the picker,
    and leave it off (or turn it off) to leave each thermostat's fan untouched. When
    a

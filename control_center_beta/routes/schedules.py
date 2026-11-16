@@ -272,11 +272,51 @@ def _validated_entries(raw):
             "days": [int(d) for d in e.get("days", []) if int(d) in _VALID_DAYS],
             "time": time_val,
             "mode": mode,
-            "temp": float(e["temp"]) if e.get("temp") is not None else None,
+            "temp": _validated_temp(e.get("temp")),
             "fan": _validated_fan(e.get("fan")),
         }
         entries.append(entry)
     return entries
+
+
+def _norm_unit(u):
+    """'C' / 'F' from any spelling ('°C', 'c', ...), else None."""
+    s = str(u or "").strip().upper().lstrip("°")
+    return "F" if s == "F" else ("C" if s == "C" else None)
+
+
+def _validated_temp(raw):
+    """Temperature is per-unit: a list of {unit: 'C'|'F', temp: float} groups, one
+    per unit, so the scheduler can send each thermostat its own unit's value
+    (clamped to that unit's live range at fire time). A legacy single number is
+    still accepted (single-unit / older schedules). Anything else, or empty -> None.
+    We never convert between C and F - each unit carries its own value."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, str):
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+    if isinstance(raw, list):
+        out, seen = [], set()
+        for g in raw:
+            if not isinstance(g, dict):
+                continue
+            unit = _norm_unit(g.get("unit"))
+            t = g.get("temp")
+            if unit is None or unit in seen or t is None:
+                continue
+            try:
+                tv = float(t)
+            except (TypeError, ValueError):
+                continue
+            seen.add(unit)
+            out.append({"unit": unit, "temp": tv})
+        return out or None
+    return None
 
 
 def _validated_fan(raw):
