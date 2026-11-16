@@ -400,6 +400,16 @@ permissions, lists and Telegram configuration/permissions/read state. A backup
 made by an older version that predates any of these extras simply leaves the
 current ones untouched instead of clearing them.
 
+**Where the data lives (v2.10.0+).** The add-on keeps everything in a single
+SQLite database, `control_center.db`, under `/data`. When you update to 2.10.0
+from any earlier version it migrates your old JSON files into the database
+automatically on first start: it writes a full `pre-2.10-backup-<timestamp>.json`
+snapshot first, imports, verifies the database matches your old files, and only
+then archives those files (renamed to `*.json.imported` - kept, never deleted).
+If the check doesn't pass it stops without touching your JSON, so the migration
+cannot lose data. The export/import format above is unchanged and is the
+supported way to move data between versions.
+
 ## Session expiry
 
 A login lasts **30 days** and is **rolling**: while a user keeps using the app,
